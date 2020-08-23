@@ -16,10 +16,6 @@ public class Main {
         }
 
         Arrays.sort(nums, (num1, num2) -> (num1 - num2));
-
-        for(int num : nums) {
-            System.out.println(num);
-        }
-
+        Arrays.stream(nums).forEach(System.out::println);
     }
 }
