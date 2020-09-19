@@ -4,7 +4,7 @@ import java.util.Stack;
 
 class Solution {
     public int[] solution(int[] prices) {
-         int lastIdx = prices.length-1;
+        int lastIdx = prices.length-1;
         int[] answer = new int[prices.length];
         Stack<int[]> stk = new Stack<>();
 
