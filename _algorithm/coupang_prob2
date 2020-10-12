@@ -1,0 +1,129 @@
+// 201009 캠퍼스 리쿠르팅
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+class Kiosk {
+    int id;
+    int customerCnt;
+    LocalDateTime endDT;
+
+    Kiosk(int id, int customerCnt, LocalDateTime endDT) {
+        this.id = id;
+        this.customerCnt = customerCnt;
+        this.endDT = endDT;
+    }
+
+    public void setCustomerCnt(int customerCnt) {
+        this.customerCnt = customerCnt;
+    }
+
+    public void setLastEndDT(LocalDateTime endDT) {
+        this.endDT = endDT;
+    }
+
+    public int getId() {
+        return id;
+    }
+    public int getCustomerCnt() {
+        return customerCnt;
+    }
+    public LocalDateTime getEndDT() {
+        return endDT;
+    }
+}
+
+public class Main {
+
+    public static int solution(int n, String[] customers) {
+        LocalDateTime initEndDT = LocalDateTime.of(2018,12,31,23,59,59);
+
+        List<Kiosk> allKios = new ArrayList<>();
+
+        for(int i=0; i<n; i++) {
+            allKios.add(new Kiosk(i, 0, initEndDT));
+        }
+
+        for(String dateTimeInfo : customers) {
+            List<Kiosk> availableKios = new ArrayList<>();
+            int year = 2019;
+            int month, day;
+            int hour, min, sec;
+            int takeMin;
+            String[] splitDateTime = dateTimeInfo.split(" ");
+            String[] monthDay = splitDateTime[0].split("/");
+            String[] hourMinSec = splitDateTime[1].split(":");
+
+            month = Integer.parseInt(monthDay[0]);
+            day = Integer.parseInt(monthDay[1]);
+            hour = Integer.parseInt(hourMinSec[0]);
+            min = Integer.parseInt(hourMinSec[1]);
+            sec = Integer.parseInt(hourMinSec[2]);
+            takeMin = Integer.parseInt(splitDateTime[2]);
+
+            LocalDateTime arrivalDT = LocalDateTime.of(year, month, day, hour, min,sec);
+            LocalDateTime newEndDT = arrivalDT.plusMinutes(takeMin);
+
+            // 사용가능한 키오스크 있는지 확인
+            LocalDateTime earlistEndDT = allKios.get(0).getEndDT();
+
+            for(Kiosk k : allKios) {
+                LocalDateTime endDt = k.getEndDT();
+                System.out.println("id :: "+k.getId()+", endDt :: "+k.getEndDT());
+
+                if(!endDt.isAfter(arrivalDT)) {
+                    availableKios.add(k);
+                }
+
+                earlistEndDT = earlistEndDT.isAfter(endDt) ? endDt : earlistEndDT;
+            }
+
+            System.out.println("arrivalDT :: "+arrivalDT);
+            System.out.println("earlistEndDT :: "+earlistEndDT);
+            System.out.println("availableKios.size() :: "+availableKios.size());
+
+            // case1 : 사용할 수 있는 키오스크 있는 경우
+            if(availableKios.size() > 0) {
+                for(Kiosk k : allKios) {
+                    if(k.getEndDT().isEqual(earlistEndDT)) {
+                        System.out.println("가장 오래 쉰 k_id :: "+k.getId());
+                        System.out.println("newEndDT :: "+newEndDT);
+                        k.setCustomerCnt(k.getCustomerCnt()+1);
+                        k.setLastEndDT(newEndDT);
+                        break;
+                    }
+                }
+            } else { // case2 : 사용할 수 있는 키오스크 없는 경우
+                for(Kiosk k : allKios) {
+                    if(k.getEndDT().isEqual(earlistEndDT)) {
+                        System.out.println("가장 빨리 끝나는 k_id :: "+k.getId());
+                        System.out.println("newEndDT :: "+k.getEndDT().plusMinutes(takeMin));
+                        k.setCustomerCnt(k.getCustomerCnt()+1);
+                        k.setLastEndDT(k.getEndDT().plusMinutes(takeMin));
+                        break;
+                    }
+                }
+            }
+            System.out.println("");
+        }
+
+        int maxCustCnt = 0;
+
+        for(Kiosk k : allKios) {
+            maxCustCnt = k.getCustomerCnt() > maxCustCnt ? k.getCustomerCnt() : maxCustCnt;
+        }
+
+        return  maxCustCnt;
+    }
+
+    public static void main(String[] args) {
+        System.out.print(solution(3, new String[]{"10/01 23:20:25 30", "10/01 23:25:50 26", "10/01 23:31:00 05",
+                "10/01 23:33:17 24", "10/01 23:50:25 13", "10/01 23:55:45 20", "10/01 23:59:39 03", "10/02 00:10:00 10"}));
+    }
+}
+
+// 1번 : 손님1 - 10/01 23:50:25 -> 손님5 - 10/02 00:03:25
+// 2번 : 손님2 - 10/01 23:51:50 -> 손님6 - 10/02 00:15:45
+// 3번 : 손님3 - 10/01 23:36:00 -> 손님4 - 10/02 00:00:00 -> 손님7 - 00:03:00 -> 손님8 -
+
