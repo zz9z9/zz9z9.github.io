@@ -15,9 +15,9 @@ timezone: Asia/Seoul
 
 # jekyll-seo-tag settings › https://github.com/jekyll/jekyll-seo-tag/blob/master/docs/usage.md
 # --------------------------
-title: zz9z9                          # the main title
+title: zz9z9                    # the main title
 
-tagline: Good Code, Better World   # it will display as the sub-title
+tagline: 좋은 코드로, 더 나은 세상을   # it will display as the sub-title
 
 description: >-                        # used by seo meta and the atom feed
   A minimal, portfolio, sidebar,
