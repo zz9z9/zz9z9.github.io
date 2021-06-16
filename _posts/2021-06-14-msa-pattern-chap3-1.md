@@ -8,6 +8,8 @@ tags: [Microservice Architecture]     # TAG names should always be lowercase
 
 # Intro
 ---
+- 프로세스 간 통신(Inter-Process Communication)
+  - 프로세스들 사이에 서로 데이터를 주고받는 행위 또는 그에 대한 방법이나 경로
 - 마이크로서비스 아키텍처는 애플리케이션을 여러 서비스로 구성하며, 서비스 인스턴스는 여러 머신에서 실행되는 프로세스 형태이므로
 반드시 IPC를 통해 상호작용 해야한다.
 - IPC는 애플리케이션 가용성(정상적으로 사용가능한 정도)에 영향을 미치며, 트랜잭션 관리와도 맞물려 있다.
