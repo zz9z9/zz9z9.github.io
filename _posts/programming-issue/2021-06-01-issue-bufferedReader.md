@@ -64,9 +64,6 @@ charLoop:
                 }
 ```
 
-> <q>Reads a line of text. A line is considered to be terminated by any one of a line feed ('\n'),
-> a carriage return ('\r'), or a carriage return followed immediately by a linefeed.</q>
-
 - 그렇다면, HTTP 요청의 마지막 라인이 어떻길래 아직 라인이 종료되었다고 판단하지 않는걸까 ?
   - [스택오버플로우에 있는 글](https://stackoverflow.com/questions/50447483/end-of-http-header)
   - [RFC 문서 34p](https://datatracker.ietf.org/doc/html/rfc2616#page-35)
