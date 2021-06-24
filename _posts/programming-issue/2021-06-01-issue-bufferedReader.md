@@ -1,5 +1,5 @@
 ---
-title: BufferedReader의 readLine() 메서드에서 밑에 코드로 진행이 안된다.
+title: BufferedReader의 readLine() 메서드 이후의 코드로 진행이 안되는 현상
 date: 2021-06-01 00:29:00 +0900
 categories: [개발 이슈]
 tags: [JAVA I/O] # TAG names should always be lowercase
@@ -48,7 +48,7 @@ BufferedReader의 readLine() 메서드는 라인이 종료되었다고 판단되
 
 - 그렇다면 라인이 종료되었다는 것을 판단하는 기준은 뭘까??
   - [자바 공식문서](https://docs.oracle.com/javase/8/docs/api/java/io/BufferedReader.html) 에 나와있는 readLine() 메서드에 대한 설명을 보면
-끝에 개행 문자('\n', '\r', '\r\n') 중 하나가 있어야 하나의 라인으로 인식한다고 한다.
+끝에 다음 문자('\n', '\r', '\r\n') 중 하나가 있어야 하나의 라인으로 인식한다고 한다.
 > <q> Reads a line of text. A line is considered to be terminated by any one of a line feed ('\n'), <br>
 > a carriage return ('\r'), or a carriage return followed immediately by a linefeed. </q>
 
