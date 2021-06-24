@@ -75,6 +75,14 @@ charLoop:
 공백인 경우 break를 통해 while문 내에서 계속 대기상태에 머물러있지 않게 할 수 있었다.
 ![image](https://user-images.githubusercontent.com/64415489/123302221-6fd47e00-d557-11eb-9a06-0e37d4e6b4f7.png)
 
+# 요약
+---
+- 현상
+  - HTTP 요청을 받아서 BufferedReader의 readLine() 메서드로 읽어 올 때 특정 라인에 도달하면 대기 상태에 머문다.
+- 원인
+  - readLine() 메서드 내에는 '하나의 라인'이라고 판단하는 기준(라인 마지막에 '\n', '\r', '\r\n')이 있는데,
+  HTTP 요청의 마지막 라인은 공백이었기 때문에 아직 한 라인이 끝나지 않았다고 판단하여 계속 대기하고 있었다.
+
 # 배운 것
 ---
 - HTTP 요청 형태
