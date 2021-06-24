@@ -80,6 +80,67 @@ charLoop:
 - HTTP 요청 형태
 - BufferedReader의 readLine() 메서드가 라인을 인식하는 방법
 
+# 실제 코드 적용
+---
+- [간단한 웹 서버 구현 레파지토리](https://github.com/zz9z9/nextstep-web-application-server)
+- 오늘 내용 관련 코드
+```java
+    private static HttpRequest processGetRequest(String requestUrl, BufferedReader bufferedReader) throws IOException {
+        Map<String, String> cookies = null;
+
+        for (String line = bufferedReader.readLine(); (!line.isEmpty() && line != null); line = bufferedReader.readLine()) {
+            if (line.contains("Cookie")) {
+                String[] info = line.split(":");
+                cookies = parseCookies(info[1]);
+                break;
+            }
+        }
+
+        if (!requestUrl.contains("?")) {
+            return new HttpRequest(HttpMethod.GET, requestUrl, cookies);
+        }
+
+        String[] info = requestUrl.split("\\?");
+        Map<String, String> params = parseQueryString(info[1]);
+
+        return new HttpRequest(HttpMethod.GET, info[0], params, cookies);
+    }
+
+    private static HttpRequest processPostRequest(String requestUrl, BufferedReader bufferedReader) throws IOException {
+        int contentLen = 0;
+        String contentType = "";
+        Map<String, String> params = null;
+        Map<String, String> cookies = null;
+
+        for (String line = bufferedReader.readLine(); (!line.isEmpty() && line != null); line = bufferedReader.readLine()) {
+            if (line.contains("Content-Length")) {
+                String[] info = line.split(":");
+                contentLen = Integer.parseInt(info[1].trim());
+            } else if (line.contains("Content-Type")) {
+                String[] info = line.split(":");
+                contentType = info[1].trim(); // ex) application/x-www-form-urlencoded
+            } else if (line.contains("Cookie")) {
+                String[] info = line.split(":");
+                cookies = parseCookies(info[1]);
+            }
+        }
+
+        if (contentLen > 0) {
+            char[] body = new char[contentLen];
+            bufferedReader.read(body);
+
+            if (contentType.equals("application/x-www-form-urlencoded")) {
+                String queryString = new String(body);
+                params = parseQueryString(queryString);
+            } else if (contentType.equals("application/json")) {
+                // TODO
+            }
+        }
+
+        return new HttpRequest(HttpMethod.POST, requestUrl, params, cookies);
+    }
+```
+
 # 더 공부해야할 부분
 ---
 - JAVA I/O
