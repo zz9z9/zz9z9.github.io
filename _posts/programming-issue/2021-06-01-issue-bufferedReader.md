@@ -20,8 +20,8 @@ public class TestServer {
             BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 
             String line;
-            while((line=br.readLine())!=null) {
-                System.out.println(line); // 여기서 멈춘다
+            while((line=br.readLine())!=null) { // 여기서 멈춘다
+                System.out.println(line);
             }
 
             System.out.println("END!");
@@ -39,7 +39,7 @@ public class TestServer {
 ![image](https://user-images.githubusercontent.com/64415489/123296071-49134900-d551-11eb-895a-2fc10875310f.png)
 
 - 하지만, 문제는 코드의 15번째 라인 `System.out.println("END!");` 에 대한 출력이 콘솔에 찍히지 않았다는 것이었다.
-디버거로 확인해보니 무한루프를 도는 것도 아니고 위 코드의 12번째 라인에서 대기 상태가 되는 것을 확인할 수 있었다.
+디버거로 확인해보니 무한루프를 도는 것도 아니고 위 코드의 11번째 라인에서 대기 상태가 되는 것을 확인할 수 있었다.
 
 # 해결 과정
 ---
