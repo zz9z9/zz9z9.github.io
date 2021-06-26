@@ -97,7 +97,7 @@ charLoop:
     private static HttpRequest processGetRequest(String requestUrl, BufferedReader bufferedReader) throws IOException {
         Map<String, String> cookies = null;
 
-        for (String line = bufferedReader.readLine(); (!line.isEmpty() && line != null); line = bufferedReader.readLine()) {
+        for (String line = bufferedReader.readLine(); (line != null && !line.isEmpty()); line = bufferedReader.readLine()) {
             if (line.contains("Cookie")) {
                 String[] info = line.split(":");
                 cookies = parseCookies(info[1]);
@@ -121,7 +121,7 @@ charLoop:
         Map<String, String> params = null;
         Map<String, String> cookies = null;
 
-        for (String line = bufferedReader.readLine(); (!line.isEmpty() && line != null); line = bufferedReader.readLine()) {
+        for (String line = bufferedReader.readLine(); (line != null && !line.isEmpty()); line = bufferedReader.readLine()) {
             if (line.contains("Content-Length")) {
                 String[] info = line.split(":");
                 contentLen = Integer.parseInt(info[1].trim());
