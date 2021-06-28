@@ -80,5 +80,5 @@ Spring Boot 2.0, Spring WebFlux, and Project Reactor 등에 익숙하지 않으�
 - 크리스 리처드슨, 『마이크로서비스 패턴』, 길벗(2020), 8장
 - [https://www.programmersought.com/article/28121145498/](https://www.programmersought.com/article/28121145498/)
 - [https://cloud.spring.io/spring-cloud-gateway/multi/multi_gateway-starter.html](https://cloud.spring.io/spring-cloud-gateway/multi/multi_gateway-starter.html)
-- [novatec-gmbh.de/en/blog/api-gateways-an-evaluation-of-zuul-2/](novatec-gmbh.de/en/blog/api-gateways-an-evaluation-of-zuul-2/)
+- [https://www.novatec-gmbh.de/en/blog/api-gateways-an-evaluation-of-zuul-2/](https://www.novatec-gmbh.de/en/blog/api-gateways-an-evaluation-of-zuul-2/)
 - [https://medium.com/@niral22/spring-cloud-gateway-tutorial-5311ddd59816](https://medium.com/@niral22/spring-cloud-gateway-tutorial-5311ddd59816)
