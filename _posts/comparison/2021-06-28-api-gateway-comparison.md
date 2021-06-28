@@ -2,7 +2,7 @@
 title: API Gateway 비교해보기
 date: 2021-06-27 00:25:00 +0900
 categories: [비교하고 선택하기]
-tags: [MSA, API Gateway, Spring Cloud Gateway, Netflix Zuul, AWS API Gateway, AWS ALB]
+tags: [MSA, API Gateway, Spring Cloud Gateway, Zuul]
 ---
 
 > '나만의 웨딩 플래너'라는 MSA 기반의 토이 프로젝트를 진행하는데 필요한 API Gateway를 만들기 위해 어떤 프레임워크를 선택해야할지
@@ -10,6 +10,7 @@ tags: [MSA, API Gateway, Spring Cloud Gateway, Netflix Zuul, AWS API Gateway, AW
 
 # API Gateway 역할
 ---
+### 대표적인 역할 몇 가지를 살펴보자
 1. 요청 라우팅
   - 요청을 HTTP 메서드, 경로에 따라 서비스로 라우팅
 2. API 조합
@@ -62,7 +63,7 @@ tags: [MSA, API Gateway, Spring Cloud Gateway, Netflix Zuul, AWS API Gateway, AW
 # 나의 선택은 ?
 ---
 - 일단은 토이 프로젝트이고 API Gateway를 처음 적용해보는 것이므로 러닝 커브가 비교적 낮을 것 같은 `Spring Cloud Zuul`을 사용하기로 결정
-- [공식 문서](https://cloud.spring.io/spring-cloud-gateway/multi/multi_gateway-starter.html) 에도 나와있지만
+- [공식 문서](https://cloud.spring.io/spring-cloud-gateway/multi/multi_gateway-starter.html) 에도 나와있지만 `Spring Cloud Gateway`를 사용하려면
 Spring Boot 2.0, Spring WebFlux, and Project Reactor 등에 익숙하지 않으면 이것들에 먼저 익숙해져야 한다고 나와있다.
 - 다음 프로젝트에서는 반응형 프로그래밍, WebFlux, Netty 등에 대해 학습하고 `Spring Cloud Gateway`를 사용해보자
 - [적용 프로젝트 repo](https://github.com/zz9z9/wedding-manager)
