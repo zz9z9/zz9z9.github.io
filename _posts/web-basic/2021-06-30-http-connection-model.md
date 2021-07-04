@@ -107,6 +107,10 @@ tags: [HTTP, Connection Management]
     - HTTP1 시절에는, 요청과 응답이 메시지라는 단위로 완벽하게 구분되어 있었지만, HTTP2에서는 스트림이라는 단위로 요청과 응답이 묶일 수 있는 구조가 만들어졌다.
     - 따라서, 응답 프레임들은 요청 순서에 상관없이 만들어진 순서대로 클라이언트에 전달될 수 있다.
     - 결과적으로, HTTP1 때처럼 중간에 응답이 막히면 대기하고 있던 Response들이 모두 기다려야하는 HOL 이슈에서 벗어날 수 있게 되었다.
+    <figure align = "center">
+      <img src = "https://user-images.githubusercontent.com/64415489/124391014-58e91500-dd29-11eb-8343-aa7872d9c451.png" height=600/>
+      <figcaption align="center">출처 : https://developers.google.com/web/fundamentals/performance/http2</figcaption>
+    </figure>
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/124388878-bbd5ae80-dd1f-11eb-85b3-778344f8758c.png" height=550/>
