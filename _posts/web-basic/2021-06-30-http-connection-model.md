@@ -78,6 +78,8 @@ tags: [HTTP, Connection Management]
   - 파이프라이닝은 HOL(Head-of-line blocking) 문제에 영향을 받습니다.
   - 이런 이유들로, 파이프라이닝은 더 나은 알고리즘인 멀티플렉싱으로 대체되었는데, 이는 HTTP/2에서 사용된다.
 
+*※ HOL(Head-of-line blocking) : 단일 TCP 연결에서, 이전 요청이 완료될 때까지 이후의 요청이 기다려야 하는 것*
+
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/124387988-934bb580-dd1b-11eb-8af8-8de7ac3a4395.png" height=550/>
   <figcaption align="center">출처 : https://developer.mozilla.org/en-US/docs/Web/HTTP/Connection_management_in_HTTP_1.x</figcaption>
@@ -104,13 +106,18 @@ tags: [HTTP, Connection Management]
   - HTTP2에서는 스트림 하나가 다수개의 요청과 응답을 처리할 수 있는 구조로 바뀌었다.
     - HTTP1 시절에는, 요청과 응답이 메시지라는 단위로 완벽하게 구분되어 있었지만, HTTP2에서는 스트림이라는 단위로 요청과 응답이 묶일 수 있는 구조가 만들어졌다.
     - 따라서, 응답 프레임들은 요청 순서에 상관없이 만들어진 순서대로 클라이언트에 전달될 수 있다.
-    - 결과적으로, HTTP1 때처럼 중간에 응답이 막히면 대기하고 있던 Response들이 모두 기다려야하는 HeadOfBlocking 이슈에서 벗어날 수 있게 되었다.
+    - 결과적으로, HTTP1 때처럼 중간에 응답이 막히면 대기하고 있던 Response들이 모두 기다려야하는 HOL 이슈에서 벗어날 수 있게 되었다.
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/124388878-bbd5ae80-dd1f-11eb-85b3-778344f8758c.png" height=550/>
   <figcaption align="center">출처 : https://www.programmersought.com/article/86161816904/</figcaption>
 </figure>
 
+# 더 공부해야할 부분
+---
+- TCP/IP
+- HTTP2, HTTP3
+- HTTP Connection Pooling
 
 # 참고 자료
 ---
