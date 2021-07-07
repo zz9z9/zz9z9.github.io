@@ -35,7 +35,7 @@ Caused by: org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statemen
 
 # 해결방법
 ---
-## 1. escape 문자(\) 사용
+## 1. escape 문자(\\) 사용
 ```
 @Getter
 @Setter
