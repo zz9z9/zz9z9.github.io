@@ -10,7 +10,7 @@ tags: [JAVA, JPA] # TAG names should always be lowercase
 # @Enumerated
 ---
 ## 1. EnumType.ORDINAL
-- 아래와 같이 사용하게되면 JPA는 `ENUM` 클래스의 `ordinal()`메서드를 사용하여 값을 저장한다(0부터 시작해서 상수가 선언된 순서대로 값이 맵핑)
+- @Enumerated(EnumType.ORDINAL)을 사용하게되면 JPA는 `ENUM` 클래스의 `ordinal()`메서드를 사용하여 값을 저장한다(0부터 시작해서 상수가 선언된 순서대로 값이 맵핑)
 - 따라서, 아래의 경우는 DB의 Article 테이블 status 컬럼에 0이 저장된다.
 - 문제점
   - 중간에 새 값을 추가하거나 순서를 재정렬하면 기존 데이터 정합성이 깨진다.
@@ -42,7 +42,7 @@ article.setStatus(Status.OPEN);
 ```
 
 ## 2. EnumType.STRING
-- 아래와 같이 사용하게되면 JPA는 `ENUM` 클래스의 `name()`메서드를 사용하여 값을 저장한다(상수 이름을 문자열로 반환)
+- @Enumerated(EnumType.STRING)을 사용하게되면 JPA는 `ENUM` 클래스의 `name()`메서드를 사용하여 값을 저장한다(상수 이름을 문자열로 반환)
 - 따라서, 아래의 경우는 DB의 Article 테이블 status 컬럼에 OPEN이 저장된다.
 - 문제점
   - enum 값을 변경하게 되면 기존 데이터 정합성이 깨진다.
