@@ -82,4 +82,4 @@ public class Order {
 # 참고 자료
 ---
 - [https://www.chrouki.com/posts/escape-sql-reserved-keywords-jpa-hibernate/](https://www.chrouki.com/posts/escape-sql-reserved-keywords-jpa-hibernate/)
-- [popit.kr/가짜뉴스아웃-하이버네이트-데이터베이스-스키마/](popit.kr/가짜뉴스아웃-하이버네이트-데이터베이스-스키마/)
+- [popit.kr/가짜뉴스아웃-하이버네이트-데이터베이스-스키마/](https://www.popit.kr/%EA%B0%80%EC%A7%9C%EB%89%B4%EC%8A%A4%EC%95%84%EC%9B%83-%ED%95%98%EC%9D%B4%EB%B2%84%EB%84%A4%EC%9D%B4%ED%8A%B8-%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%B2%A0%EC%9D%B4%EC%8A%A4-%EC%8A%A4%ED%82%A4%EB%A7%88/)
