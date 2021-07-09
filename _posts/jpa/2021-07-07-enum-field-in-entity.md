@@ -209,7 +209,42 @@ article.setId(4);
 article.setTitle("converted title");
 article.setCategory(Category.MUSIC);
 ```
+# 그럼 무조건 @Converter를 사용하면 될까?
+---
+> 위 내용을 공부를 하고 난 뒤 [인프런 김영한님 강의](https://www.inflearn.com/course/%EC%8A%A4%ED%94%84%EB%A7%81%EB%B6%80%ED%8A%B8-JPA-%ED%99%9C%EC%9A%A9-1) 를 듣던 중
+> @Enumerated(EnumType.String)을 사용하시는 것을 보고 질문을 남겼고 갓영한님의 답변을 들을 수 있었다.
 
+```
+[질문]
+안녕하세요 선생님 강의 재밌게 잘 듣고 있습니다 !
+
+강의를 듣기 전에 스스로 고민해보는 시간을 갖기 위해 공부하다가
+
+@Enumerated(EnumType.String) 경우는 선언한 상수의 이름이 바뀌게 되면(바뀔일은 드물겠지만)
+
+기존에 저장됐던 데이터 와의 정합성 문제가 있고,
+
+문자열로 선언되어 필요 이상으로 많은 공간을 할당하게 된다는 문제점이 있다고 봤습니다.
+
+결과적으로 해당 글에서는 JPA2.1 부터 도입된 @Converter를 사용하는 것을 추천한다고 하는데 실무에서는 어떤지 궁금합니다!
+
+혹시나 해서 해당 글 출처 남깁니다 : https://www.baeldung.com/jpa-persisting-enums-in-jpa
+```
+
+```
+[답변]
+안녕하세요. 이재윤님
+
+이부분은 선택인데요.
+
+저의 경우 실무에서도 @Enumerated(EnumType.String)을 주로 사용합니다.
+
+@Converter를 통해서 좀 더 최적화를 하셔도 됩니다. 그런데 ENUM의 길이가 그렇게 긴 것도 아니고,
+
+최근 DB 성능도 좋아서 이 부분을 최적화해도 크게 많은 이점을 얻지는 못합니다.
+
+감사합니다.
+```
 
 # 더 공부해야할 부분
 ---
