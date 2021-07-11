@@ -107,6 +107,60 @@ tags: [MSA, 테스트 코드]
 2. 실행 : 서비스 메서드를 호출
 3. 확인 : 서비스 메서드가 올바른 값을 반환하고 디펜던시가 올바르게 호출되었는지 확인
 
+```java
+public class OrderServiceTest {
+
+  private OrderService orderService;
+  private OrderRepository orderRepository;
+  private DomainEventPublisher eventPublisher;
+  private RestaurantRepository restaurantRepository;
+  private SagaManager<CreateOrderSagaState> createOrderSagaManager;
+  private SagaManager<CancelOrderSagaData> cancelOrderSagaManager;
+  private SagaManager<ReviseOrderSagaData> reviseOrderSagaManager;
+  private OrderDomainEventPublisher orderAggregateEventPublisher;
+
+  @Before
+  public void setup() {
+    orderRepository = mock(OrderRepository.class);
+    eventPublisher = mock(DomainEventPublisher.class);
+    restaurantRepository = mock(RestaurantRepository.class);
+    createOrderSagaManager = mock(SagaManager.class);
+    cancelOrderSagaManager = mock(SagaManager.class);
+    reviseOrderSagaManager = mock(SagaManager.class);
+
+    // Mock DomainEventPublisher AND use the real OrderDomainEventPublisher
+
+    orderAggregateEventPublisher = mock(OrderDomainEventPublisher.class);
+
+    orderService = new OrderService(orderRepository, eventPublisher, restaurantRepository,
+            createOrderSagaManager, cancelOrderSagaManager, reviseOrderSagaManager, orderAggregateEventPublisher, Optional.empty());
+  }
+
+
+  @Test
+  public void shouldCreateOrder() {
+    when(restaurantRepository.findById(AJANTA_ID)).thenReturn(Optional.of(AJANTA_RESTAURANT));
+    when(orderRepository.save(any(Order.class))).then(invocation -> {
+      Order order = (Order) invocation.getArguments()[0];
+      order.setId(ORDER_ID);
+      return order;
+    });
+
+    Order order = orderService.createOrder(CONSUMER_ID, AJANTA_ID, CHICKEN_VINDALOO_MENU_ITEMS_AND_QUANTITIES);
+
+    verify(orderRepository).save(same(order));
+
+    verify(orderAggregateEventPublisher).publish(order,
+            Collections.singletonList(new OrderCreatedEvent(CHICKEN_VINDALOO_ORDER_DETAILS, RestaurantMother.AJANTA_RESTAURANT_NAME)));
+
+    verify(createOrderSagaManager).create(new CreateOrderSagaState(ORDER_ID, CHICKEN_VINDALOO_ORDER_DETAILS), Order.class, ORDER_ID);
+  }
+
+  // TODO write tests for other methods
+
+}
+```
+
 ## 컨트롤러 테스트
 > 컨트롤러 클래스는 각각 지정된 REST API 끝점을 담당한 여러 메서드로 구성된다. 메서드의 매개변수는 경로 변수(path variable)처럼
 > HTTP 요청에서 추출된 값을 나타낸다. 컨트롤러 메서드는 도메인 서비스 또는 리파지토리를 호출해서 응답 객체를 반환한다.
@@ -122,6 +176,60 @@ tags: [MSA, 테스트 코드]
   <img src = "https://user-images.githubusercontent.com/64415489/125201570-b8579f80-e2aa-11eb-8832-e99d925a3497.png"/>
   <figcaption align="center">출처 : https://terasolunaorg.github.io/guideline/5.4.1.RELEASE/en/UnitTest/ImplementsOfUnitTest</figcaption>
 </figure>
+
+```java
+public class OrderControllerTest {
+
+  private OrderService orderService;
+  private OrderRepository orderRepository;
+  private OrderController orderController;
+
+  @Before
+  public void setUp() throws Exception {
+    orderService = mock(OrderService.class);
+    orderRepository = mock(OrderRepository.class);
+    orderController = new OrderController(orderService, orderRepository);
+  }
+
+
+  @Test
+  public void shouldFindOrder() {
+
+    when(orderRepository.findById(1L)).thenReturn(Optional.of(CHICKEN_VINDALOO_ORDER));
+
+    given().
+            standaloneSetup(configureControllers(orderController)).
+    when().
+            get("/orders/1").
+    then().
+            statusCode(200).
+            body("orderId", equalTo(new Long(OrderDetailsMother.ORDER_ID).intValue())).
+            body("state", equalTo(OrderDetailsMother.CHICKEN_VINDALOO_ORDER_STATE.name())).
+            body("orderTotal", equalTo(CHICKEN_VINDALOO_ORDER_TOTAL.asString()))
+    ;
+  }
+
+  @Test
+  public void shouldFindNotOrder() {
+    when(orderRepository.findById(1L)).thenReturn(Optional.empty());
+
+    given().
+            standaloneSetup(configureControllers(new OrderController(orderService, orderRepository))).
+    when().
+            get("/orders/1").
+    then().
+            statusCode(404)
+    ;
+  }
+
+  private StandaloneMockMvcBuilder configureControllers(Object... controllers) {
+    CommonJsonMapperInitializer.registerMoneyModule();
+    MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter(JSonMapper.objectMapper);
+    return MockMvcBuilders.standaloneSetup(controllers).setMessageConverters(converter);
+  }
+
+}
+```
 
 ## 이벤트/메세지 핸들러 테스트
 > 메세지 어댑터는 컨트롤러처럼 도메인 서비스, 레파지토리 등을 호출하는 단순 클래스이다.
