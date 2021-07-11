@@ -108,20 +108,63 @@ tags: [MSA, 테스트 코드]
 3. 확인 : 서비스 메서드가 올바른 값을 반환하고 디펜던시가 올바르게 호출되었는지 확인
 
 ## 컨트롤러 테스트
+> 컨트롤러 클래스는 각각 지정된 REST API 끝점을 담당한 여러 메서드로 구성된다. 메서드의 매개변수는 경로 변수(path variable)처럼
+> HTTP 요청에서 추출된 값을 나타낸다. 컨트롤러 메서드는 도메인 서비스 또는 리파지토리를 호출해서 응답 객체를 반환한다.
+
+- 컨트롤러에서 호출하는 도메인 서비스, 리파지토리 같은 것들을 모킹하여 컨트롤러에 대해 독립 단위 테스트를 수행하는 것이 좋다.
 - 컨트롤러 클래스를 인스턴스화하고 메서드를 호출할 수도 있지만, 이렇게 하면 요청 라우팅 같은 중요한 기능은 테스트할 수 없다.
 - 따라서 목 MVC 테스트 프레임워크를 활용하는 것이 효율적이다.
   - Spring MockMvc, Rest Assured Mock이 대표적인 예이다.
-  - HTTP 요청을 보내서 반환된 HTTP 응답을 단언할 수 있기 때문에 진짜 네트워크 호출을 하지 않아도 HTTP 요청 라우팅 및 자바 객체 <-> JSON 변환이 가능하다.
+  - HTTP 요청을 보내서 반환된 HTTP 응답을 단언(assertion)할 수 있기 때문에
+  진짜 네트워크 호출을 하지 않아도 HTTP 요청 라우팅 및 자바 객체 ⟷ JSON 변환이 가능하다.
 
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125201570-b8579f80-e2aa-11eb-8832-e99d925a3497.png"/>
+  <figcaption align="center">출처 : https://terasolunaorg.github.io/guideline/5.4.1.RELEASE/en/UnitTest/ImplementsOfUnitTest</figcaption>
+</figure>
 
+## 이벤트/메세지 핸들러 테스트
+> 메세지 어댑터는 컨트롤러처럼 도메인 서비스, 레파지토리 등을 호출하는 단순 클래스이다.
+> 즉, 메세지 어댑터의 각 메서드는 메세지/이벤트에서 꺼낸 데이터를 서비스 메서드에 넘겨 호출한다.
+> 따라서, 메세지 어댑터는 컨트롤러와 비슷한 방법으로 단위 테스트를 수행할 수 있다.
 
+- 테스트별로 메세지 어탭터 인스턴스를 생성하고 메세지를 채널에 전송한 후, 서비스 목이 정확히 호출되었는지 확인한다.
+- 메세징 인프라는 스터빙하기 때문에 실제 메세지 브로커는 관여하지 않는다.
+- `Eventuate Tram Mock Messaging` 프레임워크를 이용해서 테스트한다.
 
-# 잘 모르겠는거
----
-테스트 하기 전에 다른 서비스 테이블에 데이터 저장해야 하는 경우 ?
+```java
+public class OrderEventConsumerTest {
 
+  private OrderService orderService;
+  private OrderEventConsumer orderEventConsumer;
+
+  @Before
+  public void setUp() throws Exception {
+    orderService = mock(OrderService.class);
+    orderEventConsumer = new OrderEventConsumer(orderService);
+  }
+
+  @Test
+  public void shouldCreateMenu() {
+
+    CommonJsonMapperInitializer.registerMoneyModule();
+
+    given().
+            eventHandlers(orderEventConsumer.domainEventHandlers()).
+    when().
+            aggregate("net.chrisrichardson.ftgo.restaurantservice.domain.Restaurant", AJANTA_ID).
+            publishes(new RestaurantCreated(AJANTA_RESTAURANT_NAME, RestaurantMother.AJANTA_RESTAURANT_MENU)).
+    then().
+       verify(() -> {
+         verify(orderService).createMenu(AJANTA_ID, AJANTA_RESTAURANT_NAME, new RestaurantMenu(RestaurantMother.AJANTA_RESTAURANT_MENU_ITEMS));
+       })
+    ;
+
+  }
+
+}
+```
 
 # 참고자료
 ---
-- https://www.popit.kr/%EB%A7%88%EC%9D%B4%ED%81%AC%EB%A1%9C-%EC%84%9C%EB%B9%84%EC%8A%A4%EC%97%90%EC%84%9C%EC%9D%98-%ED%85%8C%EC%8A%A4%ED%8A%B8-%ED%99%98%EA%B2%BD-%EA%B5%AC%EC%B6%95/
-- 크리스 리처드슨, 『마이크로서비스 패턴』, 길벗(2020), 9~10장
+- 크리스 리처드슨, 『마이크로서비스 패턴』, 길벗(2020), 9장
