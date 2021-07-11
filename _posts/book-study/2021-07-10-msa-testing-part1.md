@@ -29,7 +29,7 @@ tags: [MSA, 테스트 코드]
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125169216-1e2d2400-e1e4-11eb-9368-8d0ad4a4b4ce.png" width="80%"/>
-  <figcaption align="center">출처 : Chris Richardson, 『Mircoservice Patterns』, p.296 </figcaption>
+  <figcaption align="center">출처 : Chris Richardson, 『Microservice Patterns』, p.296 </figcaption>
 </figure>
 
 ## 자동화 테스트의 종류
@@ -42,7 +42,7 @@ tags: [MSA, 테스트 코드]
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125169087-99daa100-e1e3-11eb-82c5-6d718fb08204.png"/>
-  <figcaption align="center">출처 : Chris Richardson, 『Mircoservice Patterns』, p.299 </figcaption>
+  <figcaption align="center">출처 : Chris Richardson, 『Microservice Patterns』, p.299 </figcaption>
 </figure>
 
 
@@ -76,7 +76,7 @@ tags: [MSA, 테스트 코드]
   4. 주문 서비스의 API를 소비하는 컨슈머 개발 팀은 계약 테스트 스위트를 추가하고, 기대대로 주문 서비스 API가 동작하는지 확인
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125169689-4fa6ef00-e1e6-11eb-9f4a-4ed0991e6054.png"/>
-  <figcaption align="center">출처 : Chris Richardson, 『Mircoservice Patterns』, p.302 </figcaption>
+  <figcaption align="center">출처 : Chris Richardson, 『Microservice Patterns』, p.302 </figcaption>
 </figure>
 
 # 서비스 단위 테스트 작성
@@ -95,7 +95,7 @@ tags: [MSA, 테스트 코드]
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125170218-d8bf2580-e1e8-11eb-9135-7f220666368a.png"/>
-  <figcaption align="center">출처 : Chris Richardson, 『Mircoservice Patterns』, p.308 </figcaption>
+  <figcaption align="center">출처 : Chris Richardson, 『Microservice Patterns』, p.308 </figcaption>
 </figure>
 
 ## 도메인 서비스 테스트
@@ -114,7 +114,7 @@ tags: [MSA, 테스트 코드]
 - 컨트롤러에서 호출하는 도메인 서비스, 리파지토리 같은 것들을 모킹하여 컨트롤러에 대해 독립 단위 테스트를 수행하는 것이 좋다.
 - 컨트롤러 클래스를 인스턴스화하고 메서드를 호출할 수도 있지만, 이렇게 하면 요청 라우팅 같은 중요한 기능은 테스트할 수 없다.
 - 따라서 목 MVC 테스트 프레임워크를 활용하는 것이 효율적이다.
-  - Spring MockMvc, Rest Assured Mock이 대표적인 예이다.
+  - `Spring MockMvc`, `Rest Assured Mock`이 대표적인 예이다.
   - HTTP 요청을 보내서 반환된 HTTP 응답을 단언(assertion)할 수 있기 때문에
   진짜 네트워크 호출을 하지 않아도 HTTP 요청 라우팅 및 자바 객체 ⟷ JSON 변환이 가능하다.
 
