@@ -1,5 +1,5 @@
 ---
-title: MSA 환경에서 테스트하기(1)
+title: MSA 환경에서 테스트하기(1) - 단위 테스트
 date: 2021-07-10 22:25:00 +0900
 categories: [책으로 공부하기, 마이크로서비스 패턴]
 tags: [MSA, 테스트 코드]
@@ -46,40 +46,7 @@ tags: [MSA, 테스트 코드]
 </figure>
 
 
-# 마이크로서비스 테스트
----
-> ***마이크로서비스는 팀별로 맡은 서비스를 개발하고 API를 발전시켜나가는 분산 시스템이다.
-> 따러서, 서비스 개발자는 자신이 개발한 서비스가 디펜던시 및 클라이언트와 잘 연동되는지 반드시 테스트 해야한다.***
-
-## 컨슈머 주도 계약 테스트 (consumer-driven contract test)
-> 두 서비스 간의 상호 작용은 두 서비스 사이의 합의 또는 계약이다. 예를 들어, 주문 서비스와 주문 이력 서비스는
-> 서로에게 발행될 이벤트 메세지의 구조와 채널에 대해 합의해야 한다.
-> API 게이트웨이와 도메인 서비스 역시 REST API 끝점에 대해 합의해야 한다.
-
-- 서비스가 클라이언트의 기대에 부합하는지 확인하는 테스트
-  - 클라이언트는 어떠한 서비스를 호출하는 서비스(API 게이트웨이, 다른 도메인 서비스 등)이다.
-- 컨슈머(호출하는 서비스)-프로바이더(호출되는 서비스)의 관계를 맺는다.
-- 프로바이더의 API가 컨슈머가 기대한 바와 일치하는지 확인하는 것. 즉, 프로바이더에 대한 통합 테스트이다.
-- 비즈니스 로직을 체크하는 테스트가 아니다.
-- 다음 사항을 확인
-  - 컨슈머가 기대한 HTTP 메서드와 경로인가 ?
-  - (헤더가 있는 경우) 컨슈머가 기대한 헤더를 받는가 ?
-  - (요청 본문이 있는 경우) 요청 본문을 받는가 ?
-  - 컨슈머가 기대한 상태 코드, 헤더, 본문이 포함된 응답을 반환하는가 ?
-- 컨슈머/프로바이더간 상호 작용을 계약(contract)이라는 샘플 모음집으로 정의하는 것
-  - 예를 들어, REST API의 계약은 HTTP 요청/응답 샘플을 모아 놓은 것
-- `Spring Cloud Contract`를 사용하여 컨슈머 계약 테스트를 진행할 수 있다.
-- 프로세스
-  1. 컨슈머 팀은 개발한 서비스가 프로바이더와 상호 작용하는 방법이 기술된 계약을 작성해서 깃 풀 리퀘스트 등을 통해 프로바이더 팀에 전달
-  2. 프로바이더 팀은 계약을 JAR로 패키징해서 메이븐 저장소에 발행
-  3. 컨슈머 쪽 테스트는 저장소에서 JAR 파일을 내려받는다.
-  4. 주문 서비스의 API를 소비하는 컨슈머 개발 팀은 계약 테스트 스위트를 추가하고, 기대대로 주문 서비스 API가 동작하는지 확인
-<figure align = "center">
-  <img src = "https://user-images.githubusercontent.com/64415489/125169689-4fa6ef00-e1e6-11eb-9f4a-4ed0991e6054.png"/>
-  <figcaption align="center">출처 : Chris Richardson, 『Microservice Patterns』, p.302 </figcaption>
-</figure>
-
-# 서비스 단위 테스트 작성
+# 단위 테스트 작성
 ---
 > 단위 테스트는 서비스의 아주 작은 부속품인 단위(unit)가 제대로 동작하는지 확인하는 테스트이다.
 > 일반적으로 단위는 클래스이므로 단위 테스트의 목표는 해당 클래스가 잘 동작하는지 확인하는 것이다.
@@ -116,7 +83,7 @@ public class OrderServiceTest {
   private RestaurantRepository restaurantRepository;
   private SagaManager<CreateOrderSagaState> createOrderSagaManager;
   private SagaManager<CancelOrderSagaData> cancelOrderSagaManager;
-  private SagaManager<ReviseOrderSagaData> reviseOrderSagaManager;
+  private SagaManager<ReviseOrderSagData> reviseOrderSagaManager;
   private OrderDomainEventPublisher orderAggregateEventPublisher;
 
   @Before
