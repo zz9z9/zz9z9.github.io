@@ -115,9 +115,15 @@ tags: [MSA]     # TAG names should always be lowercase
 
 ---
 
+# 실제로 적용해보기
+---
+- [토이 프로젝트 '나만의 웨딩 매니저' 통신 방식 구조](https://zz9z9.github.io/posts/my-wedding-manager-communication-architecture/)
+
 # 더 공부해야할 부분
+---
 - gRPC
 - 블로킹과 동기
 
 # 참고 자료
+---
 - 크리스 리처드슨, 『마이크로서비스 패턴』, 길벗(2020), p104-152.
