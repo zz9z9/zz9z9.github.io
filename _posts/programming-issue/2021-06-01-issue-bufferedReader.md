@@ -36,7 +36,7 @@ public class TestServer {
 ```
 
 - 아래와 같이 요청이 들어오는 것을 확인할 수 있었고, 'Http Method(GET, POST, ...)가 뭔지 확인하려면 요청의 첫 번째 라인을 확인하면 되겠구나' 등의 판단을 할 수 있었다.
-![image](https://user-images.githubusercontent.com/64415489/123296071-49134900-d551-11eb-895a-2fc10875310f.png)
+![image](https://user-images.githubusercontent.com/64415489/125474131-fb47851c-3e78-448f-91e1-57ad8fcd5a5e.png)
 
 - 하지만, 문제는 코드의 15번째 라인 `System.out.println("END!");` 에 대한 출력이 콘솔에 찍히지 않았다는 것이었다.
 디버거로 확인해보니 무한루프를 도는 것도 아니고 위 코드의 11번째 라인에서 대기 상태가 되는 것을 확인할 수 있었다.
