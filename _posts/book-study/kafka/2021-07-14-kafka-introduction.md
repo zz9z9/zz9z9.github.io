@@ -1,5 +1,5 @@
 ---
-title: 카프카란 ?
+title: 카프카 개요
 date: 2021-07-14 22:25:00 +0900
 categories: [책으로 공부하기, Kafka]
 tags: [Kafka]
