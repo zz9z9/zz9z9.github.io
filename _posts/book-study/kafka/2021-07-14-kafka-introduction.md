@@ -159,12 +159,12 @@ tags: [Kafka]
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125667207-a72a8e9a-b6c4-4afb-b2e7-b94c587bf6e3.png" width="80%"/>
-  <figcaption align="center">출처 : 사사키 도루 외 5인, 『실전 아파치 카프카』, 한빛미디어(2020), p51</figcaption>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p51</figcaption>
 </figure>
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125667294-cfb976c9-963f-4f8c-9a1e-340017f0feb0.png" width="80%"/>
-  <figcaption align="center">출처 : 사사키 도루 외 5인, 『실전 아파치 카프카』, 한빛미디어(2020), p51 </figcaption>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p51 </figcaption>
 </figure>
 
 # 요약
@@ -180,6 +180,6 @@ tags: [Kafka]
 
 # 참고자료
 ---
-- 사사키 도루 외 5인, 『실전 아파치 카프카』, 한빛미디어(2020), 1장
+- 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), 1장
 - [https://kafka.apache.org/documentation/#](https://kafka.apache.org/documentation/#)
 - [https://blog.stackpath.com/distributed-system/](https://blog.stackpath.com/distributed-system/)
