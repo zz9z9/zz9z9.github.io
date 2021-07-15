@@ -72,7 +72,7 @@ tags: [Kafka]
 - Pub/Sub 모델
   - Publisher = Producer
   - Subscriber = Consumer
-  - Publisher는 브로커 내의 `Topic`이라고 불리는 카테고리에 메세지를 발행한다.
+  - Publisher는 브로커 내의 `Topic`이라고 불리는 스토리지에 메세지를 발행한다.
   - Subscriber는 여러 개의 토픽 중 원하는 것만 구독하여 메세지를 수신한다.
   - 여러 Subscriber가 동일한 토픽을 구독하면, 큐잉 모델과는 달리 하나의 메세지가 여러 Subscriber(컨슈머)에게 도달할 수 있다.
 
