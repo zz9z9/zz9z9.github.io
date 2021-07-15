@@ -149,7 +149,7 @@ tags: [Kafka]
   - 브로커는 오프셋 커밋을 통해 오프셋을 업데이트한다. 즉, 컨슈머가 메세지를 처리(수신)한 기록을 남기는 것이다.
   - 이를 통해 메세지를 재전송할 때도 어디서부터 재전송하면 되는지 판단할 수 있다.
 
-<img src = "https://user-images.githubusercontent.com/64415489/125665528-7a46620e-38fe-482a-b35d-6cf9bc5e50ae.png" width="90%"/>
+<img src = "https://user-images.githubusercontent.com/64415489/125733510-2edaa09b-bc57-49c2-84ac-2929c1c7b7ac.png" width="90%"/>
 
 
 ### Exactly Once 구현
