@@ -1,5 +1,5 @@
 ---
-title: 카프카의 구성 요소와 동작 방식 파헤치기
+title: 카프카의 전반적인 구성과 동작 방식 살펴보기
 date: 2021-07-15 14:00:00 +0900
 categories: [책으로 공부하기, Kafka]
 tags: [Kafka]
@@ -7,7 +7,7 @@ tags: [Kafka]
 
 *※ 해당 내용은 '실전 아파치 카프카(한빛미디어)' 2장을 읽고 필요한 부분을 정리한 내용입니다.*
 
-# 분산 메세징 처리를 위한 구성 요소
+# 분산 메세징 처리를 위한 시스템 구성
 ---
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125829211-609c948b-6b2b-4bf3-a2fe-5f7fd424e013.png" width="80%"/>
@@ -54,7 +54,7 @@ tags: [Kafka]
 - 코디네이션 서비스는 데이터 액세스가 빨라야 하며, 자체적으로 장애에 대한 대응성을 가져야 한다.
   - Zookeeper는 자체적으로 클러스터링을 제공하여 장애에도 데이터 유실 없이 fail over/fail back이 가능하다.
 
-# 메세지 송수신을 위한 시스템 구성 요소
+# 메세지 송수신을 위한 시스템 구성
 ---
 ## 1. 메세지와 토픽
 - 메세지
@@ -118,6 +118,15 @@ tags: [Kafka]
   <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p69</figcaption>
 </figure>
 
+### 메세지의 순서 보증
+- 카프카는 기본적으로 파티션을 여러 개로 구성하여 확장성을 높인다.
+  - 이로 인해, 프로듀서에서 메세지를 송신한 순서대로 컨슈머에서 메세지를 수신한다는 보장이 없다.
+  - 메세지 순서 보증을 위해 단일 파티션으로 구성하게 되면 카프카의 강점인 확장성을 잃게 된다.
+- 메세지의 종류(토픽)별 순서를 보증하기 위해서는 파티셔닝에서 살펴본 '해시에 의한 분할'을 활용할 수 있다.
+- 전체 메세지의 순서를 보증하는 것은 구현 난이도가 높다.
+- 또한, 컨슈머 구현이 프로듀서 데이터 전송 순서에 의존하게 되면 카프카 전후의 시스템적인 분리에 제한을 줄 수 있다.
+- 메세지 순서 보증을 위한 정렬 기능을 구현해야 한다면, 어디에서(브로커 or 컨슈머) 구현할지는 시스템 전체를 고려하여 판단해야 한다.
+
 ## 4. 컨슈머
 - `컨슈머 API`를 이용해 브로커에서 메세지를 취득하도록 구현된 애플리케이션이다.
 
@@ -149,25 +158,71 @@ tags: [Kafka]
   - 즉, 재송신된(At Least Once) 메세지 6,7,8에 대해 어떻게 메세지 중복 처리를 할 것인지에 대한 방안이 필요하다.
 
 
-# 복제 구조
+# 데이터의 견고성을 높이는 복제 구조
 ---
+> 카프카는 장애시에도 수신한 메세지를 잃지 않기 위해 복제(Replication) 구조를 갖추고 있다.
 
-# 궁금한점
----
-- 브로커의 데이터 보관시 삭제 트리거를 경과 시간으로 설정했는데 해당 경과 시간이 지나기 전에 브로커 저장용량이 가득차면 어떡하지 ??
-- 파티션과 분산 메세징 처리 연관성 ?? 멀티쓰레딩 같은건가 ??
-- 파티션과 컨슈머 그룹 관계
-- 메세지 순서 보증
-  - ColdSeq가 파티션 하나로해서 순서 보증한거로 알고 있는데, 이게 최선일까? 컨슈머 입장에서 순서 보증이 안되더라도 로직상으로 처리할 순 없었을까 ?
-  - Cold는 파티션 몇개지 ??
-- 주키퍼와 카프카 관계?
-- 카프카 클러스터 ? 주키퍼 클러스터 ?
-- 토픽은 pull형을 가능하려고 필요한건가 ??
+- 파티션은 단일 또는 여러 개의 레플리카로 구성되어 토픽 단위로 레플리카 수를 지정할 수 있다.
+- 레플리카 중 하나는 Leader 나머지는 Follower라고 불린다.
+  - Follower는 Leader로부터 메세지를 취득하여 복제를 유지한다.
+  - 프로듀서/컨슈머간 데이터 교환은 Leader가 맡게된다.
 
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125878759-a964b203-2fc2-4f7e-83b2-d7822dc5800c.png" width="80%"/>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p.72</figcaption>
+</figure>
 
-# 요약
----
+## In-Sync Replica
+- Leader 레플리카의 복제 상태를 유지하고 있는 레플리카는 `In-Sync Replica(ISR)`로 분류된다.
+  - 파라미터 `replica.lag.time.max.ms`에서 정한 시간보다도 오랫동안 복제의 요청 및 복제가 이루어지지 않을 경우 Leader 레플리카 복제 상태를 유지하지 않는 레플리카로 간주한다.
+- 모든 레플리카가 ISR로 되어 있지 않은 파티션을 Under Replicated Partitions라고 한다.
+- 복제 수와는 별개로 최소 ISR 수`(min.insync.replica)` 설정이 가능하다.
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125882067-f7fbfc93-db8c-4532-a28b-6d8423cc6dc0.png" width="80%"/>
+  <figcaption align="center">출처 : https://www.javatpoint.com/kafka-topic-replication</figcaption>
+</figure>
 
+## High Watermark
+- 복제가 완료된 최신 오프셋
+- 컨슈머는 High Watermark까지 기록된 메세지를 취득할 수 있다.
+
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125882269-978a5e2d-0b39-4817-b9e4-bc339e36fd10.png" width="90%"/>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p.73</figcaption>
+</figure>
+
+## Ack 설정
+- 브로커 → 프로듀서로 Ack를 어느 타이밍에 송신할 것인지를 설정하는 것은 성능과 (브로커 서버 장애시) 데이터 유실 방지에 큰 영향을 준다.
+
+| Ack 설정  |  설명  |
+|----------|-------|
+|0|프로듀서는 Ack를 기다리지 않고 다음 메세지를 송신한다.|
+|1|Leader Replica에 메세지가 전달되면 Ack를 반환한다.|
+|all|모든 ISR의 수만큼 복제되면 Ack를 반환한다.|
+
+- 프로듀서는 Ack가 돌아오지 않고 타임아웃된 메세지에 대해 송신 실패로 간주한다.
+- Ack를 반환하는 타이밍에는 메세지가 디스크가 아닌 메모리(OS 버퍼)에 기록되어있는 상태이다.
+
+## ISR과 Ack를 통한 메세지 처리 제어
+> ISR과 Ack 설정에 따라 메세지 쓰기를 제어할 수 있다. <br>
+> 상황은 브로커 4대, 레플리카 수는 3으로 브로커 1대가 고장나 레플리카를 하나 잃어버린 경우라고 가정한다.
+
+### 1. min.insync.replicas=3 (레플리카 수와 동일), Ack=all
+- 비정상 상태로 간주되어 잃어버린 레플리카가 ISR로 복귀할 때까지 메세지를 처리하지 않는다.
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125883982-3a08138d-1df7-4f73-9d2d-b9c520bb2cbb.png" width="90%"/>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p.75</figcaption>
+</figure>
+
+### 2. min.insync.replicas=2, Ack=all
+- 브로커 1대가 고장나더라도 최소 ISR 수를 만족하므로 Ack를 반환하고 처리를 계속한다.
+- 처리를 계속할 수는 있지만, 복구 전에 브로커가 더 고장나게 되면 처리 중인 메세지를 손실할 위험이 높아진다.
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/125884276-a1abae44-2110-47da-862c-a9b7356ad36c.png" width="90%"/>
+  <figcaption align="center">출처 : 사사키 도루 외 4인, 『실전 아파치 카프카』, 한빛미디어(2020), p.75</figcaption>
+</figure>
+
+- 시스템 요구 사항과 제약 조건에 따라, '메세지를 잃지 않는 것'과 '시스템의 처리가 계속 되는 것' 사이의 균형을 min.insync.replicas와 Ack 설정을 통해 조절해야 한다.
 
 # 참고자료
 ---
