@@ -120,7 +120,7 @@ tags: [Kafka]
 - API를 기반으로 타 제품과의 접속에 관한 공통 부분을 프레임워크화한 `Kafka Connect`와 제품별 커넥터도 있다.
 - 카프카의 스트림 데이터 처리를 위한 `Streams API`와 이를 이용한 `Kafka Streams`도 제공된다.
 
-![image](https://user-images.githubusercontent.com/64415489/125660555-6cec4bf0-6d66-4a8c-bb59-e25570e8c3f5.png)
+![image](https://user-images.githubusercontent.com/64415489/126040678-d5a62e72-ed2c-4ac5-817a-d58bddbcf47a.png)
 
 <br>
 
