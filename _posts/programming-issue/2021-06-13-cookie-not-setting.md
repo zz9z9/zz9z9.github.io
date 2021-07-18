@@ -67,7 +67,7 @@ public String login(String id, String pw, HttpResponse response) throws IOExcept
 |---------------|---------------|
 |name = VALUE    | 쿠키에 부여된 이름과 값(필수) |
 |Expires = DATE | 쿠키의 유효 기간(default : 브라우저 닫을 때까지) |
-|Path = PATH   | 쿠키 적용이 되는 서버 상의 디렉토리(default : 쿠키를 생성한 도큐먼트와 같은 디렉토리 |
+|Path = PATH   | 쿠키 적용이 되는 서버 상의 디렉토리(default : 쿠키를 생성한 도큐먼트와 같은 디렉토리) |
 |Domain = 도메인 명| 쿠키 적용 대상이 되는 도메인 명(default : 쿠키를 생성한 서버의 도메인) |
 |Secure| HTTPS로 통신하는 경우에만 쿠키 송신|
 |HttpOnly| 쿠키를 자바스크립트에서 엑세스하지 못하도록 제한 |
