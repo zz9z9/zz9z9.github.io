@@ -13,7 +13,7 @@ tags: [MSA, 토이 프로젝트]
 - 고가용성을 위해 비동기적으로 처리할 수 있는건 다 비동기적으로 처리해보자.
   - 이렇게 해봤을 때 어떤게 좋고 안 좋은지 등에 대해 직접 느껴보고 어떤식으로 재구성하면 좋을지도 생각해보자
 
-![image](https://user-images.githubusercontent.com/64415489/125468271-93f49d30-d99a-4333-98f4-8dae5c39e660.png)
+![image](https://user-images.githubusercontent.com/64415489/126521625-9c938321-9890-4f15-a7e8-3aeb55b111b8.png)
 
 # 잘 모르겠는 부분
 ---
