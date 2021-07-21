@@ -1,24 +1,20 @@
 ---
-title: 힙 사이즈와 OutOfMemoryError
+title: 자바 힙 메모리 사이즈와 OutOfMemoryError
 date: 2021-07-20 23:00:00 +0900
 categories: [Java]
 tags: [Java, Heap Memory]
 ---
 
-# OS 메모리 영역과 JVM 메모리 영역 ??
+지금까지 OutOfMemoryError(OOM)을 만나게 되면, 정확한 진단없이 그냥 성능 팀에서 하라는 대로 Xms, Xmx 옵션을 활용해서 힙 크기를 조절했던 것 같다.
+내가 스스로 판단할 수 있게끔 지식을 갖추고 연습해보자.
 
-# 힙 사이즈
+# 힙 메모리 사이즈
 ---
 ## 기본값
-default
-초기 메모리 = 32/64 = 0.5GB(InititialHeapSize)
-
-최대 메모리 = 32/ 4= 8GB(MaxHeapSize)
-
-`java -XX:+PrintFlagsFinal -version 2>&1 | grep -i -E 'heapsize|permsize|version'`
-
-metaspacesize
-permsize
+- [공식 문서](https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gc-ergonomics.html) 에 보면 default로 세팅되는 초기 힙사이즈와 최대 힙사이즈에 대해 나와있다.
+- 결론부터 얘기하면, 초기 힙사이즈는 물리 메모리의 1/64, 최대 힙사이즈는 물리 메모리의 1/4이다.
+- 나의 경우 RAM이 32G 이므로, 초기 힙사이즈, 최대 힙사이즈는 각각 500MB, 8GB 정도가 나와야할 것이다.
+- 아래의 `InitialHeapSize`와 `MaxHeapSize`를 확인해보면 예상대로 계산되는 것을 확인할 수 있다.
 
 ```
 $ java -XX:+PrintFlagsFinal -version 2>&1 | grep -i -E 'heapsize|metaspacesize|version'
@@ -38,12 +34,41 @@ $ java -XX:+PrintFlagsFinal -version 2>&1 | grep -i -E 'heapsize|metaspacesize|v
   java version "15.0.1" 2020-10-20
 ```
 
+<img src="https://user-images.githubusercontent.com/64415489/126507865-9dcb5218-9f74-4615-968d-dfe4061f09a8.png" width="80%"/>
 
-## 힙의 최소/최대 사이즈
+## 내 애플리케이션에 적절한 힙 사이즈는 ?
+> 딱 나눠 떨어지는 공식 같은 것은 없는 것 같다. 아래 사항을 참고하여 적절한 힙 사이즈를 찾기 위해 노력해보자.
 
-## 내 애플리케이션에 적절한 힙 사이즈 ?
+아래 내용들은 [공식 문서](https://docs.oracle.com/cd/E13222_01/wls/docs81/perform/JVMTuning.html) 에서 발췌하였다.
+해당 문서는 WebLogic Server를 기준으로 작성되었다.
 
-## 힙의 크기는 유동적으로 증가시킬 수 있는건가 ?
+### 힙 사이즈와 GC
+- GC에 대한 허용 속도는 애플리케이션에 따라 다르며 GC의 실제 시간과 빈도를 분석한 후 조정해야 한다.
+- 힙 크기가 클수록 Full GC 속도가 느려지고 빈도는 줄어든다. 힙 크기가 작을수록 Full GC는 빠르지만 자주 발생한다.
+- 힙 크기를 조정하는 목적은 JVM이 GC 수행하는 데 드는 시간을 최소화하는 동시에, 한 번에 처리할 수 있는 클라이언트 수를 최대화하는 것이다.
+
+### verbosegc 사용하기
+- HotSpot VM의 GC 옵션(verbosec)을 사용하면 GC에 투입되는 시간과 리소스의 양을 정확하게 측정할 수 있다.
+  - 로그 파일을 통해 진단 결과를 확인한다.
+- 애플리케이션을 실행하는 동안 최대 부하에서 성능을 모니터링 한다.
+- verbosec 옵션을 사용하여 JVM에 대한 자세한 가비지 수집 출력을 켜고 표준 오류 및 표준 출력을 모두 로그 파일을 통해 다음을 확인한.
+  - 실행옵션 예시 : `-XX:+UseSerialGC -Xms1024m -Xmx1024m -verbose:gc`
+  - GC 수행 빈도
+  - GC 수행 시간(Full GC는 3~5초 이상 걸리지 않아야 한다.)
+  - Full GC 후 사용 가능한 힙 메모리. 즉, 항상 힙의 85% 이상이 사용 가능한 상태라면 경우 힙 크기를 더 작게 설정할 수 있다.
+- 힙 크기가 시스템에서 사용 가능한 RAM보다 크지 않아야 한다.
+  - 시스템이 페이지를 디스크로 "swap" 하지 않도록 가능한 큰 힙 크기를 사용한다.
+  - 시스템의 사용 가능한 RAM 크기는 하드웨어 구성과 시스템에서 프로세스를 실행하는 데 필요한 메모리 요구 사항에 따라 달라진다.
+- 시스템이 가비지 수집에 너무 많은 시간을 소비하는 경우 힙 크기를 줄인다.
+  - 일반적으로 사용 가능한 RAM의 80%(운영 체제나 다른 프로세스에서 사용하지 않음)를 JVM에 사용해야 한다.
+
+### 주의사항
+- JVM에서 사용하는 최대 메모리 양이 사용 가능한 물리적 RAM 양을 초과하지 않도록 설정해야 한다.
+  - 이 값을 초과하면 OS가 페이징을 시작하고 성능이 크게 저하된다.
+- 프로덕션 환경에서는 최소 힙 크기와 최대 힙 크기를 동일한 값으로 설정한다.
+   - 힙을 지속적으로 늘리거나 줄이는 데 사용되는 JVM 리소스를 낭비하지 않도록 하기 위해
+
+<br>
 
 # OutOfMemoryError의 다양한 원인 살펴보기
 ---
@@ -113,8 +138,10 @@ jstat은 $JAVA_HOME/bin 디렉토리에 존재한다.*
 ---
 - finalize를 사용하면 안되는 이유
 - 스레드 우선순위
+- gc 로그 보는 법
 
 # 참고 자료
 ---
-- 자바 트러블슈팅
-- https://docs.oracle.com/cd/E12839_01/web.1111/e13814/jvm_tuning.htm#PERFM164
+- 이상민, 『자바 트러블슈팅』, 제이펍(2019), 12장.
+- [https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gc-ergonomics.html](https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gc-ergonomics.html)
+- [https://docs.oracle.com/cd/E12839_01/web.1111/e13814/jvm_tuning.htm#PERFM150](https://docs.oracle.com/cd/E12839_01/web.1111/e13814/jvm_tuning.htm#PERFM150)
