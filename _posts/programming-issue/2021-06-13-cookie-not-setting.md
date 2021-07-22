@@ -16,7 +16,7 @@ tags: [Cookie, Set-Cookie]
 # 원인
 ---
 - Set-Cookie 헤더의 속성 중 `Path`값을 따로 설정하지 않으면 쿠키를 응답한 화면이 포함된 디렉토리와 그 하위 디렉토리로 요청하는 경우에만 쿠키를 송신한다.
-- 파일 디렉토리는 아래와 같이 때문에 Path를 따로 설정하지 않으면, login 화면이 포함된 /user 디렉토리와 그 하위에 있는 자원을 요청하는 경우에만 쿠키가 송신된다.
+- 파일 디렉토리는 아래와 같기 때문에 Path를 따로 설정하지 않으면, login 화면이 포함된 /user 디렉토리와 그 하위에 있는 자원을 요청하는 경우에만 쿠키가 송신된다.
 - 결과적으로, index 화면은 login 화면보다 상위 디렉토리에 존재하기 때문에 index 화면에 리디렉션시 쿠키가 송신되지 않았던 것이다.
 ```
 ├── ./index.html
@@ -60,7 +60,7 @@ public String login(String id, String pw, HttpResponse response) throws IOExcept
 개별 쿠키를 개별 애플리케이션 경로에만 유효하도록 선언하는 것이 좋다.
 
 
-# Set-Cookie 필드 속성 값 살펴보기
+## Set-Cookie 필드 속성 값 살펴보기
 ---
 
 |  속성          |   설명         |
