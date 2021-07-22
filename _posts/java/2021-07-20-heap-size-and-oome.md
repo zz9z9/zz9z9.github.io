@@ -53,6 +53,7 @@ $ java -XX:+PrintFlagsFinal -version 2>&1 | grep -i -E 'heapsize|metaspacesize|v
 - 애플리케이션을 실행하는 동안 최대 부하에서 성능을 모니터링 한다.
 - verbosec 옵션을 사용하여 JVM에 대한 자세한 가비지 수집 출력을 켜고 표준 오류 및 표준 출력을 모두 로그 파일을 통해 다음을 확인한.
   - 실행옵션 예시 : `-XX:+UseSerialGC -Xms1024m -Xmx1024m -verbose:gc`
+    - 자바9 부터는 `-verbose:gc` 옵션 대신 `-Xlog:gc`라는 옵션을 사용해야한다.
   - GC 수행 빈도
   - GC 수행 시간(Full GC는 3~5초 이상 걸리지 않아야 한다.)
   - Full GC 후 사용 가능한 힙 메모리. 즉, 항상 힙의 85% 이상이 사용 가능한 상태라면 경우 힙 크기를 더 작게 설정할 수 있다.
