@@ -5,6 +5,13 @@ categories: [JAVA]
 tags: [JAVA, poi library] # TAG names should always be lowercase
 ---
 
+회사 프로젝트에서 조회한 화면에 대해 엑셀 파일로 다운받게 만들어주는 기능을 구현해야 했다. 방법을 찾다보니 POI 라이브러리라는게 있었고 이를 활용해서 구현할 수 있었다.
+하지만, 다른 파트에서 해당 라이브러리를 사용하다 OOM(Out Of Memory)에러가 발생했고, 구현체를 살펴보니 XSSF의 usermodel을 사용하고 있었다.
+해당 파트에서는 문제 해결을 위해 알아보던 중, SXSSF가 더 효율적이라는 것을 찾아냈고 이를 적용하여 OOM 문제를 해결했다.
+([이 글](https://lhb0517.tistory.com/entry/OOM-%EB%A7%9E%EA%B3%A0-%EB%82%98%EC%84%9C-%EC%95%8C%EC%95%84%EB%B3%B8-apache-poi-xlsx) 에서도 비슷한 경험을 공유해주신다.)<br>
+아직 우리 파트에선 OOM이 발생하진 않았지만, 현재 XSSF를 사용하고 있기 때문에 OOM이 발생할 잠재적 가능성을 갖고있는 것이다.
+따라서, SXSSF를 적용하기에 앞서 어떤 원리로 이런 차이가 만들어지는건지 알고 싶었다.
+
 # HSSF & XSSF
 ---
 - HSSF는 Excel '97(-2007) 파일 형식(.xls)를 지원한다.
