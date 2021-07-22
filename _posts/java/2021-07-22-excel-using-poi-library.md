@@ -20,12 +20,11 @@ tags: [JAVA, poi library] # TAG names should always be lowercase
 - XSSF가 지원되는 Excel 2007(.xlsx) 파일은 XML 기반, HSSF가 지원되는 Excel '97 파일(.xls)은 바이너리 기반이다.
   - XML을 처리하는데 필요한 memory footprint가 더 높다.
 
-***※ memory footprint : 프로그램이 실행하는 동안 사용하거나 참조하는 기본 메모리의 양***
+### ***※ memory footprint : 프로그램이 실행하는 동안 사용하거나 참조하는 기본 메모리의 양***
 
 # SXSSF
 ---
 > Since 3.8-beta3, POI ***provides a low-memory footprint*** SXSSF API built on top of XSSF. <br>
-
 
 - SXSSF는 매우 큰 스프레드시트를 생성하거나 힙 공간이 제한될 때 사용할 수 있는 XSSF의 API 호환 스트리밍 확장이다.
 - SXSSF는 sliding window 내에 있는 행에 대한 액세스를 제한하여 low memory footprint를 가능하게 한다. <br> (window : 메모리 버퍼의 일정 영역)
