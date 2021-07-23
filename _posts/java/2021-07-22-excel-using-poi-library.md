@@ -111,6 +111,10 @@ public static void main(String[] args) throws Throwable {
   <figcaption align="center">출처 : https://poi.apache.org/components/spreadsheet/</figcaption>
 </figure>
 
+# 실제 메모리 사용량 비교해보기
+---
+- [XSSF vs SXSSF 클래스 메모리 사용량 비교해보기](https://zz9z9.github.io/posts/xssf-oom-analyze/)
+
 # 더 공부할 부분
 ---
 - sliding window memory 아키텍처
