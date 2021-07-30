@@ -1,7 +1,7 @@
 ---
 title: 카프카의 전반적인 구성과 동작 방식 살펴보기
 date: 2021-07-15 14:00:00 +0900
-categories: [책으로 공부하기, Kafka]
+categories: [Kafka]
 tags: [Kafka]
 ---
 
