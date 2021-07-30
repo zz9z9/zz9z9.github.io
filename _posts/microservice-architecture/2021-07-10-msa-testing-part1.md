@@ -1,7 +1,7 @@
 ---
 title: MSA 환경에서 테스트하기(1) - 단위 테스트
 date: 2021-07-10 22:25:00 +0900
-categories: [책으로 공부하기, 마이크로서비스 패턴]
+categories: [Microservice Architecture]
 tags: [MSA, 테스트 코드]
 ---
 *※ 해당 내용은 '마이크로서비스 패턴(크리스 리처드슨)' 9장을 읽고 필요한 부분을 정리한 내용입니다.*
