@@ -157,7 +157,7 @@ tags: [Kafka]
 ### Exactly Once 구현
 - 카프카의 유용성이 높아지면서 Exactly Once 수준의 전달을 보증하고자 하는 요구가 높아졌다.
 - 이를 위해 카프카에 트랜잭션 개념을 도입하게 되었다.
-- Exactly Once를 보증하기 위해서는 프로듀서, 컨슈머 측에서의 구현도 필요하다.
+- Exactly Once를 보증하기 위해서는 [프로듀서, 컨슈머 측에서의 구현](https://zz9z9.github.io/posts/kafka-delivery-guarantees-exactly-once/) 도 필요하다.
 
 <figure align = "center">
   <img src = "https://user-images.githubusercontent.com/64415489/125667207-a72a8e9a-b6c4-4afb-b2e7-b94c587bf6e3.png" width="80%"/>
