@@ -130,19 +130,21 @@ tags: [Kafka]
 - 프로듀서 입장에서는 당연히 중간에 메세지가 유실되지 않고 컨슈머까지 전달되어야 한다.
 - 이를 위해 카프카는 '전달 보증(delivery guarantees)' 기능을 제공한다.
 
-| 종류 | 개요 | 재전송 유무 | 중복 삭제 유무| 메세지 중복/유실 여부 |
+| 종류 | 브로커에서 메시지 처리 | 재전송 유무 | 중복 삭제 유무| 메시지 유실 여부 |
 | --- | --- | --- | --- | --- |
-| At Most Once  | 최대 1회까지 전달 시도 | X | X | 중복되지 않지만 유실될 수 있다|
-| At Least Once | 최소 1회는 전달 | O | X | 중복 가능성은 있지만 유실되진 않는다 |
-| Exactly Once  | 1회만 전달 | O | O | 중복, 유실되지 않지만 성능이 좋지 않다|
+| At Most Once  | 0 또는 1회 | X | X | 유실될 수 있다.|
+| At Least Once | 1회 또는 그 이상 | O | X | 유실 가능성이 낮다.|
+| Exactly Once  | 1회 | O | O | 유실 가능성이 매우 낮다.|
 
 - 카프카 개발 초기에는 높은 처리량을 구현해야 했기 때문에 Exactly Once 수준의 보증은 미루고 최소한 메세지 유실을 방지하고자 At Least Once 수준으로 전달을 보증했다.
 
 ### Ack와 Offset Commit
-- At Least Once를 실현하기 위해 도입한 개념
 - Ack
   - 브로커가 메세지를 수신했을 때 프로듀서에게 수신 완료했다는 응답
   - 이것을 이용해 프로듀서는 재전송 여부를 판단할 수 있다.
+  - `acks = 0`이면 at most once 수준의 전달 보증
+  - `acks = 1`이면 at least once 수준의 전달 보증 (default)
+  - `acks = all`이면 exactly once 수준의 전달 보증 (acks 이외에 enable.idempotence 등의 설정도 필요하다.)
 - Offset Commit
   - Offset : 컨슈머가 어디까지 메세지를 받았는지를 관리하기 위한 지표
   - Offset Commit : 오프셋을 이용해 전달 보증을 실현하는 구조
