@@ -149,6 +149,7 @@ public class XssfTest {
 ### Dominator Tree
 - Dominator Tree를 살펴보면 ElementXobj 객체로 인해 대부분의 메모리가 점유되고 있다.
 - `.xlsx` 파일은 XML 기반이라고 하는데, XSSF는 이 XML을 처리하는데 메모리를 상당히 많이 차지하는 것 같다.
+  - `.xlsx` 의 XML과 관련된 글은 [네이버 기술블로그의 다음 글](https://d2.naver.com/helloworld/9423440) 을 참고해보면 좋을 것 같다.
 ![image](https://user-images.githubusercontent.com/64415489/126833565-449cc779-cb63-4b37-ab8c-ebb9bb330892.png)
 
 ## 테스트 케이스2. SXSSF(auto-flush 사용하지 않음)
