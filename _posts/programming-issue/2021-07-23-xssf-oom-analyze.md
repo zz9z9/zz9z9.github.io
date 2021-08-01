@@ -221,5 +221,5 @@ public class SxssfAutoFlush {
 # 결론
 ---
 - 추측 : XSSF는 XML 기반의 무언가를 처리함에 있어서 메모리 낭비가 심하다.
-  - 이로 인해, 데이터 건수가 많으면 OOM이 발생하게 된
+  - 이로 인해, 데이터 건수가 많으면 OOM이 발생하게 된다.
 - poi를 활용해 엑셀을 만든다면 SXSSF를 auto-flush 기능을 활성화해서 사용하자.
