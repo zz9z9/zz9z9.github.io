@@ -30,6 +30,8 @@ tags: [Kafka, 미해결]
 ## Case 1. at least once 수준에서의 재송신
 - 환경 및 옵션 세팅
   - 브로커 1대 / acks = 1(default) / request.timeout.ms = 1000 (1초) / retries = 10
+  - 토픽 생성
+    - `./bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic 토픽명`
 
 - 테스트 시나리오
   1. 브로커를 끈다.
@@ -112,7 +114,7 @@ public class SampleProducer {
   - 브로커 1대 / acks = 1(default) / request.timeout.ms = 1000 (1초) / retries = 10
 
 - 테스트 시나리오
-  1. 브로커를 켜고 메시지를 한 번 송신한다.(메타데이터를 받아온다.)
+  1. 주키퍼와 브로커를 켜고 메시지를 한 번 송신한다.(메타데이터를 받아온다.)
   2. 브로커를 끈다.
   3. 메시지를 송신한다.
   4. request.timeout.ms에 정의된 시간 내에 ack 응답이 오지 않으면 10번 재송신된다.
@@ -151,7 +153,7 @@ exception : org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s
     - `./bin/kafka-topics.sh --create --zookeeper localhost:2181 --config min.insync.replicas=2 --replication-factor 3 --partitions 1 --topic 토픽명`
 
 - 테스트 시나리오
-  1. 브로커를 3대를 켠다.
+  1. 주피커와 브로커를 3대를 켠다.
   2. 메시지를 한 번 송신하고 정상적으로 처리되는지 확인한다.
   3. 브로커 두 대를 다운시킨다.
   4. 브로커가 한 대만 남아있으므로 `min.insync.replicas=2`를 만족할 수 없기 때문에 에러가 발생할 것이고 메시지는 재전송 될 것이다.
@@ -262,12 +264,119 @@ public class SampleProducer {
   <figcaption align="center">출처 : https://jaceklaskowski.gitbooks.io/apache-kafka/content/kafka-server-ReplicaManager.html </figcaption>
 </figure>
 
+<br>
 
-## Case4. at most once vs at least once 메시지 유실 정도 비교 (작성중)
-- 새로운 리더 선발하는 동안 at most once와 at least once의 메시지 유실 정도 비교하기
+## Case4. at most once vs at least once 메시지 유실 정도 비교
+- 환경 및 옵션 세팅
+  - 브로커 3대 / replication.factor = 3 / min.insync.replicas = 2 / retries = Integer.MAX
+  - acks = 0 (at most once)
+  - acks = 1 (at least once)
+  - 토픽 생성
+    - `./bin/kafka-topics.sh --create --zookeeper localhost:2181 --config min.insync.replicas=2 --replication-factor 3 --partitions 1 --topic 토픽명`
 
-`./bin/kafka-topics.sh --describe --topic 토픽명 --zookeeper localhost:2181` 명령어를 통해 leader 레플리카를 파악한다.
+- 테스트 시나리오
+1. 주키퍼와 브로커 3대를 켠다.
+2. `./bin/kafka-topics.sh --describe --topic 토픽명 --zookeeper localhost:2181` 명령어를 통해 리더 레플리카를 파악한다.
+3. `./bin/kafka-consumer-groups.sh --bootstrap-server localhost:포트번호 --group dawn --describe` 명령어를 통해 브로커 3대의 LOG-END-OFFSET을 파악한다.
+4. 프로듀서에서 10만건의 메시지를 송신하게 하고 도중에 리더 레플리카를 가진 브로커를 다운시킨다.
+5. 메시지 송신이 완료되고 난 뒤, 새로운 리더 레플리카를 파악하고 3번 명령어 통해 현재 LOG-END-OFFSET을 확인한다.
+6. 새로운 리더가 선출될 때 `LeaderNotAvailableException`가 발생할 것이고, 그로 인해 처리되지 못한 메시지가 얼마나 차이가 나는지 확인해본다.
+  - at most once인 경우에는 리더 선출로 인해 메시지 처리가 되지 않더라도 재송신 하지 않기 때문에 유실되는 메시지가 있을 것이다.
+  - at least once인 경우에 리더 선출로 인해 에러가 나는 경우 메시지를 재송할 것이므로 at most once 경우보다는 더 많은 메시지가 처리될 것이다.
 
+- 테스트 결과 (at most once)
+  - before
+
+  ```
+  GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+  dawn            dawn            0          5               5               0
+  ```
+
+  - after
+
+  ```
+  GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+  dawn            dawn            0          100005          100005          0
+  ```
+
+- 테스트 결과 (at least once)
+  - before
+
+  ```
+  GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+  dawn            dawn            0          100005           100005         0
+  ```
+
+  - after
+
+  ```
+  GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+  dawn            dawn            0          200005          200005          0
+  ```
+
+- 프로듀서 코드
+
+```java
+package basic;
+
+import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import java.util.Properties;
+import java.util.Scanner;
+
+public class SampleProducer {
+    private static final String TOPIC_NAME = "dawn";
+    private static final String FIN_MESSAGE = "exit";
+
+    public static void main(String[] args) {
+        Properties properties = new Properties();
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092,localhost:9093,localhost:9094");
+        properties.put(ProducerConfig.ACKS_CONFIG, "1"); // at most once : 0 , at least once : 1
+        properties.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+        while (true) {
+            Scanner sc = new Scanner(System.in);
+            System.out.print("Input > ");
+            String message = sc.nextLine();
+
+            ProducerRecord<String, String> record = new ProducerRecord<>(TOPIC_NAME, message);
+            try {
+
+                for(int i=0; i<100000; i++) {
+                    producer.send(record, (metadata, exception) -> {
+                        if (exception != null) {
+                            // some exception
+                            System.out.println("exception : " + exception);
+                        }
+                    });
+                    if(i%10000==0) {
+                        Thread.sleep(1000);
+                    }
+                }
+            } catch (Exception e) {
+                // exception
+            } finally {
+                producer.flush();
+            }
+
+            if (message.equals(FIN_MESSAGE)) {
+                producer.close();
+                break;
+            }
+        }
+    }
+}
+```
+
+### 결과 분석
+- 두 가지 전달 보증 수준 모두에서 메시지 유실은 없었다.
+- 이렇게 테스트하는게 아닌가 ... ??
+- 리더가 선출되는 과정과 그 때의 메시지 처리에 대해 좀 더 자세하게 공부해보자
 
 # Case 별로 배운 부분
 ---
