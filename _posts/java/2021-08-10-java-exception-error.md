@@ -37,8 +37,8 @@ Error와 Exception은 모두 `java.lang.Throwable`의 하위 클래스이다. �
 |     |Exception|Error|
 |-----|---------|-----|
 |복구 여부|try-catch 사용하여 호출자에게 다시 예외 throw|불가능|
-|유형|Unchecked type|Checked type, Unchecked type|
-|발생 원인|대부분 프로그램이 실행되는 환경에 의해 발생|프로그램에 의해 발생|
+|유형|Checked type, Unchecked type|Unchecked type|
+|발생 원인|프로그램에 의해 발생|대부분 프로그램이 실행되는 환경에 의해 발생|
 |발생 시점|런타임(Checked type의 경우 컴파일 시점에 컴파일러가 체크)|런타임|
 
 # Checked Exception vs Unchecked Exception
