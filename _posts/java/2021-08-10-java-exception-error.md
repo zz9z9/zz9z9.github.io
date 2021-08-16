@@ -103,9 +103,9 @@ private static void checkedExceptionWithTryCatch() {
 
 # 참고자료
 ---
-- https://stackoverflow.com/questions/5813614/what-is-difference-between-errors-and-exceptions
-- https://madplay.github.io/post/java-checked-unchecked-exceptions
-- https://cheese10yun.github.io/checked-exception/#unchecked-exception-1
-- https://www.geeksforgeeks.org/errors-v-s-exceptions-in-java/
-- https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html
-- https://www.baeldung.com/java-checked-unchecked-exceptions
+- [https://stackoverflow.com/questions/5813614/what-is-difference-between-errors-and-exceptions](https://stackoverflow.com/questions/5813614/what-is-difference-between-errors-and-exceptions)
+- [https://madplay.github.io/post/java-checked-unchecked-exceptions](https://madplay.github.io/post/java-checked-unchecked-exceptions)
+- [https://cheese10yun.github.io/checked-exception/#unchecked-exception-1](https://cheese10yun.github.io/checked-exception/#unchecked-exception-1)
+- [https://www.geeksforgeeks.org/errors-v-s-exceptions-in-java/](https://www.geeksforgeeks.org/errors-v-s-exceptions-in-java/)
+- [https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html](https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html)
+- [https://www.baeldung.com/java-checked-unchecked-exceptions](https://www.baeldung.com/java-checked-unchecked-exceptions)
