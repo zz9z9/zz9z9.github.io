@@ -99,7 +99,7 @@ private static void checkedExceptionWithTryCatch() {
 
 # 실제로 적용해보기
 ---
-- completableFuture 사용해서 성능 개선해보기
+- completableFuture 사용시 get(), fork() 중 어떤 것을 사용해야할까 ?
 
 # 참고자료
 ---
