@@ -118,13 +118,34 @@ CompletableFuture<Void> allFutures = CompletableFuture.allOf(future1, future2, f
 
 ## Case2. 성능 개선 되지 않음
 비슷한 로직을 가진 다른 화면에도 동일하게 적용해봤지만 성능 개선이 되지 않는 경우도 있었다. 원인을 살펴보니, 여러 개의 조회 메서드 중, 특정 하나에서 시간이 오래걸리는 경우였다.
-그렇게 되면, 비동기로 처리하더라도 결국 모든 결과를 가져오는데 걸리는 시간은 제일 오래 걸리는 메서드 기준이므로, 비동기로 처리하는 이점을 누릴 수 없다.
-Case1의 경우 측정해보니 세 개의 메서드가 거의 동일한 시간이 걸렸다. 즉, 적용하고자 하는 로직이 어떤 특성을 갖는지 파악하고 적용해야 개선 효과를 얻을 수 있을 것 같다.
+그렇게 되면, 아래 코드 기준으로 `retrieve()`는 가장 오래 걸리는 작업(future2)이 끝날때까지 기다려야하므로, context switching과 같은 멀티 스레딩 오버헤드를 고려했을 때,
+sequential하게 처리하는게 더 나을수도 있다. Case1의 경우 측정해보니 세 개의 메서드가 거의 동일한 시간이 걸렸다.
+즉, 적용하고자 하는 로직이 어떤 특성을 갖는지 파악하고 적용해야 개선 효과를 얻을 수 있을 것 같다.
 
+```java
+public Map<String, Object> retrieve() {
+  CompletableFuture<Object> future1 =
+                CompletableFuture.supplyAsync(() -> testProxy.findSomething(param1));
+
+  CompletableFuture<Object> future2 =
+                CompletableFuture.supplyAsync(() -> testProxy.findSomething(param2));
+
+  CompletableFuture<Object> future3 =
+                CompletableFuture.supplyAsync(() -> testProxy.findSomething(param3));
+
+
+  Map<String, Object> toClient = new HashMap<>();
+  toClient.put("result1", future1.join()); // 10ms
+  toClient.put("result2", future2.join()); // 2000ms
+  toClient.put("result3", future3.join()); // 10ms
+
+  return toClient;
+}
+```
 
 # After. Parellel Stream 적용
 위에서 살펴본 로직을 다음과 같이 변경하였고, 개선 전에 비해 빨라졌지만 CompletableFuture와 비교했을 때는 좀 더 느린 것을 확인할 수 있었다.
-둘 다 기본적으로 fork-join common pool을 사용하지만, Stream에서는 그룹화하는 부분(`toMap()`) 부분 때문에 CompletableFuture에 비해 시간이 좀 더 걸리는 것 같다.
+둘 다 기본적으로 fork-join common pool을 사용하지만, Stream에서는 그룹화하는 부분(`toMap()`) 때문에 CompletableFuture에 비해 시간이 좀 더 걸리는 것 같다.
 
 ```java
 public Map<String, Object> retrieve() {
