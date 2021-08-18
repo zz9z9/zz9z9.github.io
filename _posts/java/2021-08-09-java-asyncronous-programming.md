@@ -90,6 +90,7 @@ threadpool.shutdown();
 - 내부적으로 `ForkJoinPool`을 사용하여 작업을 비동기식으로 처리한다.
   - 즉, 전역 `ForkJoinPool.commonPool()`메서드에서 얻은 스레드에서 작업을 실행한다.
     - `ForkJoinPool.commonPool()` 메서드에 의해 반환된 스레드 풀은 모든 CompletableFutures 및 모든 병렬 스트림에 의해 JVM 전체에서 공유된다.
+    - ***전역적으로 공유되기 때문에 common pool 사용시 주의해야 한다.([실제 장애 사례](https://multifrontgarden.tistory.com/254))***
     ```java
     private static final Executor ASYNC_POOL = USE_COMMON_POOL ?
         ForkJoinPool.commonPool() : new ThreadPerTaskExecutor();
@@ -285,17 +286,73 @@ CompletableFuture.supplyAsync(() -> 0)
 - 작업이 완료되는 것을 너무 오래 기다리지 않도록 타임아웃을 관리한다.
 
 
-# Parallel Streams
+# Parallel Stream
 ---
+- Fork-Join Framework를 이용하여 작업들을 분할하고, 병렬적으로 처리한다.
+  - Fork-Join Framework는 작업 데이터를 worker 스레드 간에 분할하고, 작업 완료 시 콜백 처리를 담당한다.
 
+- 공통 풀의 스레드 수는 프로세서 코어 수(논리 코어 수, `Runtime.getRuntime().availableProcessors()`)와 동일하다. 그러나 JVM 매개 변수를 전달하여 사용할 스레드 수를 지정할 수도 있다.
+  - `-D java.util.concurrent.ForkJoinPool.common.parallelism=4`
+  - 그러나 이 설정은 전역 설정이므로 모든 병렬 스트림과 공통 풀을 사용하는 fork-join 작업에 영향을 미치기 때문에, 합당한 이유가 아닌 이상 기본 설정을 사용하는 것을 권장한다.
+  - ***전역적으로 공유되기 때문에 common pool 사용시 주의해야 한다.([실제 장애 사례](https://multifrontgarden.tistory.com/254))***
 
-# @Async
----
+<br>
+*병렬 처리의 이점을 완벽히 활용하려면, 다음과 같은 오버헤드를 고려해야한다.*
 
+## Splitting Costs(분할 비용)
+>  데이터 소스를 고르게 분할하는 데 드는 비용이다. 즉, Parallel Stream은 작업을 분할하기 위해 `Spliterator`의 `trySplit()`을 사용하는데,
+>  분할되는 작업의 단위가 균등하게 나누어져야 하며, 나누어지는 작업에 대한 비용이 높지 않아야 순차적 방식보다 효율적으로 이루어질 수 있다.
+
+- 0 ~ 1,000,000까지 ArrayList와 LinkedList에 할당한 뒤, 일반 스트림과 병렬 스트림 사용하여 성능 비교
+  - ArrayList는 위치 속성을 활용하여 저렴하고 고르게 분할할 수 있는 반면, LinkedList에는 이러한 속성이 없다.
+```
+Benchmark                                                     Mode  Cnt        Score        Error     Units
+DifferentSourceSplitting.differentSourceArrayListParallel     avgt   25    2004849,711 ±    5289,437  ns/op
+DifferentSourceSplitting.differentSourceArrayListSequential   avgt   25    5437923,224 ±   37398,940  ns/op
+DifferentSourceSplitting.differentSourceLinkedListParallel    avgt   25   13561609,611 ±  275658,633  ns/op
+DifferentSourceSplitting.differentSourceLinkedListSequential  avgt   25   10664918,132 ±  254251,184  ns/op
+```
+
+## Merging Costs(병합 비용)
+- 병렬 연산을 위해 분할한 데이터 소스를 처리하고 난 뒤에는 각각의 결과를 병합해야 한다.
+- 다음은 0 ~ 1,000,000까지 ArrayList에 할당한 뒤 `reduce()`를 통해 병합하는 경우와, `collect()`를 통해 `Set`으로 그룹화하는 경우에 대한 성능비교이다.
+  - reduce 같은 연산의 경우 비용이 저렴한 반면, `Set`이나 `Map`에 그룹화하는 것과 같은 병합 작업은 상당한 비용이 들 수 있다.
+```
+Benchmark                                                     Mode  Cnt        Score        Error     Units
+MergingCosts.mergingCostsGroupingParallel                     avgt   25  135093312,675 ± 4195024,803  ns/op
+MergingCosts.mergingCostsGroupingSequential                   avgt   25   70631711,489 ± 1517217,320  ns/op
+MergingCosts.mergingCostsSumParallel                          avgt   25    2074483,821 ±    7520,402  ns/op
+MergingCosts.mergingCostsSumSequential                        avgt   25    5509573,621 ±   60249,942  ns/op
+```
+
+## 독립적인 작업
+- `distinct()`, `sorted()`와 같은 중간 단계 연산들(intermediate operation) 중 일부 연산자들은 연산자 내부에 상태(State) 정보를 가지고 있다.
+- 따라서, 모든 Worker들은 독립적으로 다른 Thread에 의해 실행되지만 처리 결과를 이런 상태 정보에 저장하고, distinct() 연산자는 이 정보를 이용하여 정해진 기능을 수행한다.
+- 즉, 내부적으로 어떤 공용 변수를 만들어 놓고 각 worker들이 이 변수에 접근할 경우 동기화 작업(synchronized) 등을 통해 변수를 안전하게 유지하면서 처리하고 있다.
+- 따라서, 잘못 사용할 경우 순차적 실행보다 더 느릴 수도 있다.
+
+## NQ Model
+- Oracle에서 제시한 간단한 모델로써, 병렬화가 성능 향상을 제공할 수 있는지 여부를 판단하는 데 도움이 될 수 있다.
+- N : 소스 데이터 요소의 수
+- Q : 데이터 요소당 수행되는 계산의 양
+- N*Q 제품이 클수록 병렬화를 통해 성능이 향상될 가능성이 높다.
+- 숫자 합계와 같이 Q가 아주 작은 문제의 경우, N은 10,000보다 커야 한다.
+- 계산 수가 증가함에 따라 병렬 처리로 성능을 높이는 데 필요한 데이터 크기는 감소한다.
+- 좀 더 상세한 내용은 [이 글](http://gee.cs.oswego.edu/dl/html/StreamParallelGuidance.html) 을 참조하면 좋을 것 같다.
+
+## CompletableFuture vs Parallel Stream
+- CompletableFuture와 Parallel Stream이 동일한 fork join common pool을 사용하는 동안 성능은 비슷할 수 있다.
+- CompletableFuture의 성능은 선택한 스레드 수로 사용자 정의 스레드 풀을 구성해야 하는 상황에서 더 좋을 수 있다.
+- 또한, 다른 작업을 수행하는 동안 URL에서 다운로드하려는 경우와 같이 비동기식 방법을 찾고 있다면 Completable uture를 선택할 수 있다.
+- Parallel Stream은 모든 작업이 일부 작업을 수행하기를 원하는 CPU 집약적 작업, 즉 모든 스레드가 다른 데이터로 동일한 작업을 수행하기를 원하는 경우 좋은 선택이 될 수 있다.
 
 # 실제로 적용하기
 ---
-- 회사 코드 비동기적으로 리팩토링 해보기
+- 회사 코드 비동기적으로 리팩토링 해보고 성능 비교해보기
+
+# 더 공부해야할 부분
+---
+- stream 기초, 내부적인 작동방식 등
 
 # 참고자료
 ---
@@ -304,3 +361,7 @@ CompletableFuture.supplyAsync(() -> 0)
 - [https://www.linkedin.com/pulse/java-8-future-vs-completablefuture-saral-saxena](https://www.linkedin.com/pulse/java-8-future-vs-completablefuture-saral-saxena)
 - [https://www.callicoder.com/java-8-completablefuture-tutorial/](https://www.callicoder.com/java-8-completablefuture-tutorial/)
 - [https://www.linkedin.com/pulse/asynchronous-programming-java-completablefuture-aliaksandr-liakh](https://www.linkedin.com/pulse/asynchronous-programming-java-completablefuture-aliaksandr-liakh)
+- [https://www.baeldung.com/java-when-to-use-parallel-stream](https://www.baeldung.com/java-when-to-use-parallel-stream)
+- [https://www.popit.kr/java8-stream%EC%9D%98-parallel-%EC%B2%98%EB%A6%AC/](https://www.popit.kr/java8-stream%EC%9D%98-parallel-%EC%B2%98%EB%A6%AC/)
+- [https://m.blog.naver.com/tmondev/220945933678](https://m.blog.naver.com/tmondev/220945933678)
+- [https://roytuts.com/difference-between-parallel-stream-and-completablefuture-in-java/](https://roytuts.com/difference-between-parallel-stream-and-completablefuture-in-java/)
