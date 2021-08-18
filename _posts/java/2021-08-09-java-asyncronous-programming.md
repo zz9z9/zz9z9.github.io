@@ -348,7 +348,7 @@ MergingCosts.mergingCostsSumSequential                        avgt   25    55095
 
 # 실제로 적용하기
 ---
-- 회사 코드 비동기적으로 리팩토링 해보고 성능 비교해보기
+- [회사 코드 비동기적으로 리팩토링 해보고 성능 비교해보기](https://zz9z9.github.io/posts/applying-java-async-for-performance/)
 
 # 더 공부해야할 부분
 ---

@@ -99,7 +99,7 @@ private static void checkedExceptionWithTryCatch() {
 
 # 실제로 적용해보기
 ---
-- completableFuture 사용시 get(), fork() 중 어떤 것을 사용해야할까 ?
+- [completableFuture 사용시 get(), fork() 중 어떤 것을 사용해야할까?](https://zz9z9.github.io/posts/applying-java-async-for-performance/#after-completablefuture-%EC%A0%81%EC%9A%A9)
 
 # 참고자료
 ---
