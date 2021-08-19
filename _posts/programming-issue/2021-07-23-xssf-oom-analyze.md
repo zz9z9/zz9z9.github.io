@@ -181,7 +181,6 @@ public class SxssfNoAutoFlush {
 
 ### Dominator Tree
 - XSSF를 사용할 때와는 다르게 ElementXobj 객체로 인한 낭비는 보이지 않는 것 같다.
-- 또한, 이전에는 보이지 않던 `org.apache.xmlbeans.impl.schema.SchemaTypeSystemImpl`이 등장하는 것을 보면, XML을 처리하는 방식이 좀 더 효율적으로 바뀐게 아닌지 추측해본다.
 ![image](https://user-images.githubusercontent.com/64415489/126836904-3fbee4e0-2d99-4e84-abb7-6842fd653db3.png)
 
 
