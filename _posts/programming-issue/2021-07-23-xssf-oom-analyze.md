@@ -204,6 +204,19 @@ public class SxssfAutoFlush {
 
 - 실행 결과 : `sxssf_autoflush_ver 경과 시간 : 2초`
 
+#### 참고. SXSSFWorkbook의 기본 윈도우 사이즈는 100이다.
+```java
+public static final int DEFAULT_WINDOW_SIZE = 100;
+
+public SXSSFWorkbook() {
+    this((XSSFWorkbook)null);
+}
+
+public SXSSFWorkbook(XSSFWorkbook workbook) {
+    this(workbook, 100);
+}
+```
+
 ### Histogram
 - SXSSFSheet 객체와 그 안에 모든 객체가 점유하는 메모리를 합쳐도 1.6Mb 정도이다.
   - XSSF에 비해 약 50배, auto-flush를 사용하지 않을 때에 비해 약 10배의 메모리를 덜 점유한다.
@@ -215,7 +228,6 @@ public class SxssfAutoFlush {
 ### Dominator Tree
 - 메모리 낭비가 없다고 봐도 무방할 것 같다.
 ![image](https://user-images.githubusercontent.com/64415489/126835214-bf45207f-7866-4caa-a683-3523f767622e.png)
-
 
 # 결론
 ---
