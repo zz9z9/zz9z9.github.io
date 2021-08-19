@@ -2,7 +2,7 @@
 title: XSSF로 인한 OOM 에러 그리고 SXSSF와 메모리 사용량 비교해보기
 date: 2021-07-23 23:00:00 +0900
 categories: [개발 일기]
-tags: [Java, Heap Memory, Eclipse Memory Analyzer]
+tags: [Java, Heap Memory, Eclipse Memory Analyzer, apache poi]
 ---
 
 # 상황
@@ -229,8 +229,34 @@ public SXSSFWorkbook(XSSFWorkbook workbook) {
 - 메모리 낭비가 없다고 봐도 무방할 것 같다.
 ![image](https://user-images.githubusercontent.com/64415489/126835214-bf45207f-7866-4caa-a683-3523f767622e.png)
 
+# 회사 코드에 적용하기
+---
+> 이제 회사 코드에 적용해보고 얼만큼의 효과가 있을지 확인해보자. 데이터 건수는 약 5600건 이다. <br>
+> (보안망으로 인해 테스트 결과는 핸드폰 카메라로 찍었습니다. 화질이 좋지 않으점 양해 부탁드립니다.)
+
+## Before (XSSF 사용)
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/130100579-bebebec9-d636-4c75-a141-e45409a641f4.png"/>
+  <figcaption align="center">메모리 약 300Mb 차지</figcaption>
+</figure>
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/130100976-454ef7f9-4add-4326-b4f4-c65760894403.png"/>
+  <figcaption align="center">엑셀 파일 생성전까지 모든 row를 메모리에 저장</figcaption>
+</figure>
+
+## After (SXSSF 사용 - default window size)
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/130101241-36c1ee77-4c6b-4895-92ff-f0a63cc93ddf.png"/>
+  <figcaption align="center">메모리 약 8Mb 차지</figcaption>
+</figure>
+<figure align = "center">
+  <img src = "https://user-images.githubusercontent.com/64415489/130101870-cb6a92f1-ed4f-4789-bbf4-d919a95db84d.png"/>
+  <figcaption align="center">window size 만큼(default : 100) 메모리에 저장</figcaption>
+</figure>
+
+
 # 결론
 ---
 - 추측 : XSSF는 XML 기반의 무언가를 처리함에 있어서 메모리 낭비가 심하다.
-  - 이로 인해, 데이터 건수가 많으면 OOM이 발생하게 된다.
-- poi를 활용해 엑셀을 만든다면 SXSSF를 auto-flush 기능을 활성화해서 사용하자.
+- XSSF는 엑셀 파일 생성 전까지 모든 행을 메모리에 올려두기 때문에, 데이터가 많은 경우 OOM이 발생할 수 있다.
+- poi를 활용해 엑셀을 만든다면 SXSSF를 auto-flush 기능을 활성화해서 사용하자.(특별한 이유가 없다면 default size를 사용하면 될 것 같다.)
