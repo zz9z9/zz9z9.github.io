@@ -1,8 +1,8 @@
 ---
 title: 간단한 DI 컨테이너 구현해보기
 date: 2021-04-09 22:25:00 +0900
-categories: [Spring]
-tags: [DI Container] # TAG names should always be lowercase
+categories: [개발 일기]
+tags: [Spring, DI Container] # TAG names should always be lowercase
 ---
 
 *※ 순수 자바코드로 간단한 스프링 DI 컨테이너를 구현해보면서 DI의 필요성, 스프링 컨테이너 동작 원리 등을 이해해보기 위해 진행해본 토이 프로젝트* <br><br>

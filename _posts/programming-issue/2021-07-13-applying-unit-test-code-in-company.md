@@ -1,8 +1,8 @@
 ---
 title: MSA 기반의 회사 프로젝트에 단위 테스트 코드 적용하기
 date: 2021-07-13 22:25:00 +0900
-categories: [TDD]
-tags: [테스트 코드, MSA]
+categories: [개발 일기]
+tags: [TDD, 테스트 코드, MSA]
 ---
 
 # 들어가기 전
