@@ -343,7 +343,7 @@ MergingCosts.mergingCostsSumSequential                        avgt   25    55095
 ## CompletableFuture vs Parallel Stream
 - CompletableFuture와 Parallel Stream이 동일한 fork join common pool을 사용하는 동안 성능은 비슷할 수 있다.
 - CompletableFuture의 성능은 선택한 스레드 수로 사용자 정의 스레드 풀을 구성해야 하는 상황에서 더 좋을 수 있다.
-- 또한, 다른 작업을 수행하는 동안 URL에서 다운로드하려는 경우와 같이 비동기식 방법을 찾고 있다면 Completable uture를 선택할 수 있다.
+- 또한, 다른 작업을 수행하는 동안 URL에서 다운로드하려는 경우와 같이 비동기식 방법을 찾고 있다면 CompletableFuture를 선택할 수 있다.
 - Parallel Stream은 모든 작업이 일부 작업을 수행하기를 원하는 CPU 집약적 작업, 즉 모든 스레드가 다른 데이터로 동일한 작업을 수행하기를 원하는 경우 좋은 선택이 될 수 있다.
 
 # 실제로 적용하기
