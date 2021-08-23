@@ -5,7 +5,7 @@ categories: [JAVA]
 tags: [JAVA, Exception, Error]
 ---
 
-# 들어가기전
+# 들어가기 전
 ---
 `CompletableFuture`를 사용하여 결과를 가져올 때, `get()`과 `join()`을 사용할 수 있는데, `get()`의 경우 checkedException `join()`의 경우 uncheckedException을 발생시킨다고 한다.
 이 둘의 차이는 무엇이고 그럼 어떤 메서드를 사용해야할까에 대한 판단을 내리기 위해 공부해보자.
