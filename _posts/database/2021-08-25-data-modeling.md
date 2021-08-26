@@ -290,7 +290,7 @@ tags: [데이터 모델링]
 
 # 실제로 적용해보기
 ---
-
+- [사이드 프로젝트에서 데이터 모델링 해보기](https://zz9z9.github.io/posts/my-wedding-manager-table-architecture/)
 
 # 참고 자료
 ---
