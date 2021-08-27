@@ -148,6 +148,8 @@ public interface ApplicationContext extends EnvironmentCapable, ListableBeanFact
     - AppConfig에서 boilerplate 코드가 생긴다 (빈 있는지 체크, 없으면 객체 생성)
     - 메서드 이름이 바뀌면 beanName 변수의 값도 변경해줘야 한다.
       - 즉, 실수할 여지를 제공한다.
+    - 상속 구조로 인해 AppConfig는 CommonConfig에 의존하게된다.
+      - CommonConfig의 변경이 AppConfig에 영향을 줄 수 있다.
 
 ```java
 public class CommonConfig {
