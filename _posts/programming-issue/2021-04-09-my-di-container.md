@@ -144,44 +144,65 @@ public interface ApplicationContext extends EnvironmentCapable, ListableBeanFact
 ### Config 클래스들에 공통적으로 적용될 수 있는 부모 클래스 생성
   - Container가 여러번 생성되더라도 Config에 있는 빈은 한 번만 등록될 수 있도록 static으로 선언
   - 멀티스레딩 환경에서의 동시 접근 문제를 방지하기 위해 ConcurrentHashMap 사용
-  - 이 방식은 어떤 문제점이 있을까 ?
+  - 문제점
+    - AppConfig에서 boilerplate 코드가 생긴다 (빈 있는지 체크, 없으면 객체 생성)
+    - 메서드 이름이 바뀌면 beanName 변수의 값도 변경해줘야 한다.
+      - 즉, 실수할 여지를 제공한다.
+
 ```java
 public class CommonConfig {
 
     private static Map<String, Object> beanStore = new ConcurrentHashMap<>();
+    private static Set<String> beanNames = ConcurrentHashMap.newKeySet();
 
-    public <T> T getBean(T instance) {
+    public Object getBean(String beanName) {
+        return beanStore.get(beanName);
+    }
 
-        String instanceName = instance.getClass().getName();
-        T returnInstance;
+    public <T> void createBean(String beanName, T instance) {
+        beanStore.put(beanName, instance);
+        beanNames.add(beanName);
+    }
 
-        if(beanStore.get(instanceName)==null) {
-            beanStore.put(instanceName, instance);
-        }
-
-        returnInstance = (T) beanStore.get(instanceName);
-
-        return returnInstance;
+    public boolean isExist(String beanName) {
+        return beanNames.contains(beanName);
     }
 }
 ```
 
 ```java
 public class AppConfig extends CommonConfig {
-
     public CustomerService customerService() {
-        CustomerService customerService = new CustomerServiceImpl(customerRepository(), plannerService());
-        return super.getBean(customerService);
+
+        String beanName = "customerService";
+        if(!isExist(beanName)) {
+            CustomerService customerService = new CustomerServiceImpl(customerRepository(), plannerService());
+            createBean(beanName, customerService);
+        }
+
+        return (CustomerService) getBean(beanName);
     }
 
     public PlannerService plannerService() {
-        PlannerService plannerService = new PlannerServiceImpl(customerRepository());
-        return super.getBean(plannerService);
+
+        String beanName = "plannerService";
+        if(!isExist(beanName)) {
+            PlannerService plannerService = new PlannerServiceImpl(customerRepository());
+            createBean(beanName, plannerService);
+        }
+
+        return (PlannerService) getBean(beanName);
     }
 
     public CustomerRepository customerRepository() {
-        CustomerRepository customerRepository = new TemporaryCustomerRepository();
-        return super.getBean(customerRepository);
+
+        String beanName = "customerRepository";
+        if(!isExist(beanName)) {
+            CustomerRepository customerRepository = new TemporaryCustomerRepository();
+            createBean(beanName, customerRepository);
+        }
+
+        return (CustomerRepository) getBean(beanName);
     }
 }
 ```
