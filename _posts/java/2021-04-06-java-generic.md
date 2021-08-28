@@ -15,7 +15,7 @@ tags: [Java, Generic]
 
 ```java
 public class CastingGenericDTO<T> implements Serialiazble {
-	private T object;
+    private T object;
     public void setObject(T obj) {
     	this.object= obj;
     }
