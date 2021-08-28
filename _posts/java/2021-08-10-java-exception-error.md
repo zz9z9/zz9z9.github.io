@@ -1,8 +1,8 @@
 ---
 title: Exception과 Error
 date: 2021-08-10 00:29:00 +0900
-categories: [JAVA]
-tags: [JAVA, Exception, Error]
+categories: [Java]
+tags: [Java, Exception, Error]
 ---
 
 # 들어가기 전

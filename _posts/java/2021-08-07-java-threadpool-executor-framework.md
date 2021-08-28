@@ -1,8 +1,8 @@
 ---
 title: Thread Pool을 위한 Java Executor Framework
 date: 2021-08-07 00:29:00 +0900
-categories: [JAVA]
-tags: [JAVA, Thread Pool, Executor Framework]
+categories: [Java]
+tags: [Java, Thread Pool, Executor Framework]
 ---
 
 자바에서의 비동기 처리를 위해 `CompletableFuture`에 대해 공부하며 클래스 내부를 보다보니 `Executor`, `ForkJoinPool` 등이 눈에 띄었다.

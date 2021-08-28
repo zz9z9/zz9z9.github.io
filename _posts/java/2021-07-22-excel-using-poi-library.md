@@ -1,8 +1,8 @@
 ---
 title: 자바로 엑셀을 만들기 위한 POI 라이브러리 살펴보기
 date: 2021-07-22 00:29:00 +0900
-categories: [JAVA]
-tags: [JAVA, poi library] # TAG names should always be lowercase
+categories: [Java]
+tags: [Java, poi library] # TAG names should always be lowercase
 ---
 
 회사 프로젝트에서 조회한 화면에 대해 엑셀 파일로 다운받게 만들어주는 기능을 구현해야 했다. 방법을 찾다보니 POI 라이브러리라는게 있었고 이를 활용해서 구현할 수 있었다.

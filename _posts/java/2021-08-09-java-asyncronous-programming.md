@@ -1,8 +1,8 @@
 ---
 title: 비동기 프로그래밍을 위한 자바 클래스 살펴보기
 date: 2021-08-09 00:29:00 +0900
-categories: [JAVA]
-tags: [JAVA, 비동기, Future, CompletableFuture]
+categories: [Java]
+tags: [Java, 비동기, Future, CompletableFuture]
 ---
 
 # 들어가기 전
