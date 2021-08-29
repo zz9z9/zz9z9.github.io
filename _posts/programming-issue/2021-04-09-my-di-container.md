@@ -5,8 +5,22 @@ categories: [개발 일기]
 tags: [Spring, DI Container] # TAG names should always be lowercase
 ---
 
-*※ 순수 자바코드로 간단한 스프링 DI 컨테이너를 구현해보면서 DI의 필요성, 스프링 컨테이너 동작 원리 등을 이해해보기 위해 진행해본 토이 프로젝트* <br><br>
-※ [구현코드 repository](https://github.com/zz9z9/my-di-container)
+# 들어가기 전
+---
+순수 자바코드로 간단한 스프링 DI 컨테이너를 구현해보면서 DI의 필요성, 스프링 컨테이너 동작 원리 등을 이해해보기 위해 약 일주일간 토이 프로젝트를 진행했다.
+아래의 요구사항들을 구현하며 간단한 컨테이너를 구현해보았다.
+- 컨테이너 생성자 파라미터로 AppConfig.class를 전달받고 해당 클래스의 정의된 메서드를 기반으로 빈을 생성한다.
+  - 생성되는 빈은 유일해야 한다(싱글톤).
+- 빈의 이름으로 빈을 가져올 수 있다.
+- 빈의 타입으로 빈을 가져올 수 있다.
+- 관리되는 모든 빈의 이름을 조회할 수 있다.
+- 예외 처리
+  - 부모 타입으로 조회시, 자식이 둘 이상 있으면 중복 오류가 발생한다.
+  - 등록되지 않은 빈의 이름으로 조회시 오류가 발생해야 한다.
+- 이를 바탕으로 간단한 애플리케이션 로직 작성
+
+※ [구현 코드 repository](https://github.com/zz9z9/my-di-container)
+
 
 # DI(Dependency Injection) Container란 ?
 ---
