@@ -71,7 +71,7 @@ tags: [HTTP, Web Server, WAS]
 ### 구현하면서 알게된 것들
 - 브라우저에서 넘어오는 request가 어떤식으로 구성되어있는지 `connection.getInputStream()`을 디버거로 찍었는데 요청에 대한 문자열 정보가 보이지 않는다. (connection은 Socket 객체)
   - `InputStream`은 바이트 단위로 숫자를 저장하기 때문에 원하는 값 볼 수 없었던 것.[(참고)](https://docs.oracle.com/javase/7/docs/api/java/io/InputStream.html)
-  - `InputStreamReader` 활용하여 byte array인 `InputStream`을 역직렬화 하고 `BufferdReader`를 이용해서 보니 요청의 맨 첫번째 줄에 html 파일에 관련된 정보가 있다.
+  - `BufferdReader`, `InputStreamReader`를 활용하여 byte array인 `InputStream`을 읽어보니 요청의 맨 첫번째 줄에 html 파일에 관련된 정보가 있다.
 - 상대경로를 사용할 경우, `./` (현재 위치)는 bin, src 폴더를 포함하는 해당 자바 프로젝트 폴더의 위치이다.
 
 <br>
