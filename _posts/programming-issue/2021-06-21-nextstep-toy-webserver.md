@@ -402,79 +402,90 @@ public class ExecutionResult {
 > LogicMapper 개선 (RequestLogicMapper)
 - LogicMapper에서 실제 비즈니스 로직을 바로 실행하는게 아니라, 중간에 LogicExecutor라는 객체를 둔다.
 - LogicMapper에서는 들어온 요청에 따라 실제 로직 메서드가 아닌 LogicExecutor의 특정 메서드를 실행하고 파라미터도 Map 형태로만 넘기도록 수정.
+- 하지만, 로직에서 추가적으로 필요한 파라미터로 HttpRequest, HttpResponse 등도 있을 수 있으므로 일단은 아래 코드처럼 Map, HttpRequest, HttpResponse했는데 해당 파라미터가 필요하지 않더라 받아야하므로 비효율적이다.
+- 실제 Spring MVC에서는 Controller 단에서 HttpServletRequest, HttpServletRespone 등을 자유롭게 받을 수 있던데, 어떻게 가능한건지 공부해보자.
 
 ```java
-    public class RequestLogicMapper {
-        static class Execution {
-            private String methodName;
-            private ResponseType responseType;
+public class RequestLogicMapper {
+    static class Execution {
+        private String methodName;
+        private ResponseType responseType;
 
-            public Execution(String methodName, ResponseType responseType) {
-                this.methodName = methodName;
-                this.responseType = responseType;
-            }
+        public Execution(String methodName, ResponseType responseType) {
+            this.methodName = methodName;
+            this.responseType = responseType;
+       }
 
-            public String getMethodName() {
-                return methodName;
-            }
-
-            public ResponseType getResponseType() {
-                return responseType;
-            }
+        public String getMethodName() {
+            return methodName;
         }
 
-        private LogicExecutor logicExecutor = LogicExecutor.getInstance();
-        private Map<String, Execution> getMappingUrl = new HashMap<>();
-        private Map<String, Execution> postMappingUrl = new HashMap<>();
+        public ResponseType getResponseType() {
+            return responseType;
+        }
+    }
 
-        public RequestLogicMapper() {
-            initGetRequest();
-            initPostRequest();
+    private LogicExecutor logicExecutor = LogicExecutor.getInstance();
+    private static Map<String, Execution> getMappingUrl = new HashMap<>();
+    private static Map<String, Execution> postMappingUrl = new HashMap<>();
+
+    static {
+        initGetRequest();
+        initPostRequest();
+    }
+
+    private static void initGetRequest() {
+        getMappingUrl.put("/user/create", new Execution("signup", ResponseType.HTML_PAGE));
+        getMappingUrl.put("/user/list", new Execution("getUserList", ResponseType.HTML_PAGE));
+    }
+
+    private static void initPostRequest() {
+        postMappingUrl.put("/user/create", new Execution("signup", ResponseType.HTML_PAGE));
+        postMappingUrl.put("/user/login", new Execution("login", ResponseType.HTML_PAGE));
+    }
+
+    public ExecutionResult doRequestLogic(HttpRequest httpRequest, HttpResponse httpResponse) throws Exception {
+        HttpMethod httpMethod = httpRequest.getHttpMethod();
+        String requestUrl = httpRequest.getRequestUrl();
+        Execution execution = null;
+
+        switch (httpMethod) {
+            case GET:
+                execution = Optional.ofNullable(getMappingUrl.get(requestUrl)).orElseThrow(NoSuchMethodError::new);
+                break;
+            case POST:
+                execution = Optional.ofNullable(postMappingUrl.get(requestUrl)).orElseThrow(NoSuchMethodError::new);
+                break;
         }
 
-        private void initGetRequest() {
-            getMappingUrl.put("/user/create", new Execution("signup", ResponseType.HTML_PAGE));
+        switch (execution.getResponseType()) {
+            case HTML_PAGE:
+                httpResponse.setStatusCode(HttpStatusCode3xx.Found);
+                break;
+            case DATA:
+                httpResponse.setStatusCode(HttpStatusCode2xx.OK);
         }
 
-        private void initPostRequest() {
-            postMappingUrl.put("/user/create", new Execution("signup", ResponseType.HTML_PAGE));
-            postMappingUrl.put("/user/login", new Execution("login", ResponseType.HTML_PAGE));
-        }
+        Map<String, String> params = httpRequest.getParams();
+        ExecutionResult result = (params != null) ? executeMethodWithParams(execution, params, httpRequest, httpResponse) : executeMethodWithoutParams(execution, httpRequest, httpResponse);
 
-        public ExecutionResult doRequestLogic(HttpRequest httpRequest) throws Exception {
-            HttpMethod httpMethod = httpRequest.getHttpMethod();
-            String requestUrl = httpRequest.getRequestUrl();
-            Map<String,String> params = httpRequest.getParams();
-            Execution execution = null;
+        return result;
+    }
 
-            switch (httpMethod) {
-                case GET:
-                    execution = Optional.ofNullable(getMappingUrl.get(requestUrl)).orElseThrow(NoSuchMethodError::new);
-                    break;
-                case POST:
-                    execution = Optional.ofNullable(postMappingUrl.get(requestUrl)).orElseThrow(NoSuchMethodError::new);
-                    break;
-            }
+    public ExecutionResult executeMethodWithParams(Execution execution, Map<String, String> params, HttpRequest request, HttpResponse response) throws Exception {
+        Method logic = logicExecutor.getClass().getMethod(execution.getMethodName(), Map.class, HttpRequest.class, HttpResponse.class);
+        Object returnObj = logic.invoke(logicExecutor, params, request, response);
 
-            ExecutionResult result = (params!=null) ? executeMethodWithParams(execution, params) : executeMethodWithoutParams(execution);
+        return new ExecutionResult(execution.getResponseType(), returnObj);
+    }
 
-            return result;
-        }
+    public ExecutionResult executeMethodWithoutParams(Execution execution, HttpRequest request, HttpResponse response) throws Exception {
+        Method logic = logicExecutor.getClass().getMethod(execution.getMethodName(), HttpRequest.class, HttpResponse.class);
+        Object returnObj = logic.invoke(logicExecutor, request, response);;
 
-        public ExecutionResult executeMethodWithParams(Execution execution, Map<String,String> params) throws Exception {
-            Method logic = logicExecutor.getClass().getMethod(execution.getMethodName(), Map.class);
-            Object returnObj = logic.invoke(logicExecutor, params);
-
-            return new ExecutionResult(execution.getResponseType(), returnObj);
-        }
-
-        public ExecutionResult executeMethodWithoutParams(Execution execution) throws Exception {
-            Method logic = logicExecutor.getClass().getMethod(execution.getMethodName());
-            Object returnObj = logic.invoke(logicExecutor);
-
-            return new ExecutionResult(execution.getResponseType(), returnObj);
-        }
-
+        return new ExecutionResult(execution.getResponseType(), returnObj);
+    }
+}
 ```
 
 > LogicExecutor 구현
@@ -494,7 +505,7 @@ public class LogicExecutor {
 
     private UserLogic userLogic = UserLogic.getInstance();
 
-    public String signup(Map<String, String> params) {
+    public String signup(Map<String, String> params, HttpRequest request, HttpResponse response) {
         String id = params.get("userId");
         String pw = params.get("password");
         String name = params.get("name");
@@ -504,11 +515,11 @@ public class LogicExecutor {
         return userLogic.signup(newUser);
     }
 
-    public String login(Map<String, String> params) {
+    public String login(Map<String, String> params, HttpRequest request, HttpResponse response) {
         String id = params.get("userId");
         String pw = params.get("password");
 
-        return userLogic.login(id,pw);
+        return userLogic.login(id,pw,response);
     }
 
 }
@@ -518,20 +529,7 @@ public class LogicExecutor {
 > 1. 로그인이 성공하면 로그인 상태를 유지할 수 있어야 한다.
 - 즉, 로그인이 성공할 경우 요청 헤더의 Cookie 헤더 값이 `logined = true`. 로그인이 실패하면 `logined = false`로 전달되어야 한다.
 
-### 구현하기 전 들었던 생각들
-- LogicExecutor에 선언한 메서드에서 Map 형태의 파라미터 뿐 아니라 setCookie 등의 처리를 위해 HttpResponse 같은 파라미터도 받아야하는 경우 RequestLogicMapper에서 어떻게 처리해줘야 할까?
-
 ### 구현
-> 일단은 아래 코드처럼 했는데 너무 어거지로 했다. 실제 Spring MVC에서는 Controller 단에서 HttpServletRequest, HttpServletRespone 등을 자유롭게 받을 수 있던데, 어떻게 가능한건지 공부해보자
-
-```java
- try {
-    logic = logicExecutor.getClass().getMethod(execution.getMethodName(), Map.class);
- } catch (NoSuchMethodException e) {
-    logic = logicExecutor.getClass().getMethod(execution.getMethodName(), Map.class, HttpResponse.class);
- }
-```
-
 ```java
 public String login(String id, String pw, HttpResponse response) throws IOException {
     User findUser = findUser(id);
@@ -550,13 +548,20 @@ public String login(String id, String pw, HttpResponse response) throws IOExcept
 
 <br>
 
-## 요구사항 6 (미해결)
+## 요구사항 6
 > 접근하고 있는 사용자가 "로그인" 상태일 경우(Cookie로 판별) 사용자 리스트 페이지로 접근했을 때 사용자 목록을 출력한다.
 > 만약 로그인하지 않은 상태라면 로그인 페이지로 이동한다.
 
-### 구현하기 전 들었던 생각들
-- cookie에 세팅된 login 여부 값을 가져와서 로그인 한 경우 목록 출력해야하는데, 그러려면 LogicExecutor에 HttpRequest를 받아서 실제 로직에서 getCookie로 해당 값이 있는지 여부를 알아야하는데
-HttpRequest까지 메서드 파라미터로 받으려면 어떻게 해야할까?? 요구사항5 마지막 고민이 여기서도 발목을 잡는다.
+### 구현
+```java
+    public String getUserList(HttpRequest request) {
+        String isLogined = request.getCookie("logined");
+        if(isLogined!=null && isLogined.equals("true")) {
+            return "/user/list.html";
+        }
+        return "/user/login.html";
+    }
+```
 
 <br>
 
@@ -592,5 +597,5 @@ HttpRequest까지 메서드 파라미터로 받으려면 어떻게 해야할까?
 # 정리
 ---
 - 구현한 웹 서버를 도식화 해보면 아래와 같다.
-  - 요구사항 5~6과 관련된 부분은 추후에 보완해볼 예정이다.
+  - 요구사항 5~6에서 파라미터를 원하는 것만 받게 하려면 어떻게 해야할지는 좀 더 공부해보자.
 ![image](https://user-images.githubusercontent.com/64415489/131258896-540717fe-18d6-48d0-ba76-5ca07a271540.png)
