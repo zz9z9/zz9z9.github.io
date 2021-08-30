@@ -69,11 +69,29 @@ charLoop:
   - [RFC 문서 34p](https://datatracker.ietf.org/doc/html/rfc2616#page-35)
   - HTTP 요청 형태 (HTTP 요청 헤더의 마지막 라인은 공백이었고 이로 인해 readLine() 메서드가 라인이 끝나지 않았다고 판단한 것)<br>
   - CRLF : Carriage Return(커서의 위치를 맨 앞으로 이동) + Line Feed(커서를 한 칸 아래로 이동)
-<img src="https://user-images.githubusercontent.com/64415489/123300555-a9a48500-d555-11eb-885b-e25fd40b499a.png" width = "70%"/>
+
+```
+Request-Line
+*(( general-header
+ | request-header
+ | entity-header ) CRLF)
+CRLF
+[ message-body ]
+```
 
 - 결과적으로 line이 공백이면 `"공백"`이라는 문자열을 출력해봄으로써 실제 HTTP 요청이 위와 같이 들어온다는 것을 알 수 있었고,
 공백인 경우 break를 통해 while문 내에서 계속 대기상태에 머물러있지 않게 할 수 있었다.
 ![image](https://user-images.githubusercontent.com/64415489/123302221-6fd47e00-d557-11eb-9a06-0e37d4e6b4f7.png)
+
+※ 참고. HTTP Response 포맷
+```
+Status-Line
+*(( general-header
+ | response-header
+ | entity-header ) CRLF)
+CRLF
+[ message-body ]
+```
 
 # 요약
 ---
