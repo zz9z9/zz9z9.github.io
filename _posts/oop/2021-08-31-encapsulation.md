@@ -1,6 +1,6 @@
 ---
 title: 객체 지향 언어의 특징 - 캡슐화
-date: 2021-09-01 00:29:00 +0900
+date: 2021-08-31 00:29:00 +0900
 categories: [OOP]
 tags: [OOP, Java]
 ---
@@ -90,3 +90,7 @@ if (account.hasRegularPermission()) {
 - 메서드에서 생성한 객체의 메서드만 호출
 - 파라미터로 받은 객체의 메서드만 호출
 - 필드로 참조하는 객체의 메서드만 호출
+
+# 연관 포스팅
+---
+-[객체 지향 언어의 특징 - 다형성과 추상화](https://zz9z9.github.io/posts/abstraction/)
