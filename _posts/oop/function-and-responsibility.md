@@ -1,6 +1,5 @@
 
 # 기능
-
 - 기능은 하위 기능으로 분해 가능하다
 
 ![image](https://user-images.githubusercontent.com/64415489/131670695-455af5b1-a5b4-48d8-bfc7-66a18ec2a303.png)
@@ -35,3 +34,14 @@
 
 ## 조건별 분기 추상화
 ![image](https://user-images.githubusercontent.com/64415489/131671540-d9299362-8455-4148-8325-52264df617c9.png)
+
+
+- 의도가 잘 드러나는 이름 사용
+![image](https://user-images.githubusercontent.com/64415489/131693177-b8fb7778-940c-46be-92f0-d405be9e0d35.png)
+
+- 역할 분리가 잘 되면 테스트가 용이해진다.
+![image](https://user-images.githubusercontent.com/64415489/131693263-354eab6f-5a25-4e86-82c4-26c47fa59186.png)
+
+
+![image](https://user-images.githubusercontent.com/64415489/131693645-52498e92-14fd-477c-a3d2-1256169be42f.png)
+
