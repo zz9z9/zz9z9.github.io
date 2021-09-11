@@ -14,7 +14,99 @@ tags: [Java, File, Files]
 ※ 파일 이외에도 네트워크 등 자바에서의 전반적인 I/O(Input/Output)에 대해 알고싶으면 [이 글](https://zz9z9.github.io/posts/java-io-nio/) 을 먼저 읽고 오시는 것을 추천드립니다.
 
 
+# 파일과 경로
+---
+> 파일을 다루는 것과 관련하여 뗼 수 없는 것이 바로 '경로'라고 생각한다. <br>
+> 따라서, 자바에서는 경로를 어떻게 다루는지 먼저 살펴보자.
+
+## getPath()
+- 간단히 말해서, getPath()는 파일의 추상 경로 이름(abstract pathname)의 문자열 표현을 반환한다.
+- 이것은 본질적으로 파일 생성자에 전달되는 경로 이름이다.
+- 따라서 상대 경로를 사용하여 File 객체를 생성한 경우 `getPath()` 메서드에서 반환된 값도 상대 경로가 된다.
+- {user.home} / baeldung 디렉토리에서 다음 코드를 호출한다고 가정하면 결과는 다음과 같이 될 것이다.
+
+```java
+File file = new File("foo/foo-one.txt");
+String path = file.getPath();
+```
+
+```
+foo/foo-one.txt  // on Unix systems
+foo\foo-one.txt  // on Windows systems
+```
+
+※ 추상 경로 이름(abstract pathname)
+- abstract pathname은 java.io.File 객체이고 경로명 문자열은 java.lang.String 객체이다.
+- 둘 다 디스크의 동일한 파일을 참조한다.
+- [Javadoc](https://docs.oracle.com/javase/7/docs/api/java/io/File.html) 에서는 java.io.File에 대해 다음과 같이 설명한다.
+  - 파일 및 디렉토리 경로 이름의 추상 표현.
+    - UI 및 운영 체제는 시스템 종속 경로 이름 문자열을 사용하여 파일 및 디렉토리의 이름을 지정한다.
+    - 따라서, File 클래스는 계층적 경로 이름에 대한 추상적이고 시스템 독립적인 뷰를 제공한다.
+
+## absolute path
+- `getAbsolutePath()` 메서드는 현재 사용자 디렉터리의 경로를 확인한 후 파일의 경로 이름을 반환한다. 이를 '절대 경로명'이라고 한다.
+
+```java
+File file = new File("foo/foo-one.txt");
+String path = file.getAbsolutePath();
+```
+
+```
+/home/username/baeldung/foo/foo-one.txt     // on Unix systems
+C:\Users\username\baeldung\foo\foo-one.txt  // on Windows systems
+```
+
+- 상대 경로에 대한 현재 디렉터리만 확인한다.
+- 약식 표현(예: "." 및 "..")은 더 이상 해결되지 않는다.
+
+```java
+File file = new File("bar/baz/../bar-one.txt");
+String path = file.getAbsolutePath();
+```
+
+```
+/home/username/baeldung/bar/baz/../bar-one.txt      // on Unix systems
+C:\Users\username\baeldung\bar\baz\..\bar-one.txt   // on Windows systems
+```
+
+## canonical path
+> Canonical : 절대적인, 유일한
+
+- `getCanonicalPath()` 메서드는 한 단계 더 나아가 절대 경로 이름뿐만 아니라 "", "..."와 같은 약어 또는 중복 이름을 확인한다.
+- 또한 Unix 시스템에서 심볼릭 링크를 확인하고, Windows 시스템에서는 드라이브 문자를 표준 케이스로 변환한다.
+
+
+```java
+File file = new File("bar/baz/../bar-one.txt");
+String path = file.getCanonicalPath();
+```
+
+```
+/home/username/baeldung/bar/bar-one.txt     // on Unix systems
+C:\Users\username\baeldung\bar\bar-one.txt  // on Windows systems
+```
+
+- 만약 현재 디렉토리가 ${user.home}/baeldung이고 `new File("bar/baz/.baz-one.txt")`이 생성된다면 `getCanonicalPath()`의 출력은 다음과 같다.
+
+```
+/home/username/baeldung/bar/baz/baz-one.txt     // on Unix systems
+C:\Users\username\baeldung\bar\baz\baz-one.txt  // on Windows Systems
+```
+
+- 약어 표현을 사용할 수 있는 방법은 무궁무진하기 때문에 파일 시스템의 단일 파일은 무한히 많은 절대 경로를 가질 수 있다.
+- 그러나 canonical path는 항상 고유하다.
+- getCanonicalPath()는 파일 시스템 쿼리가 필요하기 때문에 IOException을 throw할 수 있다.
+  - 예를 들어 Windows 시스템에서 잘못된 문자 중 하나를 사용하여 File 객체를 생성하는 경우 표준 경로를 확인하면 IOException이 발생한다.
+
+### 사용 예시
+- File 객체를 매개변수로 받아 fully qualified name을 데이터베이스에 저장하는 메소드를 작성한다고 가정해보자.
+- 경로가 상대적인지 또는 약어가 포함되어 있는지 알 수 없는 경우, `getCanonicalPath()`를 사용할 수 있다.
+  - 하지만, `getCanonicalPath()`는 파일 시스템을 읽기 때문에 성능이 저하된다.
+- 따라서, 만약 중복된 이름이나 심볼릭 링크가 없고 드라이브 문자 대소문자가 표준화된 경우(Windows OS를 사용하는 경우) `getAbsoultePath()`를 사용하는 것이 좋다.
+
+
 # java.io.File
+---
 > File 객체가 제공하는 기능은 다음과 같다.
 
 - File 객체가 가리키는 것이 파일인 경우
@@ -44,6 +136,7 @@ tags: [Java, File, Files]
   - 따라서 OS에 독립적인 코드를 짜기위해서는 해당 OS의 경로 구분 문자를 가져오는 `File.sperator`를 사용해야한다.
 
 # java.nio.file(Path, Paths, Files)
+---
 > `java.nio.file` 패키지는 JVM이 파일, 파일 속성 및 파일 시스템에 접근하기 위한 인터페이스 및 클래스를 정의한다. <br>
 > 이 API는 java.io.File 패키지의 한계를 극복하기 위해 사용될 수 있다. <br>
 > 핵심은 Path이고 Paths, Files에서는 다양한 메서드를 제공하는 것 같다.
@@ -225,82 +318,6 @@ File[] files = file.listFiles();
 DirectoryStream<Path> paths = Files.newDirectoryStream(path);
 ```
 
-# 경로
-
-## getPath()
-Simply put, getPath() returns the String representation of the file's abstract pathname. This is essentially the pathname passed to the File constructor.
-
-So, if the File object was created using a relative path, the returned value from getPath() method would also be a relative path.
-
-If we invoke the following code from the {user.home}/baeldung directory:
-
-File file = new File("foo/foo-one.txt");
-String path = file.getPath();
-The path variable would have the value:
-
-foo/foo-one.txt  // on Unix systems
-foo\foo-one.txt  // on Windows systems
-Notice that for the Windows system, the name-separator character has changed from the forward slash(/) character, which was passed to the constructor, to the backslash (\) character. This is because the returned String always uses the platform's default name-separator character.
-
-
-
-- An abstract pathname is a java.io.File object and a pathname string is a java.lang.String object. Both reference the same file on the disk.
-
-  How do I know?
-
-  The first sentence of the Javadoc of java.io.File explains:
-
-  An abstract representation of file and directory pathnames.
-
-  It goes on to explain why:
-
-  User interfaces and operating systems use system-dependent pathname strings to name files and directories. This class presents an abstract, system-independent view of hierarchical pathnames.
-
-
-- The abstract pathname is just the string form of the file/location held in the File object.
-
-If you check the javadoc of File#toString():
-
-Returns the pathname string of this abstract pathname. This is just the string returned by the getPath() method.
-
-## absolute path
-- The getAbsolutePath() method returns the pathname of the file after resolving the path for the current user directory — this is called an absolute pathname.
-- So, for our previous example, file.getAbsolutePath() would return:
-```
-/home/username/baeldung/foo/foo-one.txt     // on Unix systems
-C:\Users\username\baeldung\foo\foo-one.txt  // on Windows systems
-```
-
-- This method only resolves the current directory for a relative path.
-- Shorthand representations (such as “.” and “..”) are not resolved further.
-- Hence when we execute the following code from the directory {user.home}/baeldung:
-
-```
-File file = new File("bar/baz/../bar-one.txt");
-String path = file.getAbsolutePath();
-```
-
-```
-/home/username/baeldung/bar/baz/../bar-one.txt      // on Unix systems
-C:\Users\username\baeldung\bar\baz\..\bar-one.txt   // on Windows systems
-```
-
-## canonical path
-
-* Canonical : 절대적인, 유일한
-
-
-## 절대경로와 상대경로
-C:\dir\a 라는 경로에서 C:\dir\b 디렉토리에 접근하려면
-- absolute : C:\dir\a\..\b
-- canonical : C:\dir\b
-- 즉 canonical은 절대적으로 유일하게 표현할 수 있는 경로를 뜻한다.
-
-``
-
-Absolute path, Canonical Path
-
-* Canonical : 절대적인, 유일한
 
 
 
