@@ -70,7 +70,7 @@ if(mem.getMembership() == GOLD) {
 
 ### After
 > 포인트 계산에 대한 책임은 `PointCalculator`에게 맡긴다. 이를 통해, 포인트 계산에 대한 부분만 따로 테스트 할 수 있게된다.
-> 즉, 역할 분리가 잘 되면 테스트가 용이해진다.
+> 즉, 역할 분리가 잘 되면 테스트가 용이해지는 장점도 얻을 수 있다.
 
 ```java
 Member mem = memberRepository.findOne(id);
