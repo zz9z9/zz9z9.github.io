@@ -138,6 +138,10 @@ public class DefaultNotifierFactory implements NotifierFactory {
   - 클라이언트가 인터페이스에 의존하며 구체 클래스는 외부에서 가져옴으로써 런타임시 사용하게될 객체에 대해 알 수 없다.
   - 따라서, 구체 클래스가 변경되더라도 클라이언트 코드는 변경되지 않는다.
 
+# 실제로 적용해보기
+---
+- [추상화를 통해 엑셀 생성 로직 리팩토링하기](https://zz9z9.github.io/posts/applying-absraction-for-excel-logic-refactoring/)
+
 # 연관 포스팅
 ---
 -[객체 지향 언어의 특징 - 캡슐화](https://zz9z9.github.io/posts/encapsulation/)
