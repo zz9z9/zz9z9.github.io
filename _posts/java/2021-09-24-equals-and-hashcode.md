@@ -106,15 +106,13 @@ cash.equals(voucher) => true // That's wrong.
 
 - 두 객체가 동일하면 동등하지만, 동등하다고 해서 동일하지는 않다.
 
-
 # hashCode()
 ---
 > 객체에 대한 해시 코드 값을 반환한다. 이 값은 해시 테이블을 사용할 때 주어진 키에 대한 해시 값으로 사용된다.
 > 이를 활용해 데이터에 효율적으로 접근하기 위해, 해당 값을 사용하여 데이터를 저장한다.
 
-- The hashCode()-method is implemented by the virtual machine as a native operation so it is not visible in the code, but it is often realized as simply returning the memory reference (on 32-bit architectures) or a modulo 32 representation of the memory reference (on a 64-bit architecture).
+- `hashCode()` 메서드는 가상 머신에 의해 native operation으로 구현된다. `hashCode()` 값은 (32비트 아키텍처에서) 메모리 참조 또는 (64비트 아키텍처에서) 메모리 참조에 대한 modulo 32 표현을 반환하는 것으로 구현되는 경우가 많다.
 
-- As much as is reasonably practical, the hashCode method defined by class Object does return distinct integers for distinct objects. (This is typically implemented by converting the internal address of the object into an integer, but this implementation technique is not required by the JavaTM programming language.)
 
 ```java
 public native int hashCode();
@@ -168,6 +166,88 @@ Team myTeam = new Team("New York", "development");
 String myTeamLeader = leaders.get(myTeam); // "Anne"를 기대하지만 결과는 null이 나온다.
 ```
 
+# equals(), hashCode() 작성하기
+---
+> 일반적으로 직접 일일이 작성하진 않고, IDE의 자동완성이나 Lombok 또는 Java7 부터 도입된 java.util 패키지의 Objects 클래스의 메서드를 활용한다.
+
+## IntelliJ Default
+
+```java
+class Team {
+    String city;
+    String department;
+
+    public Team(String city, String department) {
+        this.city = city;
+        this.department = department;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Team team = (Team) o;
+
+        if (city != null ? !city.equals(team.city) : team.city != null) return false;
+        return department != null ? department.equals(team.department) : team.department == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = city != null ? city.hashCode() : 0;
+        result = 31 * result + (department != null ? department.hashCode() : 0);
+        return result;
+    }
+}
+```
+
+## Objects 유틸 활용
+
+```java
+import java.util.Objects;
+
+class Team {
+    String city;
+    String department;
+
+    public Team(String city, String department) {
+        this.city = city;
+        this.department = department;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Team team = (Team) o;
+        return Objects.equals(city, team.city) &&
+                Objects.equals(department, team.department);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(city, department);
+    }
+}
+```
+
+## Lombok 활용
+
+```java
+import lombok.EqualsAndHashCode;
+
+@EqualsAndHashCode
+class Team {
+    String city;
+    String department;
+
+    public Team(String city, String department) {
+        this.city = city;
+        this.department = department;
+    }
+}
+```
 
 # 참고 자료
 ---
