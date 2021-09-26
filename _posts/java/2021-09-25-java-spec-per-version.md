@@ -241,7 +241,7 @@ String overview = vehicle.getOverview();
 ## Optional
 > Java 8 이전에는 NPE(NullPointerException)가 발생할 가능성 때문에 개발자가 참조한 값의 유효성을 주의 깊게 확인해야 했다.
 > 유효성 검사를 위해 성가시고 오류가 발생하기 쉬운 boilerplate code가 필요했다.
-> Java 8 Optional<T> 클래스는 T 타입의 객체에 대한 컨테이너로 작동한다. 이 값이 null이 아닌 경우 이 객체의 값을 반환할 수 있다.
+> `Optional<T>` 클래스는 T 타입의 객체에 대한 컨테이너로 작동한다. 이 값이 null이 아닌 경우 이 객체의 값을 반환할 수 있다.
 > 이 컨테이너 내부의 값이 null이면 NPE를 던지는 대신 미리 정의된 일부 작업을 수행할 수 있다.
 
 - Without Optional
