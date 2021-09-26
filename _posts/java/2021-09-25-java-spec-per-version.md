@@ -247,7 +247,8 @@ String overview = vehicle.getOverview();
 - Without Optional
 
 ```java
-List<String> listOpt = getList().orElseGet(() -> new ArrayList<>());
+List<String> list = getList();
+List<String> listOpt = list != null ? list : new ArrayList<>();
 ```
 
 ```java
@@ -628,3 +629,4 @@ String formatted = switch (o) {
 - [https://blog.ippon.tech/comparing-java-lts-releases/](https://blog.ippon.tech/comparing-java-lts-releases/)
 - [https://www.oracle.com/java/technologies/java-se-support-roadmap.html](https://www.oracle.com/java/technologies/java-se-support-roadmap.html)
 - [https://dzone.com/articles/new-java-7-language-features](https://dzone.com/articles/new-java-7-language-features)
+- [https://www.baeldung.com/java-8-new-features](https://www.baeldung.com/java-8-new-features)
