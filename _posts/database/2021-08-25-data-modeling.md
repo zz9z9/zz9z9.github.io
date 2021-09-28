@@ -68,7 +68,7 @@ tags: [데이터 모델링]
   - 즉, 하나의 엔터티 내에서 다른 어트리뷰트와 비교했을 때, 독자적인 성질을 가지는 것이어야 한다.
 - 가공하지 않은 그대로의 값이라는 의미도 내포하고 있다.
   - 가공하지 않은 것의 반대 의미로 '추출 칼럼'이 있다.
-  - 추출 칼럼은 하나의 텐터티나 다른 엔터티의 어트리뷰트로부터 계산된 값이다.
+  - 추출 칼럼은 하나의 엔터티나 다른 엔터티의 어트리뷰트로부터 계산된 값이다.
      - 예를 들어 게시물의 코멘트 개수, 게시판에 등록된 게시물의 개수 등이 있다.
 
 ### Attribute의 원자성
@@ -166,7 +166,7 @@ tags: [데이터 모델링]
 - 정의된 업무 요건을 기반으로 다음을 도출한다.
   - Entity
   - Attribute
-  - 식별자(Identifier) 지정 후보키(candidate key), 기본키(primary key), 대체키(alternate key), 중복키(composite key)
+  - 식별자(Identifier), 지정 후보키(candidate key), 기본키(primary key), 대체키(alternate key), 중복키(composite key)
   - 식별자가 될만한 어트리뷰트가 없다면 인조키 생성
   - Entity간의 관계 정의(PK와 FK 연결, Cardinality & Optionality)
     - 각 엔터티 간의 관계를 최대한 간결하게 표현해야 한다. ERD(E-R Diagram)의 생명은 가독성이다.
