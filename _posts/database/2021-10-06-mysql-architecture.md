@@ -116,4 +116,4 @@ tags: [MySQL]
 
 # 참고 자료
 ---
-Real MySQL
+- 이성욱, 『개발자와 DBA를 위한 Real MySQL』, 위키북스(2012), 3장
