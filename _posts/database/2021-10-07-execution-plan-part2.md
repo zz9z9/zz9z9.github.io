@@ -420,6 +420,7 @@ ORDER BY dept_name DESC LIMIT 10;
 # 관련 글
 ---
 - [MySQL 실행 계획 (1)](https://zz9z9.github.io/posts/execution-plan-part1/)
+- [MySQL 실행 계획 (3)](https://zz9z9.github.io/posts/execution-plan-part3/)
 
 # 참고 자료
 ---
