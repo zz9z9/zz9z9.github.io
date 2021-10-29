@@ -9,8 +9,6 @@ tags: [Clean Code, TDD]
 ---
 내 마음대로 구현해봤던 [숫자 야구 게임 구현하기 1편](https://zz9z9.github.io/posts/number-baseball-part1/)에 이어, 박재성님의 피드백 강의를 듣고 느낀점과 TDD 방식으로 개발하면서 느낀점을 정리해보려고 한다.
 
-<br><br>
-
 ※ [TDD 연습해본 코드](https://github.com/zz9z9/java-baseball-playground/tree/tdd-prac)
 
 # 피드백 강의를 통해 배운 것
