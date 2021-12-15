@@ -10,12 +10,14 @@ tags: [IE11]
 사내에서 사용하는 화면 중, 버튼을 누르면 `window.open(url, target, options)`으로 팝업을 띄우는 코드가 있었다. 하지만, 요구사항으로 인해 기존 로직을 `POST` 요청으로 변경해야했고 이를 위해 아래와 같은 방식으로 코드를 변경했다.
 ```javascript
 const form = document.createElement("form");
-form1.target="child1";
-form1.param1="param1";
-form1.param2="param2";
+form.target="child1";
+form.method="POST";
+form.action="url";
+form.param1="param1";
+form.param2="param2";
 
 window.open("", "child1", "some options");
-form1.submit();
+form.submit();
 ```
 
 개발 환경에서 테스트를 잘 마치고 운영 환경 전단계에 배포해서 확인해보는데, 기존에 팝업으로 뜨던 화면이 새로운 탭에서 열리고 팝업창은 빈 상태로 떠있는 현상이 발생했다. <br>
