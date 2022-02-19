@@ -69,7 +69,8 @@ tags: [Maven, HTTP Block]
   - `*` = 모든 레파지토리
   - `external:*` = localhost나 파일 기반 이외의 레파지토리
     - 위에서 본 settings.xml에서 알 수 있듯, 3.8.1부터 `external:http:*`가 적용됐다.
-    - 즉, `external:http:*`는 localhost를 사용하는 리포지토리를 제외한 HTTP를 사용하는 모든 리포지토리를 차단한다.
+    - 즉, `external:http:*`는 localhost를 사용하는 리포지토리를 제외한 HTTP를 사용하는 모든 리포지토리를 의미한다.
+      - 여기에 `<blocked>true</blocked>`와 같은 속성이 더해져 HTTP 요청을 차단한다.
       - **맨 처음에 언급했던, Maven 3.8.1 버전부터 HTTP 요청이 차단되는 이유이다.**
   - `repo,repo1` = repo, repo1 (여러 레파지토리 정의시)
   - `*,!repo1` = repo1을 제외한 모든 레파지토리
