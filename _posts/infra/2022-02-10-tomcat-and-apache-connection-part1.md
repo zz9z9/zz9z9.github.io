@@ -53,7 +53,7 @@ Tomcat과 Apache HTTP Server 연동과 관련된 기초 지식을 살펴보고, 
   - ex : `LoadModule jk_module modules/mod_jk.so`
 
 2. workers.properties
-- Tomcat 프로세스(worker)가 사용하는 호스트 및 포트를 정의하는 파일이다. (아래 Tomcat Worker 파트 참조)
+- 웹 서버 worker 정의 및 Tomcat 인스턴스가 사용하는 호스트, 포트 등을 정의하는 파일이다. (아래 Worker 파트 참조)
 - `workers.properties`파일은 `${APACHE_HOME}/conf` 디렉토리에 있다.
 - `httpd.conf`에서 해당 파일의 경로를 정의해야 한다.
   - ex : `JkWorkersFile /etc/httpd/conf/workers.properties`
