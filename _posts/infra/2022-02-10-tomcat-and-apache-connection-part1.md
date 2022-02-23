@@ -53,7 +53,7 @@ Tomcat과 Apache HTTP Server 연동과 관련된 기초 지식을 살펴보고, 
   - ex : `LoadModule jk_module modules/mod_jk.so`
 
 2. workers.properties
-- 웹 서버 worker 정의 및 Tomcat 인스턴스가 사용하는 호스트, 포트 등을 정의하는 파일이다. (아래 Worker 파트 참조)
+- Tomcat 프로세스가 사용하는 호스트, 포트 등을 정의하는 파일이다. (아래 Worker 파트 참조)
 - `workers.properties`파일은 `${APACHE_HOME}/conf` 디렉토리에 있다.
 - `httpd.conf`에서 해당 파일의 경로를 정의해야 한다.
   - ex : `JkWorkersFile /etc/httpd/conf/workers.properties`
@@ -88,17 +88,22 @@ JkMount  /examples/* worker1
 ---
 
 ## Tomcat Worker
-> Tomcat Worker는 일부 웹 서버를 대신하여 서블릿 또는 기타 콘텐츠를 실행하기 위해 대기 중인 Tomcat 인스턴스이다.
+> Tomcat Worker는 일부 웹 서버를 대신하여 서블릿 또는 기타 콘텐츠를 실행하기 위해 대기 중인 Tomcat 인스턴스이다. <br>
 
-- Apache HTTP Server와 같은 웹 서버가 서블릿 요청을 Tomcat 인스턴스(worker)로 전달하도록 할 수 있다.
+※ 참고
+- [공식 문서](https://tomcat.apache.org/connectors-doc/common_howto/workers.html)를 보면 Tomcat Worker를 다음과 같이 정의한다.
+  - "**A Tomcat worker** is a Tomcat instance that is waiting to execute servlets on behalf of some web server. For example, we can have a web server such as the Apache HTTP Server forwarding servlet requests to a Tomcat process **(the worker)** running behind it."
+    - worker가 두 번 나와서 혼란스러웠는데, 전자의 worker는 톰캣 프로세스로 전달하는 역할(mod_jk 관련), 후자의 worker는 실제 애플리케이션을 구동하고 있는 톰캣 프로세스라고 이해했다. (잘못된 경우 추후에라도 수정하겠습니다.)
+  - **앞으로 살펴볼 것들은 모두 전자의 worker와 관련한 내용이다.**
+
+- Apache HTTP Server와 같은 웹 서버가 서블릿 요청을 Tomcat 프로세스로 전달하도록 할 수 있다.
 - 대표적으로 다음과 같은 경우, 여러 개의 worker를 구성할 수도 있다.
   - 모든 개발자가 동일한 웹 서버를 공유하지만, 자신의 worker를 소유하는 개발 환경이 필요한 경우.
   - 하나의 웹 서버에서 여러 사이트를 제공하기 위해, worker 별로 제공하는 가상 호스트가 필요한 경우.
   - 로드 밸런싱을 제공하고자 하는 경우.
     - 즉, 자체 머신에서 여러 worker를 실행하고 요청을 분배해야 한다.
 
-## 웹 서버 플러그인 Worker
-> 웹 서버에서 Tomcat 인스턴스로 요청을 전달, 로드 밸런싱 등의 목적을 가진 Worker로써 <br>
+### Worker 정의하기
 > `workers.properties`라는 속성 파일에 정의된다. (경로 : `${APACHE_HOME}/conf`)
 
 - `worker.list`로 worker를 정의한다.
