@@ -90,16 +90,15 @@ JkMount  /examples/* worker1
 ## Tomcat Worker
 > Tomcat Worker는 일부 웹 서버를 대신하여 서블릿 또는 기타 콘텐츠를 실행하기 위해 대기 중인 Tomcat 인스턴스이다. <br>
 
-※ 참고
-- [공식 문서](https://tomcat.apache.org/connectors-doc/common_howto/workers.html)를 보면 Tomcat Worker를 다음과 같이 정의한다.
-  - "**A Tomcat worker** is a Tomcat instance that is waiting to execute servlets on behalf of some web server. For example, we can have a web server such as the Apache HTTP Server forwarding servlet requests to a Tomcat process **(the worker)** running behind it."
-    - worker가 두 번 나와서 혼란스러웠는데, 전자의 worker는 톰캣 프로세스로 전달하는 역할(mod_jk 관련), 후자의 worker는 실제 애플리케이션을 구동하고 있는 톰캣 프로세스라고 이해했다. (잘못된 경우 추후에라도 수정하겠습니다.)
-  - **앞으로 살펴볼 것들은 모두 전자의 worker와 관련한 내용이다.**
+※ 참고 : [공식 문서](https://tomcat.apache.org/connectors-doc/common_howto/workers.html)를 보면 Tomcat Worker를 다음과 같이 정의한다.
+- "**A Tomcat worker** is a Tomcat instance that is waiting to execute servlets on behalf of some web server. For example, we can have a web server such as the Apache HTTP Server forwarding servlet requests to a Tomcat process **(the worker)** running behind it."
+  - worker가 두 번 나와서 혼란스러웠는데, 전자의 worker는 톰캣 프로세스로 전달하는 역할(mod_jk 관련), 후자의 worker는 실제 애플리케이션을 구동하고 있는 톰캣 프로세스라고 이해했다. (잘못된 경우 추후에라도 수정하겠습니다.)
+- **앞으로 살펴볼 것들은 모두 전자의 worker와 관련한 내용이다.** 후자의 worker는 **톰캣 프로세스**로 표현할 것이다.
 
-- Apache HTTP Server와 같은 웹 서버가 서블릿 요청을 Tomcat 프로세스로 전달하도록 할 수 있다.
+- worker는 Apache HTTP Server와 같은 웹 서버를 대신하여 서블릿 요청을 톰캣 프로세스로 전달한다.
 - 대표적으로 다음과 같은 경우, 여러 개의 worker를 구성할 수도 있다.
   - 모든 개발자가 동일한 웹 서버를 공유하지만, 자신의 worker를 소유하는 개발 환경이 필요한 경우.
-  - 하나의 웹 서버에서 여러 사이트를 제공하기 위해, worker 별로 제공하는 가상 호스트가 필요한 경우.
+  - 하나의 웹 서버에서 여러 사이트를 제공하기 위해, 톰캣 프로세스별 가상 호스트가 필요한 경우.
   - 로드 밸런싱을 제공하고자 하는 경우.
     - 즉, 자체 머신에서 여러 worker를 실행하고 요청을 분배해야 한다.
 
