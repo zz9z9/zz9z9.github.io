@@ -171,7 +171,7 @@ worker.worker2.lbfactor=3
   - 먼저 아파치 모듈 디렉토리(예:`/usr/lib/apache`)에 설치되어야 있어야한다.
   - 아파치 `httpd.conf`에 모듈이 로드되어야하고, `JKMount` 등 관련 옵션들이 정의되어야 한다.
   - `workers.properties` 파일이 작성되어야한다.
-    - `workers.properties`는 웹 서버에서 서블릿 컨텐츠 요청 등을 전달하기 위한 웹 서버 플러그인 worker와 요청을 전달받을 톰캣 인스턴스의 호스트 및 포트 등을 정의한 파일이다.
+    - `workers.properties`는 서블릿 컨텐츠 요청 전달, 로드 밸런싱 등을 위한 Tomcat worker와 요청을 전달받을 톰캣 프로세스의 호스트 및 포트 등을 정의한 파일이다.
 
 # 참고 자료
 ---
