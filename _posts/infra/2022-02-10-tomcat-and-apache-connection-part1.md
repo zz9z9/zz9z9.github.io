@@ -58,7 +58,7 @@ Tomcat과 Apache HTTP Server 연동과 관련된 기초 지식을 살펴보고, 
 - `httpd.conf`에서 해당 파일의 경로를 정의해야 한다.
   - ex : `JkWorkersFile /etc/httpd/conf/workers.properties`
 
-### 아파치 `httpd.conf` 톰캣 관련 부분 예시
+### 아파치 `httpd.conf` mod_jk 관련 부분 예시
 ```
 # Load mod_jk module
 LoadModule    jk_module  modules/mod_jk.so
@@ -116,11 +116,11 @@ worker.list= worker1, worker2
 
 |Type|정의|
 |--------|-----------|
-| ajp13 | 이 worker는 ajp13 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
+| ajp13 | 이 타입의 worker는 ajp13 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
 | lb | 로드 밸런싱 worker로써, 특정 수준의 내결함성과 함께 유연한 로드 밸런싱을 제공한다.|
 | status | 로드밸런서를 관리하기 위한 status worker이다. |
-| ajp12 | 이 worker는 ajp12 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
-| ajp14 | 이 worker는 ajp14 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
+| ajp12 | 이 타입의 worker는 ajp12 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
+| ajp14 | 이 타입의 worker는 ajp14 프로토콜을 사용하여 Tomcat worker에게 요청을 전달한다. |
 
 ## Worker Type별 속성 살펴보기
 > `workers.properties`파일에 세팅되는 속성과 관련해서 자세한 내용은 [공식 문서](https://tomcat.apache.org/connectors-doc/reference/workers.html) 참조
