@@ -45,14 +45,15 @@ tags: [MySQL, SQL]
 - 문제가 될만한 부분이라고 생각했던 부분에 표시를 했다.
   - og 테이블 인덱스 풀스캔
     - 그로 인해 임시 테이블인 derived7 테이블을 만들기 위해 조인시 많은 레코드에 접근
-  - 불필요한 임시 테이블 생성 및 정렬 (`Using temporary, Using filesort`)
+  - 임시 테이블 생성 및 정렬 (`Using temporary, Using filesort`)
 
 ## 튜닝1
-> 불필요한 임시 테이블 생성 및 정렬하는 부분을 제거했다. (수행 시간 : 약 3.5초)
+> 임시 테이블 생성 및 정렬하는 부분을 제거했다. (수행 시간 : 약 3.5초)
 
-- `Using temporary, Using filesort`가 나오는 이유는 `GROUP BY`, `ORDER BY` 하는 부분에서 인덱스를 타지 않기 때문이다.
-- og 테이블의 인덱스는 `(컬럼1,컬럼2)`로 구성되었기 때문에, `GROUP BY`, `ORDER BY`에 명시된 컬럼 순서를 인덱스가 구성된 순서로 변경했다.
-  - 인덱스는 이미 정렬되어 있기 때문에, `GROUP BY`, `ORDER BY`를 위해 임시 테이블을 만들 필요가 없다.
+- MySQL은 `GROUP BY`, `ORDER BY` 처리를 위해 임시 테이블을 만들기 때문에, `Using temporary, Using filesort`가 나오게 된다.
+- 인덱스는 이미 정렬되어 있기 때문에, `GROUP BY`, `ORDER BY`를 인덱스 기준으로 하면 위해 임시 테이블을 만들 필요가 없다.
+  - og 테이블의 인덱스는 `(컬럼1,컬럼2)`로 구성되었기 때문에, `GROUP BY`, `ORDER BY`에 명시된 컬럼 순서를 인덱스가 구성된 순서로 변경했다.
+
 
 ### 변경된 쿼리
 ```sql
