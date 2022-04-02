@@ -1,7 +1,7 @@
 ---
 title: IntelliJ - 프로젝트, 모듈이란 ?
 date: 2022-04-02 20:25:00 +0900
-categories: [IntelliJ]
+categories: [개발 도구, IntelliJ]
 tags: [IDE]
 ---
 
