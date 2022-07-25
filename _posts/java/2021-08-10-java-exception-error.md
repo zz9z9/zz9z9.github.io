@@ -109,3 +109,4 @@ private static void checkedExceptionWithTryCatch() {
 - [https://www.geeksforgeeks.org/errors-v-s-exceptions-in-java/](https://www.geeksforgeeks.org/errors-v-s-exceptions-in-java/)
 - [https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html](https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html)
 - [https://www.baeldung.com/java-checked-unchecked-exceptions](https://www.baeldung.com/java-checked-unchecked-exceptions)
+- [https://www.scaler.com/topics/java/error-vs-exception-in-java/](https://www.scaler.com/topics/java/error-vs-exception-in-java/)
