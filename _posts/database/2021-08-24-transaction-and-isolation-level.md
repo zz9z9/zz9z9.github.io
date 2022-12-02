@@ -139,3 +139,4 @@ H2 : READ COMMITTED
 - [https://www.geeksforgeeks.org/acid-properties-in-dbms/](https://www.geeksforgeeks.org/acid-properties-in-dbms/)
 - [https://en.wikipedia.org/wiki/Database_transaction](https://en.wikipedia.org/wiki/Database_transaction)
 - [https://lng1982.tistory.com/287](https://lng1982.tistory.com/287)
+- [https://www.scaler.com/topics/dbms/acid-properties-in-dbms/](https://www.scaler.com/topics/dbms/acid-properties-in-dbms/)
