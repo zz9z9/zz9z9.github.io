@@ -139,3 +139,4 @@ LocalDateTime 등록만료일시 = LocalDateTime.of(nextYear, 12, 31, 23, 59, 59
 > 해당 글은 다음 포스팅을 통해 살펴보자.
 
 ## 다음 포스팅
+- [MySQL에서 시간,날짜 데이터를 저장할 때 반올림되는 현상 (2)](https://zz9z9.github.io/posts/mysql-round-up-part2/)
