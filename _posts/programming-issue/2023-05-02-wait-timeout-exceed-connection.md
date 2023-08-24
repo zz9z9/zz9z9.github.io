@@ -86,7 +86,7 @@ MySQL 서버 입장에서 JDBC 커넥션이 Idle인 상태로 wait_timeout(defau
 - `BlockingQueue` 구현 클래스 할당
 ![KakaoTalk_Photo_2023-08-24-23-33-09](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/9c4a350b-cfb0-40b4-897e-9f40b5bdbd91)
 
-  - idle 커넥션 큐는 `FairBlockingQueue`(https://tomcat.apache.org/tomcat-7.0-doc/api/org/apache/tomcat/jdbc/pool/FairBlockingQueue.html)
+  - idle 커넥션 큐는 `FairBlockingQueue`([https://tomcat.apache.org/tomcat-7.0-doc/api/org/apache/tomcat/jdbc/pool/FairBlockingQueue.html](https://tomcat.apache.org/tomcat-7.0-doc/api/org/apache/tomcat/jdbc/pool/FairBlockingQueue.html))
 
 - 실제 커넥션 할당 (busy 큐에 들어가게됨)
 ![KakaoTalk_Photo_2023-08-24-23-33-16](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/1bf3d3a1-aeb6-465b-89e8-50fcfdeef6df)
