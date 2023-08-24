@@ -137,7 +137,7 @@ MySQL 서버 입장에서 JDBC 커넥션이 Idle인 상태로 wait_timeout(defau
 ### 2. PoolCleaner에서 주기적으로 커넥션 유효성 체크하도록
 - `validationQuery`, `timeBetweenEvictionRunsMillis`, `testWhileIdle` 등의 속성 활용하여 주기적으로 커넥션 유효성 검사
 
-- 유의사항 (출처 : [https://d2.naver.com/helloworld/5102792]([https://d2.naver.com/helloworld/5102792])) - commons dbcp 1.x 기준
+- 유의사항 (출처 : [https://d2.naver.com/helloworld/5102792](https://d2.naver.com/helloworld/5102792)) - commons dbcp 1.x 기준
   - Evictor 스레드는 동작 시에 커넥션 풀에 잠금(lock)을 걸고 동작하기 때문에 너무 자주 실행하면 서비스 실행에 부담을 줄 수 있다.
   - 또한 numTestsPerEvictionRun 값을 크게 설정하면 Evictor 스레드가 검사해야 하는 커넥션 개수가 많아져 잠금 상태에 있는 시간이 길어지므로 역시 서비스 실행에 부담을 줄 수 있다.
   - 게다가 커넥션 유효성 검사를 위한 테스트 옵션(testOnBorrow, testOnReturn, testWhileIdle)을 어떻게 설정하느냐에 따라 애플리케이션의 안정성과 DBMS의 부하가 달라질 수 있다. 그러므로 Evictor 스레드와 테스트 옵션을 사용할 때는 데이터베이스 관리자와 상의해서 사용하는 DBMS에 최적화될 수 있는 옵션으로 설정해야 한다.
