@@ -35,7 +35,7 @@ is longer than the server configured value of 'wait_timeout'.
 
 
 ## 에러 원인 찾기
-- 출처 : https://kakaocommerce.tistory.com/45
+- 출처 : [https://kakaocommerce.tistory.com/45](https://kakaocommerce.tistory.com/45)
 ```
 MySQL 서버 입장에서 JDBC 커넥션이 Idle인 상태로 wait_timeout(default 28800초) 이상 사용되지 않을 경우
 해당 커넥션을 close 하여 할당된 리소스를 회수하게 된다.
@@ -47,7 +47,7 @@ MySQL 서버 입장에서 JDBC 커넥션이 Idle인 상태로 wait_timeout(defau
 ![KakaoTalk_Photo_2023-08-24-23-17-31 001](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/2937d57c-88a2-412f-9c9b-b20a01a572e0)
 
 **※ 참고**
-- CUBRID는 자체적으로 커넥션을 관리하고 자동으로 다시 연결하도록 구현되어있다고 한다. (출처 : https://d2.naver.com/helloworld/5102792)
+- CUBRID는 자체적으로 커넥션을 관리하고 자동으로 다시 연결하도록 구현되어있다고 한다. (출처 : [https://d2.naver.com/helloworld/5102792](https://d2.naver.com/helloworld/5102792))
 
 ## 에러 재현해보기
 - 검증해보고 싶은 부분
@@ -59,22 +59,19 @@ MySQL 서버 입장에서 JDBC 커넥션이 Idle인 상태로 wait_timeout(defau
 
 - 검증 과정
   - 코드 실행 전 mysql workbench에서 확인한 현재 열려있는 커넥션 갯수 (`show status where variable_name = 'Threads_connected';`)
-![KakaoTalk_Photo_2023-08-24-23-17-31 003](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/1f240e48-9337-4591-bf75-8ca3c5d82347)
-
+    - ![KakaoTalk_Photo_2023-08-24-23-17-31 003](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/1f240e48-9337-4591-bf75-8ca3c5d82347)
   - 커넥션 연결 (두 개의 커넥션 중 하나의 커넥션에만 wait_timeout 5초 설정 : ①, 나머지 하나는 default 값인 28800초)
-![KakaoTalk_Photo_2023-08-24-23-17-31 004](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/0bb4e418-3b84-4d5f-b2da-0df65e0fda18)
-
+    - ![KakaoTalk_Photo_2023-08-24-23-17-31 004](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/0bb4e418-3b84-4d5f-b2da-0df65e0fda18)
   - `wait_timeout` 이상 대기 (②)
-![KakaoTalk_Photo_2023-08-24-23-17-31 005](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/72d4019d-0f25-4142-8374-dbfda759341e)
-
+    - ![KakaoTalk_Photo_2023-08-24-23-17-31 005](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/72d4019d-0f25-4142-8374-dbfda759341e)
     - **"idle 상태인 커넥션중 `wait_timeout` 지나면 mysql 서버에서 해당 커넥션 만큼의 세션(스레드) 갯수가 감소한 것을 확인할 수 있다."** 에 대해 검증 완료
-
   - mysql 서버에서 닫힌 커넥션에 질의할시 동일한 에러 발생(③)
-     - **"닫힌 세션에 맵핑된 커넥션으로 질의 요청하는 경우 위 에러가 발생한다."** 에 대해 검증 완료
-```
-Exception in thread "main" com.mysql.cj.jdbc.exceptions.CommunicationsException:
-The last packet successfully received from the server was 107,054 milliseconds ago. (중략 ...)
-```
+    - **"닫힌 세션에 맵핑된 커넥션으로 질의 요청하는 경우 위 에러가 발생한다."** 에 대해 검증 완료
+    ```
+    Exception in thread "main" com.mysql.cj.jdbc.exceptions.CommunicationsException:
+    The last packet successfully received from the server was 107,054 milliseconds ago. (중략 ...)
+    ```
+
 
 ### 의문점
 > MMS 발송 job은 5분마다 돌면서 발송 대상이 있는지 조회한다. 그리고 발송 job 이외에도 주기적으로 도는 다른 job들도 있기 때문에 커넥션 풀에 있는 커넥션들이 주기적으로 사용될 것 같은데 왜 커넥션이 끊어진걸까 ?
@@ -133,14 +130,14 @@ The last packet successfully received from the server was 107,054 milliseconds a
 
 ![KakaoTalk_Photo_2023-08-24-23-36-57](https://github.com/zz9z9/zz9z9.github.io/assets/64415489/7f763431-c90d-4ef1-a3fd-f97effcc78cf)
 
-- **사실상 커넥션 풀 사용하는 이점이 많이 사라짐**
+- **사실상 커넥션 풀 사용하는 이점이 사라지는 것(?)**
 - 트래픽 많지 않아서 현재로서 운영상 이슈는 없음
 
 
 ### 2. PoolCleaner에서 주기적으로 커넥션 유효성 체크하도록
 - `validationQuery`, `timeBetweenEvictionRunsMillis`, `testWhileIdle` 등의 속성 활용하여 주기적으로 커넥션 유효성 검사
 
-- 유의사항 (https://d2.naver.com/helloworld/5102792) - commons dbcp 1.x 기준
+- 유의사항 (출처 : [https://d2.naver.com/helloworld/5102792]([https://d2.naver.com/helloworld/5102792])) - commons dbcp 1.x 기준
   - Evictor 스레드는 동작 시에 커넥션 풀에 잠금(lock)을 걸고 동작하기 때문에 너무 자주 실행하면 서비스 실행에 부담을 줄 수 있다.
   - 또한 numTestsPerEvictionRun 값을 크게 설정하면 Evictor 스레드가 검사해야 하는 커넥션 개수가 많아져 잠금 상태에 있는 시간이 길어지므로 역시 서비스 실행에 부담을 줄 수 있다.
   - 게다가 커넥션 유효성 검사를 위한 테스트 옵션(testOnBorrow, testOnReturn, testWhileIdle)을 어떻게 설정하느냐에 따라 애플리케이션의 안정성과 DBMS의 부하가 달라질 수 있다. 그러므로 Evictor 스레드와 테스트 옵션을 사용할 때는 데이터베이스 관리자와 상의해서 사용하는 DBMS에 최적화될 수 있는 옵션으로 설정해야 한다.
