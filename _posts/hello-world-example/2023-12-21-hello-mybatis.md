@@ -16,6 +16,7 @@ tags: [Mybatis]
 ---
 
 - **상황1**
+
 ```java
 public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 
@@ -53,6 +54,7 @@ public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 ```
 
 - **상황2**
+
 ```java
 public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 
@@ -88,7 +90,9 @@ public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 ---
 
 > 의존성 추가 : `implementation 'org.mybatis:mybatis:3.5.14'`
+
 - MyBatis 관련 설정 파일 세팅 : `mybatis-config.xml`
+
 ```xml
 <?xml version = "1.0" encoding = "UTF-8"?>
 
@@ -117,6 +121,7 @@ public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 </configuration>
 ```
 - 매퍼 파일 세팅
+
 ```xml
 <!-- member.xml-->
 <?xml version = "1.0" encoding = "UTF-8"?>
@@ -143,6 +148,7 @@ public class JdbcMemberQueryServiceImpl implements MemberQueryService {
 </mapper>
 ```
 - **상황1**
+
 ```java
 public class MybatisMemberQueryServiceImpl implements MemberQueryService {
     private static SqlSessionFactory sqlSessionFactory;
@@ -174,6 +180,7 @@ public class MybatisMemberQueryServiceImpl implements MemberQueryService {
 ```
 
 - **상황2**
+
 ```java
 public class MybatisMemberQueryServiceImpl implements MemberQueryService {
     ...
@@ -220,6 +227,7 @@ public class MybatisMemberQueryServiceImpl implements MemberQueryService {
 | 1.3 | 3.4+ | 3.2.2+ |	2.1+ | Java 6+ |
 
 ## SqlSessionTemplate 주입
+
 ```java
 @Configuration
 public class AppConfig {
@@ -271,8 +279,6 @@ public class PersistenceDemoApp {
 - **상황1**
 
 ```java
-import java.lang.reflect.Member;
-
 public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
   private final SqlSession sqlSession;
@@ -295,9 +301,10 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 > 위 예제에서 sqlSession의 구현체인 sqlSessionTemplate에서 commit, rollback을 직접호출하면 `UnsupportedOperationException` 발생, 기본적으로는 autoCommit된다. 또한 SqlSession에는 setAutoCommit하는 부분도 없다.<br>
 > 따라서, 상황2를 위해서는 `org.springframework.transaction.TransactionManager`가 필요 <br><br>
-> [공식 문서](https://mybatis.org/spring/ko/transactions.html)에 따르면 "마이바티스 스프링 연동모듈을 사용하는 중요한 이유중 하나는 마이바티스가 스프링 트랜잭션에 자연스럽게 연동될수 있다는 것이다. 마이바티스에 종속되는 새로운 트랜잭션 관리를 만드는 것보다는 마이바티스 스프링 연동모듈이 스프링의 DataSourceTransactionManager과 융합되는 것이 좋다." 라고 되어있는게 mybatis-spring 자체적으로는 트랜잭션 관리하는 부분을 제공하지 않고 스프링쪽의 `TransactionManager`가 필요하다는 얘기인 것 같기도하다.
+> [공식 문서](https://mybatis.org/spring/ko/transactions.html)에 따르면 ***"마이바티스 스프링 연동모듈을 사용하는 중요한 이유중 하나는 마이바티스가 스프링 트랜잭션에 자연스럽게 연동될수 있다는 것이다. 마이바티스에 종속되는 새로운 트랜잭션 관리를 만드는 것보다는 마이바티스 스프링 연동모듈이 스프링의 DataSourceTransactionManager과 융합되는 것이 좋다."*** 라고 되어있는게 mybatis-spring 자체적으로는 트랜잭션 관리하는 부분을 제공하지 않고 스프링쪽의 `TransactionManager`가 필요하다는 얘기인 것 같기도하다.
 
 - AppConfig.java에 PlatformTransactionManager 빈 선언 및 MemberQueryService에 주입
+
 ```java
 @Bean
 public PlatformTransactionManager transactionManager() {
@@ -311,6 +318,7 @@ public MemberQueryService memberQueryService() throws Exception {
 ```
 
 - **상황2**
+
 ```java
 public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
@@ -339,7 +347,7 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 ### MyBatis와 비교해서 나아졌다고 느끼는 부분
 - SqlSessionFactory 사용해서 SqlSession을 매번 생성하고 커밋/롤백후 닫는 작업을 안해줘도된다.
-- SqlSessionTemplate은 Thread-safe하다. (참고 : https://mybatis.org/spring/sqlsession.html)
+- SqlSessionTemplate은 Thread-safe하다. ([참고](https://mybatis.org/spring/sqlsession.html))
 
 ### 생각하는 문제점
 - 트랜잭션 처리를 위해 TransactionManager, TransactionStatus 등 이전에 비해 의존해야될 객체들이 더 생긴다.
@@ -348,6 +356,7 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 ## 위 상황2 개선해보기 : @Transactional 사용
 - AppConfig.java에 `@EnableTransactionManagement` 선언
+
 ```java
 public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
@@ -376,6 +385,7 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 - 비즈니스 로직에서 트랜잭션 관련 부분이 사라진다.
 
 ## Statement id 문자열로 입력하는 부분 개선하기 : 매퍼 인터페이스 사용
+
 ```java
 public interface MemberMapper {
   void save(Member member);
@@ -386,7 +396,8 @@ public interface MemberHistoryMapper {
 }
 ```
 
-- `AppConfig.java`에 MapperFactoryBean 추가
+- `AppConfig.java`에 Mapper 빈 추가
+
 ```java
 @Bean
 public MemberMapper memberMapper() throws Exception {
@@ -414,14 +425,14 @@ public MemberQueryService memberQueryService() throws Exception {
 @MapperScan("hello.persistence.mybatis.mapper")
 public class AppConfig {
 
-  @Bean
-  public MemberQueryService memberQueryService() throws Exception {
-        // TODO : MapperScan 사용할 때는 의존성 주입 어떻게하지 ??
-  }
+    @Bean
+    public MemberQueryService memberQueryService() throws Exception {
+          // TODO : MapperScan 사용할 때는 의존성 주입 어떻게하지 ??
+    }
 }
 ```
 
-- mapper.xml 파일의 namespace가 Mapper 인터페이스의 full package 명을 적어야한다.
+- 매퍼 파일의 namespace에는 매퍼 인터페이스의 full package 명을 적어야한다.
   - member.xml : `<mapper namespace = "hello.persistence.mybatis.mapper.MemberMapper">`
   - memberHistory.xml : `<mapper namespace = "hello.persistence.mybatis.mapper.MemberHistoryMapper">`
 
@@ -454,7 +465,3 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 ### 전과 비교해서 나아졌다고 느끼는 부분
 - DB 관련된 코드가 비즈니스 로직에서 완전히 분리된다.
 - Statement id가 잘못 맵핑된 경우 컴파일 시점에서 발견될 수 있다. (즉, 문자열 오타 등으로 인해 없는 Statement 호출할 일은 없음)
-
-# 참고 자료
-- https://mybatis.org/spring/mappers.html
-- https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/
