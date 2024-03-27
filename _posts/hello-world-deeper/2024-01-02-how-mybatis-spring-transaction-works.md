@@ -82,6 +82,7 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 
 - 참고 : `org.springframework.jdbc.datasource.DataSourceTransactionManager#doBegin` (위 과정의 4번 부분)
+
 ```java
 protected void doBegin(Object transaction, TransactionDefinition definition) {
     DataSourceTransactionObject txObject = (DataSourceTransactionObject)transaction;
@@ -134,6 +135,7 @@ protected void doBegin(Object transaction, TransactionDefinition definition) {
 ```
 
 - 참고 : `org.springframework.transaction.support.AbstractPlatformTransactionManager#prepareSynchronization` (위 과정의 5번 부분)
+
 ```java
 protected void prepareSynchronization(DefaultTransactionStatus status, TransactionDefinition definition) {
     if (status.isNewSynchronization()) {
