@@ -71,17 +71,16 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 > 내부적으로는 다양한 조건들에 의해 더 복잡하게 분기처리 되지만, 위 예제 코드가 어떻게 동작하는지의 흐름을 파악하는 정도로만 시퀀스 다이어그램을 그려봤다. ~~(처음이라 제대로 그린것인지는 잘 모르겠지만 ...)~~ <br>
 > `transactionManager.getTransaction` 호출시 흐름을 내가 이해한대로 정리하면,  <br>
-> 1. 추상 클래스인 AbstractPlatformTransactionManager는 실제 구현체인 DataSourceTransactionManager에게 트랜잭션을 다루기 위한 객체를 만들어달라고 요청한다. <br>
-> 2. 동일한 트랜잭션 내부에서는 하나의 커넥션이 사용되어야 하기 때문에, 그러한 커넥션을 관리할 ConnectionHolder가 필요하다(트랜잭션 동기화). 따라서, 트랜잭션을 다루기 위한 객체는 ConnectionHolder를 필요로하고 이를 얻기 위해 TransactionSynchronizationManager에게 요청한다. <br>
-> 3. AbstractPlatformTransactionManager는 얻은 트랜잭션 객체(DataSourceTransactionObject)가 이미 처리하고 있는 트랜잭션이 존재하는지 확인한다.
-> 4. 없는 경우, 트랜잭션 처리를 시작하기 위한 준비를 한다. <br> (트랜잭션 객체에 ConnectionHolder 세팅, ConnectionHolder에 트랜잭션 동기화 여부 세팅, ConnectionHolder에서 관리하는 Connection에 auto-commit `false` 세팅 등)
-> 5. 트랜잭션 및 트랜잭션 동기화와 관련된 속성들을 TransactionSynchronizationManager쪽에 세팅한다. <br><br>
-> 즉, `transactionManager.getTransaction`는 **"기존에 처리되고 있는 트랜잭션이 있는지 확인하고, 없으면 트랜잭션 처리를 위해 준비하는 단계"** 라고 생각하면 될 것 같다.
+> - 추상 클래스인 AbstractPlatformTransactionManager는 실제 구현체인 DataSourceTransactionManager에게 트랜잭션을 다루기 위한 객체를 만들어달라고 요청한다. <br>
+> - 동일한 트랜잭션 내부에서는 하나의 커넥션이 사용되어야 하기 때문에, 그러한 커넥션을 관리할 ConnectionHolder가 필요하다(트랜잭션 동기화). 따라서, 트랜잭션을 다루기 위한 객체는 ConnectionHolder를 필요로하고 이를 얻기 위해 TransactionSynchronizationManager에게 요청한다. <br>
+> - AbstractPlatformTransactionManager는 얻은 트랜잭션 객체(DataSourceTransactionObject)가 이미 처리하고 있는 트랜잭션이 존재하는지 확인한다.
+> - 없는 경우, 트랜잭션 처리를 시작하기 위한 준비를 한다. <br> (트랜잭션 객체에 ConnectionHolder 세팅, ConnectionHolder에 트랜잭션 동기화 여부 세팅, ConnectionHolder에서 관리하는 Connection에 auto-commit `false` 세팅, TransactionSynchronizationManager에 ConnectionHolder 세팅되도록 등)
+> - 트랜잭션 및 트랜잭션 동기화와 관련된 속성들을 TransactionSynchronizationManager쪽에 세팅한다. <br><br>
+> 즉, `transactionManager.getTransaction`는 **"기존에 처리되고 있는 트랜잭션이 있는지 확인(1)하고, 없으면 트랜잭션 처리를 위해 준비(2)하는 과정"** 이라고 생각하면 될 것 같다.
 
-<img width="1423" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/a40fd901-2fe4-48aa-bed6-39b5752d9181">
+<img width="1449" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/3a47cdb4-90f6-4977-b87a-3cddd14ac866">
 
-
-- 참고 : `org.springframework.jdbc.datasource.DataSourceTransactionManager#doBegin` (위 과정의 4번 부분)
+- 참고 : `org.springframework.jdbc.datasource.DataSourceTransactionManager#doBegin`
 
 ```java
 protected void doBegin(Object transaction, TransactionDefinition definition) {
@@ -134,7 +133,7 @@ protected void doBegin(Object transaction, TransactionDefinition definition) {
 }
 ```
 
-- 참고 : `org.springframework.transaction.support.AbstractPlatformTransactionManager#prepareSynchronization` (위 과정의 5번 부분)
+- 참고 : `org.springframework.transaction.support.AbstractPlatformTransactionManager#prepareSynchronization`
 
 ```java
 protected void prepareSynchronization(DefaultTransactionStatus status, TransactionDefinition definition) {
