@@ -26,9 +26,6 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
   public void createMember(String id, String name) {
     Member newMember = new Member(id, name);
     sqlSession.insert("member.save", newMember);
-
-    causeException();
-
     sqlSessionTemplate.insert("memberHistory.save", MemberHistory.forJoin(newMember));
   }
 }
@@ -51,11 +48,10 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
     public void createMember(String id, String name) {
       TransactionStatus txStatus = transactionManager.getTransaction(new DefaultTransactionDefinition());
       Member newMember = new Member(id, name);
+
       sqlSession.insert("member.save", newMember);
-
-      causeException();
-
       sqlSession.insert("memberHistory.save", MemberHistory.forJoin(newMember));
+
       transactionManager.commit(txStatus);
     }
 
@@ -64,8 +60,9 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 
 > 이게 어떻게 가능한 것인지 파악하기 위해 아래 순서로 내부 흐름을 살펴볼 예정이다.
 > 1. `transactionManager.getTransaction` <br>
-> 2. `sqlSession.insert`  <br>
-> 3. `transactionManager.commit`
+> 2. `sqlSession.insert // 첫번째 insert`  <br>
+> 3. `sqlSession.insert // 두번째 insert`  <br>
+> 4. `transactionManager.commit`
 
 ## 1. transactionManager.getTransaction
 
@@ -78,7 +75,7 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 > - 트랜잭션 및 트랜잭션 동기화와 관련된 속성들을 TransactionSynchronizationManager쪽에 세팅한다. <br><br>
 > 즉, `transactionManager.getTransaction`는 **"기존에 처리되고 있는 트랜잭션이 있는지 확인(1)하고, 없으면 트랜잭션 처리를 위해 준비(2)하는 과정"** 이라고 생각하면 될 것 같다.
 
-<img width="1449" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/3a47cdb4-90f6-4977-b87a-3cddd14ac866">
+<img width="1346" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/d7582312-b86e-47a1-974e-2ef97c540c4c">
 
 - 참고 : `org.springframework.jdbc.datasource.DataSourceTransactionManager#doBegin`
 
@@ -144,6 +141,21 @@ protected void prepareSynchronization(DefaultTransactionStatus status, Transacti
         TransactionSynchronizationManager.setCurrentTransactionName(definition.getName());
         TransactionSynchronizationManager.initSynchronization();
     }
-
 }
 ```
+
+## 2. 첫번째 sqlSession.insert
+
+- TransactionSynchronizationManager에게 트랜잭션 동기화가 활성화 되어있는지 확인.
+- 활성화되어 있으면 동기화에 필요한 SqlSessionHolder가 있는지 확인
+- SqlSessionHolder가 없으면 생성하여 TransactionSynchronizationManager에 바인딩
+- DB에 질의하기 위해 얻어온 SqlSession의 구현체 DefaultSqlSession를 통해 DB에 질의
+  - 질의시 1번 단계(`transactionManager.getTransaction`)에서 세팅한 ConnectionHolder의 Connection이 사용된다.
+- 트랜잭션 동기화중인지 확인뒤, 동기화 중이지 않으면 질의한 것 바로 commit 후 SqlSession.close()
+- 동기화 중이면, commit 하지않고 동기화에 사용되는 SqlSessionHolder의 SqlSession을 release
+
+- 요약하면,
+  - (1) 트랜잭션 동기화중인지 확인후 동기화를 위한 SqlSessionHolder 등 준비
+  - (2) 동기화 중이면, DB에 질의 후 SqlSession을 commit & close하지 않고, SqlSession을 release
+
+<img width="1598" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/2459112c-7f85-4491-ab0c-77b4c4abcc15">
