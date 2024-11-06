@@ -1,7 +1,7 @@
 ---
 title: IE11에서 window.open()시 빈팝업과 새로운 탭 생기는 이슈
 date: 2021-12-14 23:00:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [IE11]
 ---
 

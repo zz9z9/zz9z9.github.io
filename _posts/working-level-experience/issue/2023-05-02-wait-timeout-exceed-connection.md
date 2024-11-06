@@ -1,7 +1,7 @@
 ---
 title:  wait_timeout을 초과한 커넥션을 사용해서 겪은 이슈 (The last packet successfully received from the server was ... milliseconds ago)
 date: 2023-05-02 10:25:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Connection Pool, MySQL]
 ---
 

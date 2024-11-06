@@ -1,7 +1,7 @@
 ---
 title: Permissions 0644 for ~ are too open 그리고 Permission denied (publickey) 현상 해결하기
 date: 2022-01-15 00:25:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [AWS, SSH]
 ---
 

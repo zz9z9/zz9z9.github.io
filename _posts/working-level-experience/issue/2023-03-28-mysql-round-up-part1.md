@@ -1,7 +1,7 @@
 ---
 title: MySQL에서 시간,날짜 데이터를 저장할 때 반올림되는 현상 (1)
 date: 2023-03-28 22:25:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [MySQL]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: IE에서 작동하지 않는 자바스크립트 코드
 date: 2021-12-06 23:00:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Internet Explorer, ES6]
 ---
 

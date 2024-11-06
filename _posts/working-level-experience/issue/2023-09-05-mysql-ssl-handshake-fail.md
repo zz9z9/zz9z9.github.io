@@ -1,7 +1,7 @@
 ---
 title: javax.net.ssl.SSLHandshakeException - No appropriate protocol (protocol is disabled or cipher suites are inappropriate)의 원인을 찾아서
 date: 2023-09-05 10:25:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [MySQL, SSL/TLS]
 ---
 
@@ -122,14 +122,15 @@ jdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, RC4, DES, MD5withRSA, \
     DH keySize < 1024, EC keySize < 224, 3DES_EDE_CBC, anon, NULL, \
     include jdk.disabled.namedCurves
 ```
+
 - 이로써 기나긴 삽질의 시간을 끝낼 수 있게 되었다..!
 
 ## 정리
 - MySQL 드라이버(mysql-connector-java 5.1.46 버전 기준)에서 `enabledTLSProtocols`과 같은 세팅이 별도로 정의되어있지 않으면, MySQL 5.7 서버와 SSL 핸드셰이크를 위한 프로토콜로 `TLS1.0`, `TLS.1.1`이 사용된다.
-- 같은 자바 버전이더라도 릴리즈 버전에 따라 disable된 프로토콜이 다를 수 있다. <br>(이전과 달라진게 없는데 왜 문제가 생기지..? 라고 섣불리 생각하지 말자)
+- 같은 자바 버전이더라도 릴리즈 버전에 따라 SSL 통신시 disable된 프로토콜이 다를 수 있다. 이로 인해, SSL 핸드셰이크가 제대로 이루어지지 않을 수 있다. <br>(이전과 달라진게 없는데 왜 문제가 생기지..? 라고 섣불리 생각하지 말자)
 
 
-## 가능한 조치 방안
+## 생각해본 조치 방안
 - MySQL 버전 업그레이드
 - `enabledTLSProtocols` 정의
   - `jdbc:mysql://{ip}:{port}/{dbName}?&enabledTLSProtocols={TLS_VERSION}`

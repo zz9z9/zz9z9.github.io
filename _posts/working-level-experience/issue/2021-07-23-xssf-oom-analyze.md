@@ -1,7 +1,7 @@
 ---
 title: XSSF로 인한 OOM 에러 그리고 SXSSF와 메모리 사용량 비교해보기
 date: 2021-07-23 23:00:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Java, Heap Memory, Eclipse Memory Analyzer, apache poi]
 ---
 

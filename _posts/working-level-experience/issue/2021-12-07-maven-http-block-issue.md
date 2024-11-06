@@ -1,7 +1,7 @@
 ---
 title: maven-default-http-blocker ... Blocked mirror for repositories 에러
 date: 2021-12-08 23:00:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Maven, HTTP Block]
 ---
 

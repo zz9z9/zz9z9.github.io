@@ -1,7 +1,7 @@
 ---
 title: 화면 리디렉션시 쿠키 송신이 안되는 현상
 date: 2021-05-28 00:29:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Cookie, Set-Cookie]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: POST 요청 사이즈 제한으로 인해 겪었던 이슈(http-max-post-size, max-http-form-post-size)
 date: 2023-01-10 10:25:00 +0900
-categories: [개발 일기]
+categories: [경험하기, 이슈 노트]
 tags: [Tomcat, HTTP]
 ---
 
