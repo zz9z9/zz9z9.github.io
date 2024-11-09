@@ -1,8 +1,8 @@
 ---
-title: MyBatis-Spring 트랜잭션 관리 들여다보기
+title: MyBatis-Spring 트랜잭션 관리
 date: 2024-01-02 22:25:00 +0900
-categories: [들여다보기]
-tags: [MyBatis-Spring]
+categories: [지식 더하기, 들여다보기]
+tags: [MyBatis]
 ---
 
 > [해당 포스팅](https://zz9z9.github.io/posts/hello-mybatis/)에서 mybatis, mybatis-spring 사용법을 간단히 살펴보았다. <br>
@@ -159,3 +159,17 @@ protected void prepareSynchronization(DefaultTransactionStatus status, Transacti
   - (2) 동기화 중이면, DB에 질의 후 SqlSession을 commit & close하지 않고, SqlSession을 release
 
 <img width="1598" alt="image" src="https://github.com/zz9z9/zz9z9.github.io/assets/64415489/2459112c-7f85-4491-ab0c-77b4c4abcc15">
+
+- `SqlSession`의 구현체로 사용되는 `SqlSessionTemplate`의 내부에서
+  `this.sqlSessionProxy = (SqlSession)Proxy.newProxyInstance(SqlSessionFactory.class.getClassLoader(), new Class[]{SqlSession.class}, new SqlSessionInterceptor());`
+
+
+## 3. 두번째 sqlSession.insert
+=> 트랜잭션 프로파게이션 관련해서 어떻게 처리하는지도 ??
+=> 질의시 1번 단계(`transactionManager.getTransaction`)에서 세팅한 ConnectionHolder의 Connection이 사용된다. 이 부분 잘 나타내볼까 ??
+
+
+## 4. transactionManager.commit
+
+TransactionSynchronizationManager에서 ThreadLocal 사용 하는 부분
+=> 여러 스레드에서 동일한 SqlSessionFactory에 접근하는 부분 제어 ??

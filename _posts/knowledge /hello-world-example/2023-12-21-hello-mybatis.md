@@ -1,7 +1,7 @@
 ---
 title: JDBC / MyBatis / MyBatis-Spring 훑어보기
 date: 2023-12-21 22:25:00 +0900
-categories: [Hello-World 레벨 구현해보기]
+categories: [지식 더하기, Hello-World 구현]
 tags: [Mybatis]
 ---
 
