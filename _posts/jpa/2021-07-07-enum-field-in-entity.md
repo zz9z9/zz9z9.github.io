@@ -1,8 +1,6 @@
 ---
 title: 엔티티에 있는 enum 타입 필드를 DB 컬럼에 어떻게 맵핑시킬 수 있을까 ?
 date: 2021-07-07 00:29:00 +0900
-categories: [JPA]
-tags: [JAVA, JPA] # TAG names should always be lowercase
 ---
 
 > 예를 들어 주문 엔티티의 '주문 상태'와 같이 enum 타입으로 선언하기 적합한 필드들이 있다. 문자열, 숫자, 날짜 등도 아닌 enum 타입은 DB에 어떻게 저장시켜야할까 ?

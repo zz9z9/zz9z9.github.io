@@ -1,8 +1,6 @@
 ---
 title: JPA 내부 구조 살펴보기
 date: 2021-05-12 00:29:00 +0900
-categories: [JPA]
-tags: [JAVA, JPA]
 ---
 
 # 들어가기 전

@@ -1,8 +1,6 @@
 ---
 title: 스프링 배치 핵심 개념 살펴보기
 date: 2021-11-23 22:25:00 +0900
-categories: [Spring Batch]
-tags: [Job, Step, ]
 ---
 
 # 들어가기 전

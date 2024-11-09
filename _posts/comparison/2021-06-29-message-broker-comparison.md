@@ -1,8 +1,6 @@
 ---
 title: Message Broker 비교해보기
 date: 2021-06-29 00:25:00 +0900
-categories: [비교하고 선택하기]
-tags: [MSA, Message Broker]
 ---
 
 > '나만의 웨딩 플래너'라는 MSA 기반의 토이 프로젝트를 진행하는데 필요한 Message Broker를 선택하기 위해

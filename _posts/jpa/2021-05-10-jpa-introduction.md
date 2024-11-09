@@ -1,8 +1,6 @@
 ---
 title: JPA 입문하기
 date: 2021-05-10 00:29:00 +0900
-categories: [JPA]
-tags: [JAVA, JPA] # TAG names should always be lowercase
 ---
 
 # 들어가기 전

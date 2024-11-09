@@ -1,13 +1,44 @@
 ---
 title: Sync/Async, Blocking/Non-Blocking
 date: 2021-08-07 00:29:00 +0900
-categories: [General Topic]
-tags: [Sync/Async, Blocking/Non-Blocking]
 ---
 
+# 들어가기 전
+---
 항상 동기적으로만 프로그래밍을 해왔었지만, 비동기적으로 프로그래밍 하는 것도 반드시 알고있어야 한다고 생각한다. (reactive app ?? -> Spring Webflux 등 ?)
-비동기면 non-block, 동기면 block 이라고 생각했는데, 잘못 생각하고있었다.
+비동기면 non-blocking, 동기면 blocking 이라고 생각했는데, 잘못 생각하고있었다.
 제대로 알아보자.
+
+# Synchronous vs Asynchronous
+---
+> Synchronous : 동시 발생[존재]하는, "synchronize(일치시키다, 동시에 일어나다)"는 [syn 같이] + [chron 시간] + [ze 동사]로 만들어지는 단어예요.
+> Asynchronous : 동시에 존재[발생]하지 않는
+
+--> 영어 뜻만보면 sync가 여러개를 동시에 실행시키는 느낌쓰 ??
+--> 동시에 발생한다는게 (끝남과) 동시에 발생 ??
+
+Synchronous, Asynchronous는 형용사. 그럼 컴퓨터 세계에선 뒤에 어떤 명사랑 자주 쓰일까 ?
+
+Synchronous Programming, Asynchronous Programming ?
+Synchronous Execution, Asynchronous Execution ?
+
+task를 처리하는 방식 ??
+
+clock을 알아야하는건가 ??
+
+--> 스레드, 프로세스 입장에서 생각 ??
+
+https://www.makeuseof.com/synchronous-asynchronous-programming-different/
+
+# Blocking vs Non-Blocking
+---
+
+# Synchronous / Asynchronous 와  Blocking / Non-Blocking 관계
+---
+sync면 blocking, async면 non-blocking 아닌가 ??
+
+https://www.cs.unc.edu/~dewan/242/s07/notes/ipc/node9.html
+
 
 
 # 다양한 관점

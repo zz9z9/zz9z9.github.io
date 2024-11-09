@@ -1,8 +1,6 @@
 ---
 title: 마이크로서비스간 통신(3) - 비동기 방식
 date: 2021-06-14 22:25:00 +0900
-categories: [Microservice Architecture]
-tags: [MSA]     # TAG names should always be lowercase
 ---
 *※ 해당 내용은 '마이크로서비스 패턴(크리스 리처드슨)' 3장을 읽고 정리한 내용입니다.*
 

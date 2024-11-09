@@ -1,8 +1,6 @@
 ---
 title: API Gateway 비교해보기
 date: 2021-06-27 00:25:00 +0900
-categories: [비교하고 선택하기]
-tags: [MSA, API Gateway, Spring Cloud Gateway, Zuul]
 ---
 
 > '나만의 웨딩 플래너'라는 MSA 기반의 토이 프로젝트를 진행하는데 필요한 API Gateway를 만들기 위해 어떤 프레임워크를 선택해야할지

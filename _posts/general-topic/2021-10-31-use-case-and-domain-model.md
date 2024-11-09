@@ -1,8 +1,6 @@
 ---
 title: 도메인 모델과 유스케이스
 date: 2021-10-31 23:00:00 +0900
-categories: [General Topic]
-tags: [도메인 모델, 유스케이스]
 ---
 
 # 들어가기 전
