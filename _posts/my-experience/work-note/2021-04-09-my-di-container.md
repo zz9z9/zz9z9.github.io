@@ -1,8 +1,8 @@
 ---
 title: 간단한 DI 컨테이너 구현해보기
 date: 2021-04-09 22:25:00 +0900
-categories: [개발 일기]
-tags: [Spring, DI Container] # TAG names should always be lowercase
+categories: [경험하기, 작업 노트]
+tags: [Spring]
 ---
 
 # 들어가기 전

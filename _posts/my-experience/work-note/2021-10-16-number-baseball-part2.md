@@ -1,8 +1,8 @@
 ---
 title: 숫자 야구 게임 구현하기 (2)
 date: 2021-10-26 22:00:00 +0900
-categories: [개발 일기]
-tags: [Clean Code, TDD]
+categories: [경험하기, 작업 노트]
+tags: []
 ---
 
 # 들어가기 전

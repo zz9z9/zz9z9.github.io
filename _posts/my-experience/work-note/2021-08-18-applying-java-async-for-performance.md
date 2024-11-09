@@ -1,8 +1,8 @@
 ---
 title: CompletableFuture, Parellel Stream을 통해 성능 개선해보기
 date: 2021-08-18 14:00:00 +0900
-categories: [개발 일기]
-tags: [JAVA, 비동기, Completable Future, Parellel Stream]
+categories: [경험하기, 작업 노트]
+tags: [Java]
 ---
 
 # 들어가기 전

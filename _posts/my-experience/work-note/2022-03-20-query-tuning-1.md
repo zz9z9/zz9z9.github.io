@@ -1,8 +1,8 @@
 ---
-title: (쿼리 튜닝) group by, order by, 드라이빙 테이블 수정을 통한 쿼리 성능 개선하기
+title: group by, order by, 드라이빙 테이블 수정을 통한 쿼리 성능 개선하기
 date: 2022-03-20 23:00:00 +0900
-categories: [Database]
-tags: [MySQL, SQL]
+categories: [경험하기, 작업 노트]
+tags: [MySQL]
 ---
 
 # 들어가기 전

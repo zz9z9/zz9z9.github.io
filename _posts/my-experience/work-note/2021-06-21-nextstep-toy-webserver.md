@@ -1,8 +1,8 @@
 ---
 title: 간단한 웹 서버 구현하기
 date: 2021-06-21 22:25:00 +0900
-categories: [개발 일기]
-tags: [HTTP, Web Server, WAS]
+categories: [경험하기, 작업 노트]
+tags: [HTTP]
 ---
 
 # 들어가기 전
