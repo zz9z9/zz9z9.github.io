@@ -47,7 +47,7 @@ public class ProxyTest {
 
 <img src = "/assets/img/proxy-issue-img1.png" alt="">
 
-- 표시한 부분부터 실행흐름이 달라지는걸 볼 수 있었고 결과적으로 `sun.net.www.protocol.http.HttpURLConnection.plainConnect0`에서 프록시 서버로 연결 후 예외가 발생했을 때, 구현이 다르게 되어있는 것을 확인할 수 있었다.
+- 표시한 부분부터 실행흐름이 달라지는걸 볼 수 있었고, 이전 호출을 따라가본 결과 `sun.net.www.protocol.http.HttpURLConnection.plainConnect0`에서 프록시 서버로 연결 후 예외가 발생했을 때, 구현이 다르게 되어있는 것을 확인할 수 있었다.
   - 좌 : `jdk8u362-b09` (프록시 서버로 재요청), 우 : `openjdk 1.8.0-242` (프록시 서버 null로 세팅하고 재요청)
 
 <img src = "/assets/img/proxy-issue-img2.png" alt="">
