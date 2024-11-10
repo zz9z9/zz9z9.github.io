@@ -61,8 +61,6 @@ public class MybatisSpringMemberQueryServiceImpl implements MemberQueryService {
 > 이게 어떻게 가능한 것인지 파악하기 위해 아래 순서로 내부 흐름을 살펴볼 예정이다.
 > 1. `transactionManager.getTransaction` <br>
 > 2. `sqlSession.insert // 첫번째 insert`  <br>
-> 3. `sqlSession.insert // 두번째 insert`  <br>
-> 4. `transactionManager.commit`
 
 ## 1. transactionManager.getTransaction
 
@@ -162,14 +160,3 @@ protected void prepareSynchronization(DefaultTransactionStatus status, Transacti
 
 - `SqlSession`의 구현체로 사용되는 `SqlSessionTemplate`의 내부에서
   `this.sqlSessionProxy = (SqlSession)Proxy.newProxyInstance(SqlSessionFactory.class.getClassLoader(), new Class[]{SqlSession.class}, new SqlSessionInterceptor());`
-
-
-## 3. 두번째 sqlSession.insert
-=> 트랜잭션 프로파게이션 관련해서 어떻게 처리하는지도 ??
-=> 질의시 1번 단계(`transactionManager.getTransaction`)에서 세팅한 ConnectionHolder의 Connection이 사용된다. 이 부분 잘 나타내볼까 ??
-
-
-## 4. transactionManager.commit
-
-TransactionSynchronizationManager에서 ThreadLocal 사용 하는 부분
-=> 여러 스레드에서 동일한 SqlSessionFactory에 접근하는 부분 제어 ??
