@@ -10,7 +10,7 @@ tags: [HTTP]
 - 특정 사용자에게서는 이런 현상이 발생하지 않음
 - 확인해보니 HTTPS 요청이 HTTP로 바껴서 리다이렉트됨
 
-<img src = "/assets/img/https-to-http-img1.png" alt="">
+![image](/assets/img/https-to-http-img1.png)
 
 ## 원인 파악하기
 - 요청이 WAS에 도달하기까지의 흐름
@@ -18,11 +18,11 @@ tags: [HTTP]
 - 인터셉터에서 `HttpServletResponse.sendRedirect` 하는 부분을 타고 들어가다보면 헤더에 `Location`을 세팅하는 코드를 만날 수 있다.
   - `org.apache.catalina.connector.Response#sendRedirect`
 
-<img src = "/assets/img/https-to-http-img2.png" alt="">
+![image](/assets/img/https-to-http-img2.png)
 
 - else절에 `toAbsoulte` 메서드에서 요청 프로토콜은 `request.getScheme()` 을 통해 가져온다.
 `org.apache.catalina.connector.Response#toAbsolute`
-<img src = "/assets/img/https-to-http-img3.png" alt="">
+![image](/assets/img/https-to-http-img3.png)
 
 **즉, WEB에서 WAS로 들어오는 요청은 `http`이므로 리다이렉트 url이 `http`로 만들어지게 되었던 것**
 
@@ -32,8 +32,7 @@ tags: [HTTP]
 
 2. 특정 사용자는 접근이 됨<br>
 **=> HSTS로 인해 HTTPS로 리다이렉트 되었음 (웹서버 설정 : `Strict-Transport-Security: max-age=31536000`)**
-<img src = "/assets/img/https-to-http-img4.png" alt="">
-
+![image](/assets/img/https-to-http-img4.png)
 
 
 **※ HSTS란 ?**
@@ -51,12 +50,12 @@ tags: [HTTP]
 * `server.tomcat.use-relative-redirects=true`로 세팅하면 `response.sendRedirect("/상대경로")`로 호출시 리다이렉트 url이 상대경로로 지정됨 (요청 프로토콜 그대로 사용)
 - 관련 코드 (위에서 살펴본 `org.apache.catalina.connector.Response#sendRedirect`의 if절)
 
-<img src = "/assets/img/https-to-http-img5.png" alt="">
+![image](/assets/img/https-to-http-img5.png)
 
 * 리다이렉트 url이 상대경로로 지정됐을때, https로 재요청하는 모습
 
-<img src = "/assets/img/https-to-http-img6.png" alt="">
-<img src = "/assets/img/https-to-http-img7.png" alt="">
+![image](/assets/img/https-to-http-img6.png)
+![image](/assets/img/https-to-http-img7.png)
 
 ### 해결방법2 : 톰캣에서 `X-Forwarded-Proto` 인식할 수 있도록 하기
 * 웹 서버에서 톰캣으로 요청시 `X-Forwarded-Proto` 헤더에 `https`를 담아서 보낸다.
@@ -82,7 +81,7 @@ public class XForwardedFilterConfig {
 ```
 
 * 리다이렉트 url이 `https`로 세팅됨
-  <img src = "/assets/img/https-to-http-img8.png" alt="">
+  ![image](/assets/img/https-to-http-img8.png)
 
 
 ## 참고. HTTP 리다이렉트 관련 상태 코드
