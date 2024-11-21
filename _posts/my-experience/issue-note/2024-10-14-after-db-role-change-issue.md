@@ -2,7 +2,7 @@
 title: DB 롤체인지 후 애플리케이션 헬스체크가 정상적으로 되지 않은 이슈 (feat. DB 커넥션 풀)
 date: 2024-10-14 22:25:00 +0900
 categories: [경험하기, 이슈 노트]
-tags: [MySQL]
+tags: [DBCP]
 ---
 
 ## 상황
