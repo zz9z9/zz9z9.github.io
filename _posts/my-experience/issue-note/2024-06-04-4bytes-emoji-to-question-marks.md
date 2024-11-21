@@ -30,7 +30,7 @@ tags: [MySQL]
 2. 서버에서는 수신한 쿼리문을 `character_set_client`에 정의된 방식으로 디코딩하여 유니코드 코드 포인트로 만듦
 3. 만들어진 코드 포인트를 `character_set_connection`에 정의된 방식으로 인코딩하여 최종 값 저장
 
-![image](/assets/img/emoji-issue-3.png)
+![image](/assets/img/emoji-issue-3.jpg)
 
 - 내용 추가 : [포스팅1](https://blog.naver.com/didim365_/220311456806)과 [포스팅2](https://intomysql.blogspot.com/2010/12/mysql-character-set.html)를 보니 `character_set_client`와 `character_set_connection`이 동일한 경우에는 변환이 일어나지 않는다고 한다. 즉, 그림에서 아래 흐름은 틀림
 
