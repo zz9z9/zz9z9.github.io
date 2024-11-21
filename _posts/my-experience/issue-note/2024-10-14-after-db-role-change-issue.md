@@ -51,7 +51,7 @@ dataSource.setTestWhileIdle(false);
 ## 원인 파악하기
 > 디버깅한 것을 바탕으로 간단하게 나타낸 그림 (틀릴 수 있음)
 
-![image](/assets/img/after-role-change-issue-img1.png)
+<img src = "https://cdn.jsdelivr.net/gh/zz9z9/zz9z9.github.io@master/assets/img/after-role-change-issue-img1.png" alt="image">
 
 ### 롤체인지 12초 때의 애플리케이션 실행 흐름
 
