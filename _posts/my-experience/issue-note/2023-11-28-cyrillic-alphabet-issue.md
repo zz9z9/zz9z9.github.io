@@ -32,13 +32,13 @@ public class Main {
 
 - 좌 : 로그에서 복사, 우 : 직접 입력
 
-<img src = "/assets/img/cyrillic-issue-img1.png">
+![image](/assets/img/cyrillic-issue-img1.png)
 
 * 앞 네 글자(M3AE)의 decimal code가 다른 것을 알 수 있다.
 * 로그에서 복사한 `M3AE`는 [키릴 문자](https://ko.wikipedia.org/wiki/%ED%82%A4%EB%A6%B4_%EB%AC%B8%EC%9E%90)라고 불리는 문자열이라고 한다.
 * 왼쪽이 키릴 문자, 오른쪽이 라틴 문자 (일반 알파벳) - [참고 사이트](https://www.codetable.net/decimal/1052)
 
-<img src = "/assets/img/cyrillic-issue-img2.png">
+![image](/assets/img/cyrillic-issue-img2.png)
 
 ## 상황재현
 1) (아이폰 기준) 키릴 문자 키보드 세팅 <br>

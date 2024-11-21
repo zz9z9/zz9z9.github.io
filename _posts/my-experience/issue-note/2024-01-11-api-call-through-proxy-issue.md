@@ -45,16 +45,16 @@ public class ProxyTest {
 - 실행 흐름을 확인해보기 위해 지연 응답이 오는 `openjdk 1.8.0-242` 버전에서 프록시 서버뿐 아니라, 요청 url 서버도 접근이 되지 않도록 해보았다.
 - 좌 : `jdk8u362-b09`, 우 : `openjdk 1.8.0-242`
 
-<img src = "/assets/img/proxy-issue-img1.png" alt="">
+![image](/assets/img/proxy-issue-img1.png)
 
 - 표시한 부분부터 실행흐름이 달라지는걸 볼 수 있었고, 이전 호출을 따라가본 결과 `sun.net.www.protocol.http.HttpURLConnection.plainConnect0`에서 프록시 서버로 연결 후 예외가 발생했을 때, 구현이 다르게 되어있는 것을 확인할 수 있었다.
   - 좌 : `jdk8u362-b09` (프록시 서버로 재요청), 우 : `openjdk 1.8.0-242` (프록시 서버 null로 세팅하고 재요청)
 
-<img src = "/assets/img/proxy-issue-img2.png" alt="">
+![image](/assets/img/proxy-issue-img2.png)
 
 ### RestTemplate 사용하면 ?
 - 내부적으로 `HttpURLConnection` 사용하기 때문에 동일하다.
-<img src = "/assets/img/proxy-issue-img3.png" alt="">
+  ![image](/assets/img/proxy-issue-img3.png)
 
 ## 참고
 > [https://bugs.openjdk.org/browse/JDK-8268881](https://bugs.openjdk.org/browse/JDK-8268881)

@@ -17,7 +17,7 @@ tags: [MySQL]
 
 ※ 들어가기 전 참고 : 유니코드는 문자를 매핑된 **코드 포인트**로 관리
 
-<img src = "/assets/img/emoji-issue-2.png" alt="">
+![image](/assets/img/emoji-issue-2.png)
 
 > 출처 : [https://www.iemoji.com/view/emoji/256/smileys-people/jack-o-lantern](https://www.iemoji.com/view/emoji/256/smileys-people/jack-o-lantern)
 
@@ -30,7 +30,7 @@ tags: [MySQL]
 2. 서버에서는 수신한 쿼리문을 `character_set_client`에 정의된 방식으로 디코딩하여 유니코드 코드 포인트로 만듦
 3. 만들어진 코드 포인트를 `character_set_connection`에 정의된 방식으로 인코딩하여 최종 값 저장
 
-<img src = "/assets/img/emoji-issue-3.jpg" alt="">
+![image](/assets/img/emoji-issue-3.png)
 
 - 내용 추가 : [포스팅1](https://blog.naver.com/didim365_/220311456806)과 [포스팅2](https://intomysql.blogspot.com/2010/12/mysql-character-set.html)를 보니 `character_set_client`와 `character_set_connection`이 동일한 경우에는 변환이 일어나지 않는다고 한다. 즉, 그림에서 아래 흐름은 틀림
 
