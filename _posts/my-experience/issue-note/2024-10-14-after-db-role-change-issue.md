@@ -51,13 +51,13 @@ dataSource.setTestWhileIdle(false);
 ## 원인 파악하기
 > 디버깅한 것을 바탕으로 간단하게 나타낸 그림 (틀릴 수 있음)
 
-<img src = "/assets/img/after-role-change-issue-img1.png" alt="">
+![image](/assets/img/after-role-change-issue-img1.png)
 
 ### 롤체인지 12초 때의 애플리케이션 실행 흐름
 
 > 하나의 DB 커넥션 관점에서의 흐름
 
-<img src = "/assets/img/after-role-change-issue-img2.png" alt="">
+![image](/assets/img/after-role-change-issue-img2.png)
 
 1. L4에서 헬스체크 요청 들어옴 -> DB에 질의 요청
 2. 질의 실패 ( `autoReconnect` true이면, 다음 질의 때 질의 날리기 전 먼저 ping 검사하라는 변수(`needsPing`)를 true로 만듦)
@@ -75,17 +75,17 @@ dataSource.setTestWhileIdle(false);
 ### 실행 흐름 코드 참고
 
 * 1\~4 : `com.mysql.cj.NativeSession#execSQL`
-  <img src = "/assets/img/after-role-change-issue-img3.png" alt="">
+  ![image](/assets/img/after-role-change-issue-img3.png)
 * 5 : `com.mysql.cj.jdbc.ConnectionImpl#connectWithRetries`
-  <img src = "/assets/img/after-role-change-issue-img4.png" alt="">
-  <img src = "/assets/img/after-role-change-issue-img5.png" alt="">
+  ![image](/assets/img/after-role-change-issue-img4.png)
+  ![image](/assets/img/after-role-change-issue-img5.png)
 * `com.mysql.cj.LocalizedErrorMessage.properties`
-  <img src = "/assets/img/after-role-change-issue-img6.png" alt="">
+  ![image](/assets/img/after-role-change-issue-img6.png)
 * 6 : `com.mysql.cj.jdbc.ConnectionImpl#prepareStatement`,`com.mysql.cj.NativeSession#checkClosed`
-  <img src = "/assets/img/after-role-change-issue-img7.png" alt="">
-  <img src = "/assets/img/after-role-change-issue-img8.png" alt="">
+  ![image](/assets/img/after-role-change-issue-img7.png)
+  ![image](/assets/img/after-role-change-issue-img8.png)
 * `com.mysql.cj.LocalizedErrorMessage.properties`
-  <img src = "/assets/img/after-role-change-issue-img9.png" alt="">
+  ![image](/assets/img/after-role-change-issue-img9.png)
 
 
 ## 조치

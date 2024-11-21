@@ -76,7 +76,7 @@ theme_mode:   light
 # will be added to all image (site avatar & posts' images) paths starting with '/'
 #
 # e.g. 'https://cdn.com'
-img_cdn: ''
+img_cdn: 'https://cdn.jsdelivr.net/gh/zz9z9/zz9z9.github.io@master'
 
 # the avatar on sidebar, support local or CORS resources
 avatar: https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Soccerball.svg/1000px-Soccerball.svg.png
