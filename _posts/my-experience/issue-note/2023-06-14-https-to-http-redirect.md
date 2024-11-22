@@ -63,7 +63,7 @@ tags: [HTTP]
 
 * 톰캣에서 리다이렉트 url 지정시 request에 담긴 `X-Forwarded-Proto` 활용하게 한다.
   * 이렇게 하려면 response.sendRedirect시 response 구현체가 org.springframework.web.filter 패키지의 `ForwardedHeaderFilter.ForwardedHeaderExtractingResponse`가 되도록 해야함
-  * 이를 위해, 아래와 같이 필터를 빈으로 등록 (부트 2.1 버전부터는 직접등록하지 않고 톰캣에 관련 설정만 해주면 자동으로 세팅되는 것 같음 : [관련 글](https://stackoverflow.com/questions/59126518/how-to-cope-with-x-forwarded-headers-in-spring-boot-2-2-0-spring-web-mvc-behin) - 상품권몰은 2.0.3v 사용)
+  * 이를 위해, 아래와 같이 필터를 빈으로 등록 (부트 2.1 버전부터는 직접등록하지 않고 톰캣에 관련 설정만 해주면 자동으로 세팅되는 것 같음 : [관련 글](https://stackoverflow.com/questions/59126518/how-to-cope-with-x-forwarded-headers-in-spring-boot-2-2-0-spring-web-mvc-behin) - 담당 웹사이트는 2.0.3v 사용)
 
 
 ```java
