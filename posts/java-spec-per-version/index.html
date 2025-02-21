@@ -1,0 +1,565 @@
+<!DOCTYPE html><html lang="en-US" mode="light" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="generator" content="Jekyll v4.4.1" /><meta property="og:title" content="Java - 자바 버전별 특징 살펴보기(JAVA 7~17)" /><meta property="og:locale" content="en_US" /><meta name="description" content="들어가기 전 글을 작성하는 현재(21.09.25) 자바 최신버전은 JDK17이다. 각 버전별 특징을 살펴보면서 이런게 있구나 정도를 인지하고, 추후에 공부가 필요한 부분은 좀 더 상세히 공부해보자." /><meta property="og:description" content="들어가기 전 글을 작성하는 현재(21.09.25) 자바 최신버전은 JDK17이다. 각 버전별 특징을 살펴보면서 이런게 있구나 정도를 인지하고, 추후에 공부가 필요한 부분은 좀 더 상세히 공부해보자." /><link rel="canonical" href="https://zz9z9.github.io/posts/java-spec-per-version/" /><meta property="og:url" content="https://zz9z9.github.io/posts/java-spec-per-version/" /><meta property="og:site_name" content="zz9z9" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2021-09-25T22:25:00+09:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Java - 자바 버전별 특징 살펴보기(JAVA 7~17)" /><meta name="twitter:site" content="@twitter_username" /> <script type="application/ld+json"> {"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2021-09-25T22:25:00+09:00","datePublished":"2021-09-25T22:25:00+09:00","description":"들어가기 전 글을 작성하는 현재(21.09.25) 자바 최신버전은 JDK17이다. 각 버전별 특징을 살펴보면서 이런게 있구나 정도를 인지하고, 추후에 공부가 필요한 부분은 좀 더 상세히 공부해보자.","headline":"Java - 자바 버전별 특징 살펴보기(JAVA 7~17)","mainEntityOfPage":{"@type":"WebPage","@id":"https://zz9z9.github.io/posts/java-spec-per-version/"},"url":"https://zz9z9.github.io/posts/java-spec-per-version/"}</script><title>Java - 자바 버전별 특징 살펴보기(JAVA 7~17) | zz9z9</title><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/site.webmanifest"><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico"><meta name="apple-mobile-web-app-title" content="zz9z9"><meta name="application-name" content="zz9z9"><meta name="msapplication-TileColor" content="#da532c"><meta name="msapplication-config" content="/assets/img/favicons/browserconfig.xml"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css"><link rel="stylesheet" href="/assets/css/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/magnific-popup@1.1.0/dist/magnific-popup.min.css"> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script src="https://cdn.jsdelivr.net/combine/npm/lozad/dist/lozad.min.js,npm/magnific-popup@1/dist/jquery.magnific-popup.min.js"></script> <script defer src="/assets/js/dist/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id=G-Q7PWLG5WYT"></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-Q7PWLG5WYT'); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Soccerball.svg/1000px-Soccerball.svg.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">zz9z9</a></div><div class="site-subtitle font-italic">좋은 코드로, 더 나은 세상을</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/zz9z9" aria-label="github" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/twitter_username" aria-label="twitter" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['example','doamin.com'].join('@')" aria-label="email" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" > <i class="fas fa-rss"></i> </a></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Java - 자바 버전별 특징 살펴보기(JAVA 7~17)</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" autocomplete="off" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Java - 자바 버전별 특징 살펴보기(JAVA 7~17)</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="semi-bold"> Lee JaeYoon </span> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sat, Sep 25, 2021, 10:25 PM +0900" prep="on" > Sep 25, 2021 <i class="unloaded">2021-09-25T22:25:00+09:00</i> </span></div><div> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="2941 words">16 min</span></div></div><div class="post-content"><h1 id="들어가기-전">들어가기 전</h1><hr /><p>글을 작성하는 현재(21.09.25) 자바 최신버전은 <code class="language-plaintext highlighter-rouge">JDK17</code>이다. 각 버전별 특징을 살펴보면서 이런게 있구나 정도를 인지하고, 추후에 공부가 필요한 부분은 좀 더 상세히 공부해보자.</p><h1 id="history">History</h1><hr /><blockquote><p>9 버전부터는 6개월 단위로 새로운 버전이 출시되고 있다.</p></blockquote><div class="table-wrapper"><table><thead><tr><th>버전<th>출시일<tbody><tr><td>JDK 1.0<td>1996년 1월<tr><td>JDK 1.1<td>1997년 2월<tr><td>J2SE 1.2<td>1998년 12월<tr><td>J2SE 1.3<td>2000년 5월<tr><td>J2SE 1.4<td>2002년 2월<tr><td>J2SE 5.0<td>2004년 9월<tr><td>Java SE 6<td>2006년 12월<tr><td>Java SE 7 (LTS)<td>2011년 7월<tr><td>Java SE 8 (LTS)<td>2014년 3월<tr><td>Java SE 9<td>2017년 9월<tr><td>Java SE 10<td>2018년 3월<tr><td>Java SE 11 (LTS)<td>2018년 9월<tr><td>Java SE 12<td>2019년 3월<tr><td>Java SE 13<td>2019년 9월<tr><td>Java SE 14<td>2020년 3월<tr><td>Java SE 15<td>2020년 9월<tr><td>Java SE 16<td>2021년 3월<tr><td>Java SE 17 (LTS)<td>2021년 9월<tr><td>Java SE 18 (예정)<td>2022년 3월<tr><td>Java SE 19 (예정)<td>2022년 9월<tr><td>Java SE 20 (예정)<td>2023년 3월<tr><td>Java SE 21 (예정, LTS)<td>2023년 9월</table></div><h2 id="lts-long-term-support">LTS (Long Term Support)</h2><ul><li>Oracle은 <a href="https://www.oracle.com/support/lifetime-support/">Oracle Lifetime 지원 정책</a>에 설명된 대로 Oracle Java SE 제품에 대한 Oracle Premier Support를 고객에게 제공한다.<li>Java SE 8 이후의 제품 릴리스의 경우 Oracle은 특정 릴리스만 LTS(Long-Term-Support) 릴리스로 지정한다.<ul><li>Java SE 7, 8, 11 및 17은 LTS 릴리스이다.</ul><li>오라클은 향후 2년마다 LTS를 출시할 계획이며, 이는 다음 LTS 출시가 2023년 9월에 Java 21이라는 것을 의미한다.<li>Oracle Premier Support를 위해, non-LTS 릴리스는 최신 LTS 릴리스의 구현 개선 사항의 누적 집합으로 간주된다.<li>새로운 기능 릴리스가 제공되면, 이전의 non-LTS 릴리스는 대체된 것으로 간주된다.<ul><li>예를 들어 Java SE 9는 non-LTS 릴리스였으며 즉시 Java SE 10(non-LTS)으로 대체되었다.<li>Java SE 10은 즉시 Java SE 11로 대체되었다.</ul><li>Java SE 11은 LTS 릴리스이므로 Oracle 고객은 Java SE 12가 릴리스되었더라도 Oracle Premier Support 및 정기 업데이트를 받게 된다.</ul><figure align="center"> <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="https://user-images.githubusercontent.com/64415489/134783306-7e71f939-2136-4987-8421-e5d024ff690d.png" /><figcaption align="center">출처 : <a href="https://www.oracle.com/java/technologies/java-se-support-roadmap.html" target="_blank"> https://www.oracle.com/java/technologies/java-se-support-roadmap.html</a></figcaption></figure><p><br /></p><p><strong><em>이제 자바의 버전별 특징을 간략하게 살펴보자. 아직 공식적으로 지원하는 버전인 7부터 정리해보았다.</em></strong></p><h1 id="java-7">Java 7</h1><hr /><h2 id="string-in-switch-statement">String in switch statement</h2><ul><li>before java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testStringInSwitch</span><span class="o">(</span><span class="nc">String</span> <span class="n">param</span><span class="o">){</span>
+
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA5</span> <span class="o">=</span> <span class="s">"Java 5"</span><span class="o">;</span>
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA6</span> <span class="o">=</span> <span class="s">"Java 6"</span><span class="o">;</span>
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA7</span> <span class="o">=</span> <span class="s">"Java 7"</span><span class="o">;</span>
+
+     <span class="k">if</span> <span class="o">(</span><span class="n">param</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="no">JAVA5</span><span class="o">)){</span>
+         <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA5</span><span class="o">);</span>
+     <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">(</span><span class="n">param</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="no">JAVA6</span><span class="o">)){</span>
+         <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA6</span><span class="o">);</span>
+     <span class="o">}</span> <span class="k">else</span> <span class="k">if</span> <span class="o">(</span><span class="n">param</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="no">JAVA7</span><span class="o">)){</span>
+         <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA7</span><span class="o">);</span>
+     <span class="o">}</span>
+ <span class="o">}</span>
+</pre></table></code></div></div><li>from java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testStringInSwitch</span><span class="o">(</span><span class="nc">String</span> <span class="n">param</span><span class="o">){</span>
+
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA5</span> <span class="o">=</span> <span class="s">"Java 5"</span><span class="o">;</span>
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA6</span> <span class="o">=</span> <span class="s">"Java 6"</span><span class="o">;</span>
+     <span class="kd">final</span> <span class="nc">String</span> <span class="no">JAVA7</span> <span class="o">=</span> <span class="s">"Java 7"</span><span class="o">;</span>
+
+     <span class="k">switch</span> <span class="o">(</span><span class="n">param</span><span class="o">)</span> <span class="o">{</span>
+         <span class="k">case</span> <span class="nl">JAVA5:</span>
+             <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA5</span><span class="o">);</span>
+             <span class="k">break</span><span class="o">;</span>
+         <span class="k">case</span> <span class="nl">JAVA6:</span>
+             <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA6</span><span class="o">);</span>
+             <span class="k">break</span><span class="o">;</span>
+         <span class="k">case</span> <span class="nl">JAVA7:</span>
+             <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="no">JAVA7</span><span class="o">);</span>
+             <span class="k">break</span><span class="o">;</span>
+     <span class="o">}</span>
+ <span class="o">}</span>
+</pre></table></code></div></div></ul><h2 id="binary-literals">Binary Literals</h2><ul><li>before java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testBinaryIntegralLiterals</span><span class="o">(){</span>
+
+      <span class="kt">int</span> <span class="n">binary</span> <span class="o">=</span> <span class="mi">8</span><span class="o">;</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">binary</span> <span class="o">==</span> <span class="mi">8</span><span class="o">){</span>
+          <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+      <span class="o">}</span> <span class="k">else</span><span class="o">{</span>
+          <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">false</span><span class="o">);</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><li>from java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testBinaryIntegralLiterals</span><span class="o">(){</span>
+
+      <span class="kt">int</span> <span class="n">binary</span> <span class="o">=</span> <span class="mb">0b1000</span><span class="o">;</span> <span class="c1">//2^3 = 8</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">binary</span> <span class="o">==</span> <span class="mi">8</span><span class="o">){</span>
+          <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+      <span class="o">}</span> <span class="k">else</span><span class="o">{</span>
+          <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">false</span><span class="o">);</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div></ul><h2 id="the-try-with-resources">The try-with-resources</h2><ul><li>before java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testTryWithResourcesStatement</span><span class="o">()</span> <span class="kd">throws</span> <span class="nc">FileNotFoundException</span><span class="o">,</span> <span class="nc">IOException</span><span class="o">{</span>
+
+   <span class="nc">FileInputStream</span> <span class="n">in</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+  <span class="k">try</span> <span class="o">{</span>
+      <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">FileInputStream</span><span class="o">(</span><span class="s">"java7.txt"</span><span class="o">);</span>
+
+      <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">in</span><span class="o">.</span><span class="na">read</span><span class="o">());</span>
+
+  <span class="o">}</span> <span class="k">finally</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">in</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+          <span class="n">in</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+      <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><li>from java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testTryWithResourcesStatement</span><span class="o">()</span> <span class="kd">throws</span> <span class="nc">FileNotFoundException</span><span class="o">,</span> <span class="nc">IOException</span><span class="o">{</span>
+
+  <span class="k">try</span> <span class="o">(</span><span class="nc">FileInputStream</span> <span class="n">in</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">FileInputStream</span><span class="o">(</span><span class="s">"java7.txt"</span><span class="o">))</span> <span class="o">{</span>
+      <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">in</span><span class="o">.</span><span class="na">read</span><span class="o">());</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div></ul><h2 id="multi-catch-similar-exceptions">Multi-Catch Similar Exceptions</h2><ul><li>before java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testMultiCatch</span><span class="o">(){</span>
+
+   <span class="k">try</span> <span class="o">{</span>
+       <span class="k">throw</span> <span class="k">new</span> <span class="nf">FileNotFoundException</span><span class="o">(</span><span class="s">"FileNotFoundException"</span><span class="o">);</span>
+   <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">FileNotFoundException</span> <span class="n">fnfo</span><span class="o">)</span> <span class="o">{</span>
+       <span class="n">fnfo</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+   <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">ioe</span><span class="o">)</span> <span class="o">{</span>
+       <span class="n">ioe</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></table></code></div></div><li>from java 7<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testMultiCatch</span><span class="o">(){</span>
+
+  <span class="k">try</span> <span class="o">{</span>
+      <span class="k">throw</span> <span class="k">new</span> <span class="nf">FileNotFoundException</span><span class="o">(</span><span class="s">"FileNotFoundException"</span><span class="o">);</span>
+  <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">FileNotFoundException</span> <span class="o">|</span> <span class="nc">IOException</span> <span class="n">fnfo</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">fnfo</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div></ul><h2 id="underscores-in-numeric-literals">Underscores in Numeric Literals</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">testUnderscoresNumericLiterals</span><span class="o">()</span> <span class="o">{</span>
+
+    <span class="kt">int</span> <span class="n">oneMillion_</span> <span class="o">=</span> <span class="mi">1_000_000</span><span class="o">;</span> <span class="c1">//new</span>
+    <span class="kt">int</span> <span class="n">oneMillion</span> <span class="o">=</span> <span class="mi">1000000</span><span class="o">;</span>
+
+    <span class="k">if</span> <span class="o">(</span><span class="n">oneMillion_</span> <span class="o">==</span> <span class="n">oneMillion</span><span class="o">){</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">else</span><span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="kc">false</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h1 id="java-8">Java 8</h1><hr /><h2 id="interface-default-and-static-methods">Interface Default and Static Methods</h2><blockquote><p>Java 8 이전에는 인터페이스에 public 추상 메서드만 선언할 수 있었다. Java 8 부터는 static, default 메서드를 선언할 수 있다.</p></blockquote><ul><li>static method<ul><li>정적 메서드는 인터페이스 내부에서만 사용할 수 있으며,. 구현 클래스에서 재정의할 수 없다.</ul></ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Vehicle</span> <span class="o">{</span>
+    <span class="kd">static</span> <span class="nc">String</span> <span class="nf">producer</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="s">"N&amp;F Vehicles"</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="nc">String</span> <span class="n">producer</span> <span class="o">=</span> <span class="nc">Vehicle</span><span class="o">.</span><span class="na">producer</span><span class="o">();</span>
+</pre></table></code></div></div><ul><li>default method<ul><li>default 메소드는 <code class="language-plaintext highlighter-rouge">default</code> 키워드를 사용하여 선언된다. 해당 메서드는 구현 클래스의 인스턴스를 통해 액세스할 수 있다.</ul></ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Vehicle</span> <span class="o">{</span>
+    <span class="k">default</span> <span class="nc">String</span> <span class="nf">getOverview</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="s">"ATV made by "</span> <span class="o">+</span> <span class="n">producer</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">VehicleImpl</span> <span class="kd">implements</span> <span class="nc">Vehicle</span> <span class="o">{</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="nc">Vehicle</span> <span class="n">vehicle</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">VehicleImpl</span><span class="o">();</span>
+<span class="nc">String</span> <span class="n">overview</span> <span class="o">=</span> <span class="n">vehicle</span><span class="o">.</span><span class="na">getOverview</span><span class="o">();</span>
+</pre></table></code></div></div><h2 id="optional">Optional</h2><blockquote><p>Java 8 이전에는 NPE(NullPointerException)가 발생할 가능성 때문에 개발자가 참조한 값의 유효성을 주의 깊게 확인해야 했다. 유효성 검사를 위해 성가시고 오류가 발생하기 쉬운 boilerplate code가 필요했다. <code class="language-plaintext highlighter-rouge">Optional&lt;T&gt;</code> 클래스는 T 타입의 객체에 대한 컨테이너로 작동한다. 이 값이 null이 아닌 경우 이 객체의 값을 반환할 수 있다. 이 컨테이너 내부의 값이 null이면 NPE를 던지는 대신 미리 정의된 일부 작업을 수행할 수 있다.</p></blockquote><ul><li>Without Optional</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">list</span> <span class="o">=</span> <span class="n">getList</span><span class="o">();</span>
+<span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">listOpt</span> <span class="o">=</span> <span class="n">list</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">list</span> <span class="o">:</span> <span class="k">new</span> <span class="nc">ArrayList</span><span class="o">&lt;&gt;();</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nc">User</span> <span class="n">user</span> <span class="o">=</span> <span class="n">getUser</span><span class="o">();</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">user</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">Address</span> <span class="n">address</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="na">getAddress</span><span class="o">();</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">address</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">street</span> <span class="o">=</span> <span class="n">address</span><span class="o">.</span><span class="na">getStreet</span><span class="o">();</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">street</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">street</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+<span class="k">return</span> <span class="s">"not specified"</span><span class="o">;</span>
+</pre></table></code></div></div><ul><li>With Optional</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">listOpt</span> <span class="o">=</span> <span class="n">getList</span><span class="o">().</span><span class="na">orElseGet</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="nc">ArrayList</span><span class="o">&lt;&gt;());</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nc">Optional</span><span class="o">&lt;</span><span class="nc">User</span><span class="o">&gt;</span> <span class="n">user</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getUser</span><span class="o">());</span>
+<span class="nc">String</span> <span class="n">result</span> <span class="o">=</span> <span class="n">user</span>
+  <span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="nl">User:</span><span class="o">:</span><span class="n">getAddress</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="nl">Address:</span><span class="o">:</span><span class="n">getStreet</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">orElse</span><span class="o">(</span><span class="s">"not specified"</span><span class="o">);</span>
+
+<span class="nc">Optional</span><span class="o">&lt;</span><span class="nc">OptionalUser</span><span class="o">&gt;</span> <span class="n">optionalUser</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getOptionalUser</span><span class="o">());</span>
+<span class="nc">String</span> <span class="n">result</span> <span class="o">=</span> <span class="n">optionalUser</span>
+  <span class="o">.</span><span class="na">flatMap</span><span class="o">(</span><span class="nl">OptionalUser:</span><span class="o">:</span><span class="n">getAddress</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">flatMap</span><span class="o">(</span><span class="nl">OptionalAddress:</span><span class="o">:</span><span class="n">getStreet</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">orElse</span><span class="o">(</span><span class="s">"not specified"</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="lambda-표현식">Lambda 표현식</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="c1">// 익명 내부 클래스 사용</span>
+<span class="nc">Runnable</span> <span class="n">runnable</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Runnable</span><span class="o">(){</span>
+      <span class="nd">@Override</span>
+      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">(){</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Hello world !"</span><span class="o">);</span>
+      <span class="o">}</span>
+    <span class="o">};</span>
+
+<span class="c1">// 람다 사용</span>
+<span class="nc">Runnable</span> <span class="n">runnable</span> <span class="o">=</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Hello world two!"</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="collections--streams">Collections &amp; Streams</h2><blockquote><p>Stream API 활용하여 함수형 프로그래밍 스타일로 코딩 가능</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">list</span> <span class="o">=</span> <span class="nc">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="s">"franz"</span><span class="o">,</span> <span class="s">"ferdinand"</span><span class="o">,</span> <span class="s">"fiel"</span><span class="o">,</span> <span class="s">"vom"</span><span class="o">,</span> <span class="s">"pferd"</span><span class="o">);</span>
+
+<span class="n">list</span><span class="o">.</span><span class="na">stream</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">filter</span><span class="o">(</span><span class="n">name</span> <span class="o">-&gt;</span> <span class="n">name</span><span class="o">.</span><span class="na">startsWith</span><span class="o">(</span><span class="s">"f"</span><span class="o">))</span>
+    <span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="nl">String:</span><span class="o">:</span><span class="n">toUpperCase</span><span class="o">)</span>
+    <span class="o">.</span><span class="na">sorted</span><span class="o">()</span>
+    <span class="o">.</span><span class="na">forEach</span><span class="o">(</span><span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">::</span><span class="n">println</span><span class="o">);</span>
+</pre></table></code></div></div><h1 id="java-9">Java 9</h1><hr /><h2 id="collections">Collections</h2><blockquote><p>List, Set, Map을 쉽게 생성할 수 있는 헬퍼 메서드가 생겼다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">list</span> <span class="o">=</span> <span class="nc">List</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="s">"one"</span><span class="o">,</span> <span class="s">"two"</span><span class="o">,</span> <span class="s">"three"</span><span class="o">);</span>
+<span class="nc">Set</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">set</span> <span class="o">=</span> <span class="nc">Set</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="s">"one"</span><span class="o">,</span> <span class="s">"two"</span><span class="o">,</span> <span class="s">"three"</span><span class="o">);</span>
+<span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">map</span> <span class="o">=</span> <span class="nc">Map</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="s">"foo"</span><span class="o">,</span> <span class="s">"one"</span><span class="o">,</span> <span class="s">"bar"</span><span class="o">,</span> <span class="s">"two"</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="streams">Streams</h2><blockquote><p><code class="language-plaintext highlighter-rouge">takeWhile</code>, <code class="language-plaintext highlighter-rouge">dropWhile</code>, <code class="language-plaintext highlighter-rouge">iterate</code> 메서드가 추가되었다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nc">Stream</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="nc">Stream</span><span class="o">.</span><span class="na">iterate</span><span class="o">(</span><span class="s">""</span><span class="o">,</span> <span class="n">s</span> <span class="o">-&gt;</span> <span class="n">s</span> <span class="o">+</span> <span class="s">"s"</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">takeWhile</span><span class="o">(</span><span class="n">s</span> <span class="o">-&gt;</span> <span class="n">s</span><span class="o">.</span><span class="na">length</span><span class="o">()</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="optionals">Optionals</h2><blockquote><p><code class="language-plaintext highlighter-rouge">ifPresentOrElse</code> 메서드가 추가되었다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="n">user</span><span class="o">.</span><span class="na">ifPresentOrElse</span><span class="o">(</span><span class="k">this</span><span class="o">::</span><span class="n">displayAccount</span><span class="o">,</span> <span class="k">this</span><span class="o">::</span><span class="n">displayLogin</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="interfaces">Interfaces</h2><blockquote><p>인터페이스 내에서 private 메서드를 선언할 수 있다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MyInterface</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">myPrivateMethod</span><span class="o">(){</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Yay, I am private!"</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h2 id="httpclient-preview">HttpClient (Preview)</h2><ul><li>Java 9는 자체적인 최신 Http 클라이언트인 HttpClient Preview 버전을 도입했다.<li>이 전까지의 Java의 내장 Http 지원은 다소 낮은 수준이었고 <code class="language-plaintext highlighter-rouge">Apache HttpClient</code> 또는 <code class="language-plaintext highlighter-rouge">OkHttp</code>와 같은 타사 라이브러리를 사용해야 했다.</ul><h1 id="java-10">Java 10</h1><hr /><h2 id="var-키워드">var 키워드</h2><blockquote><p>지역 변수(메서드 내 변수)에 대해 타입 추론이 가능하다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kt">void</span> <span class="nf">foo</span><span class="o">()</span> <span class="o">{</span>
+    <span class="kt">var</span> <span class="n">name</span> <span class="o">=</span> <span class="s">"Lee"</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h1 id="java-11">Java 11</h1><hr /><blockquote><p>Java 10은 라이선스 없이 상업적으로 사용할 수 있는 마지막 무료 Oracle JDK 릴리스였다. 즉, Java 11부터는 LTS를 사용하려면 비용을 지불해야 한다.</p></blockquote><h2 id="strings--files">Strings &amp; Files</h2><blockquote><p>String, Files 클래스에 새로운 메서드가 추가됐다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="s">"Marco"</span><span class="o">.</span><span class="na">isBlank</span><span class="o">();</span>
+<span class="s">"Mar\nco"</span><span class="o">.</span><span class="na">lines</span><span class="o">();</span>
+<span class="s">"Marco  "</span><span class="o">.</span><span class="na">strip</span><span class="o">();</span>
+
+<span class="nc">Path</span> <span class="n">path</span> <span class="o">=</span> <span class="nc">Files</span><span class="o">.</span><span class="na">writeString</span><span class="o">(</span><span class="nc">Files</span><span class="o">.</span><span class="na">createTempFile</span><span class="o">(</span><span class="s">"helloworld"</span><span class="o">,</span> <span class="s">".txt"</span><span class="o">),</span> <span class="s">"Hi, my name is!"</span><span class="o">);</span>
+<span class="nc">String</span> <span class="n">s</span> <span class="o">=</span> <span class="nc">Files</span><span class="o">.</span><span class="na">readString</span><span class="o">(</span><span class="n">path</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="running-java-files">Running Java Files</h2><blockquote><p>자바 파일을 실행하기 위해 <code class="language-plaintext highlighter-rouge">javac</code>로 컴파일 하지 않아도 된다.</p></blockquote><ul><li>before java 11<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>$ javac HelloWorld.java
+$ java HelloWorld
+Hello Java 8!
+</pre></table></code></div></div><li>from java 11<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>$ java HelloWorld.java
+Hello Java 11!
+</pre></table></code></div></div></ul><h2 id="람다식에-var-키워드-사용">람다식에 var 키워드 사용</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="o">(</span><span class="kt">var</span> <span class="n">firstName</span><span class="o">,</span> <span class="kt">var</span> <span class="n">lastName</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">firstName</span> <span class="o">+</span> <span class="n">lastName</span>
+</pre></table></code></div></div><h2 id="not-predicate-method">Not Predicate Method</h2><blockquote><p><code class="language-plaintext highlighter-rouge">Predicate</code> 인터페이스에 정적 <code class="language-plaintext highlighter-rouge">not()</code> 메소드가 추가되었다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nc">List</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">sampleList</span> <span class="o">=</span> <span class="nc">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="s">"Java"</span><span class="o">,</span> <span class="s">"\n \n"</span><span class="o">,</span> <span class="s">"Kotlin"</span><span class="o">,</span> <span class="s">" "</span><span class="o">);</span>
+<span class="nc">List</span> <span class="n">withoutBlanks</span> <span class="o">=</span> <span class="n">sampleList</span><span class="o">.</span><span class="na">stream</span><span class="o">()</span>
+  <span class="o">.</span><span class="na">filter</span><span class="o">(</span><span class="nc">Predicate</span><span class="o">.</span><span class="na">not</span><span class="o">(</span><span class="nl">String:</span><span class="o">:</span><span class="n">isBlank</span><span class="o">))</span>
+  <span class="o">.</span><span class="na">collect</span><span class="o">(</span><span class="nc">Collectors</span><span class="o">.</span><span class="na">toList</span><span class="o">());</span>
+
+<span class="n">assertThat</span><span class="o">(</span><span class="n">withoutBlanks</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="s">"Java"</span><span class="o">,</span> <span class="s">"Kotlin"</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="httpclient-standard">HttpClient (Standard)</h2><blockquote><p>새로운 HTTP API는 전반적인 성능을 향상시키고 HTTP/1.1 및 HTTP/2를 모두 지원한다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre><span class="nc">HttpClient</span> <span class="n">httpClient</span> <span class="o">=</span> <span class="nc">HttpClient</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">()</span>
+  <span class="o">.</span><span class="na">version</span><span class="o">(</span><span class="nc">HttpClient</span><span class="o">.</span><span class="na">Version</span><span class="o">.</span><span class="na">HTTP_2</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">connectTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">20</span><span class="o">))</span>
+  <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+
+<span class="nc">HttpRequest</span> <span class="n">httpRequest</span> <span class="o">=</span> <span class="nc">HttpRequest</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">()</span>
+  <span class="o">.</span><span class="na">GET</span><span class="o">()</span>
+  <span class="o">.</span><span class="na">uri</span><span class="o">(</span><span class="no">URI</span><span class="o">.</span><span class="na">create</span><span class="o">(</span><span class="s">"http://localhost:"</span> <span class="o">+</span> <span class="n">port</span><span class="o">))</span>
+  <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+
+<span class="nc">HttpResponse</span> <span class="n">httpResponse</span> <span class="o">=</span> <span class="n">httpClient</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">httpRequest</span><span class="o">,</span> <span class="nc">HttpResponse</span><span class="o">.</span><span class="na">BodyHandlers</span><span class="o">.</span><span class="na">ofString</span><span class="o">());</span>
+
+<span class="n">assertThat</span><span class="o">(</span><span class="n">httpResponse</span><span class="o">.</span><span class="na">body</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="s">"Hello from the server!"</span><span class="o">);</span>
+</pre></table></code></div></div><h2 id="collections-1">Collections</h2><blockquote><p><code class="language-plaintext highlighter-rouge">java.util.Collection</code> 인터페이스에는 <code class="language-plaintext highlighter-rouge">IntFunction</code> 인수를 사용하는 새로운 기본 <code class="language-plaintext highlighter-rouge">toArray()</code> 메소드가 포함된다. 이렇게 하면 컬렉션에서 배열을 더 쉽게 생성할 수 있다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nc">List</span> <span class="n">sampleList</span> <span class="o">=</span> <span class="nc">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="s">"Java"</span><span class="o">,</span> <span class="s">"Kotlin"</span><span class="o">);</span>
+<span class="nc">String</span><span class="o">[]</span> <span class="n">sampleArray</span> <span class="o">=</span> <span class="n">sampleList</span><span class="o">.</span><span class="na">toArray</span><span class="o">(</span><span class="nc">String</span><span class="o">[]::</span><span class="k">new</span><span class="o">);</span>
+
+<span class="n">assertThat</span><span class="o">(</span><span class="n">sampleArray</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="s">"Java"</span><span class="o">,</span> <span class="s">"Kotlin"</span><span class="o">);</span>
+</pre></table></code></div></div><h1 id="java-12">Java 12</h1><hr /><h2 id="switch-expressionpreview">Switch Expression(Preview)</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="kt">boolean</span> <span class="n">result</span> <span class="o">=</span> <span class="k">switch</span> <span class="o">(</span><span class="n">status</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="no">SUBSCRIBER</span> <span class="o">-&gt;</span> <span class="kc">true</span><span class="o">;</span>
+    <span class="k">case</span> <span class="no">FREE_TRIAL</span> <span class="o">-&gt;</span> <span class="kc">false</span><span class="o">;</span>
+    <span class="k">default</span> <span class="o">-&gt;</span> <span class="k">throw</span> <span class="k">new</span> <span class="nc">IllegalArgumentException</span><span class="o">(</span><span class="s">"something is murky!"</span><span class="o">);</span>
+<span class="o">};</span>
+</pre></table></code></div></div><h1 id="java-13">Java 13</h1><hr /><h2 id="multiline-strings-preview">Multiline Strings (Preview)</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nc">String</span> <span class="n">htmlWithJava13</span> <span class="o">=</span> <span class="sh">"""
+              &lt;html&gt;
+                  &lt;body&gt;
+                      &lt;p&gt;Hello, world&lt;/p&gt;
+                  &lt;/body&gt;
+              &lt;/html&gt;
+              """</span><span class="o">;</span>
+</pre></table></code></div></div><h1 id="java-14">Java 14</h1><hr /><h2 id="switch-expression-standard">Switch Expression (Standard)</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="kt">int</span> <span class="n">numLetters</span> <span class="o">=</span> <span class="k">switch</span> <span class="o">(</span><span class="n">day</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="no">MONDAY</span><span class="o">,</span> <span class="no">FRIDAY</span><span class="o">,</span> <span class="no">SUNDAY</span> <span class="o">-&gt;</span> <span class="mi">6</span><span class="o">;</span>
+    <span class="k">case</span> <span class="no">TUESDAY</span>                <span class="o">-&gt;</span> <span class="mi">7</span><span class="o">;</span>
+    <span class="k">default</span>      <span class="o">-&gt;</span> <span class="o">{</span>
+      <span class="nc">String</span> <span class="n">s</span> <span class="o">=</span> <span class="n">day</span><span class="o">.</span><span class="na">toString</span><span class="o">();</span>
+      <span class="kt">int</span> <span class="n">result</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="na">length</span><span class="o">();</span>
+      <span class="n">yield</span> <span class="n">result</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">};</span>
+</pre></table></code></div></div><h2 id="records-preview">Records (Preview)</h2><blockquote><p>boilerplate code를 작성하는 고통을 완화하는 데 도움이 되는 Record 클래스가 추가되었다. 해당 클래스는 데이터,(잠재적으로) getter/setter, equals/hashcode, toString만 포함된다.</p></blockquote><ul><li>before<div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="kd">final</span> <span class="kd">class</span> <span class="nc">Point</span> <span class="o">{</span>
+  <span class="kd">public</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">x</span><span class="o">;</span>
+  <span class="kd">public</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">y</span><span class="o">;</span>
+
+  <span class="kd">public</span> <span class="nf">Point</span><span class="o">(</span><span class="kt">int</span> <span class="n">x</span><span class="o">,</span> <span class="kt">int</span> <span class="n">y</span><span class="o">)</span> <span class="o">{</span>
+      <span class="k">this</span><span class="o">.</span><span class="na">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">;</span>
+      <span class="k">this</span><span class="o">.</span><span class="na">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">;</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+  <span class="c1">// state-based implementations of equals, hashCode, toString</span>
+  <span class="c1">// nothing else</span>
+</pre></table></code></div></div><li>record 사용</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="n">record</span> <span class="nf">Point</span><span class="o">(</span><span class="kt">int</span> <span class="n">x</span><span class="o">,</span> <span class="kt">int</span> <span class="n">y</span><span class="o">)</span> <span class="o">{</span> <span class="o">}</span>
+
+<span class="kt">var</span> <span class="n">point</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Point</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="mi">2</span><span class="o">);</span>
+<span class="n">point</span><span class="o">.</span><span class="na">x</span><span class="o">();</span> <span class="c1">// returns 1</span>
+<span class="n">point</span><span class="o">.</span><span class="na">y</span><span class="o">();</span> <span class="c1">// returns 2</span>
+</pre></table></code></div></div><h2 id="helpful-nullpointerexception">Helpful NullPointerException</h2><blockquote><p>마침내 NullPointerException은 정확히 어떤 변수가 null인지 설명한다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="n">author</span><span class="o">.</span><span class="na">age</span> <span class="o">=</span> <span class="mi">35</span><span class="o">;</span>
+<span class="o">---</span>
+<span class="nc">Exception</span> <span class="n">in</span> <span class="n">thread</span> <span class="s">"main"</span> <span class="n">java</span><span class="o">.</span><span class="na">lang</span><span class="o">.</span><span class="na">NullPointerException</span><span class="o">:</span>
+     <span class="nc">Cannot</span> <span class="n">assign</span> <span class="n">field</span> <span class="s">"age"</span> <span class="n">because</span> <span class="s">"author"</span> <span class="n">is</span> <span class="kc">null</span>
+</pre></table></code></div></div><h2 id="pattern-matching-for-instanceof-preview">Pattern Matching For InstanceOf (Preview)</h2><blockquote><p><code class="language-plaintext highlighter-rouge">instanceof</code>로 타입 검사 후 형변환을 할 필요가 없어졌다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="k">if</span> <span class="o">(</span><span class="n">obj</span> <span class="k">instanceof</span> <span class="nc">String</span> <span class="n">s</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">s</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">"hello"</span><span class="o">));</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h2 id="packaging-tool-incubator">Packaging Tool (Incubator)</h2><blockquote><p>필요한 모든 종속성을 포함하여 Java 애플리케이션을 플랫폼별 패키지로 패키징할 수 있는 인큐베이팅 패키지 도구가 도입됐다.</p></blockquote><ul><li>Linux: deb and rpm<li>macOS: pkg and dmg<li>Windows: msi and exe</ul><h2 id="garbage-collectors">Garbage Collectors</h2><ul><li>Concurrent Mark Sweep(CMS) Garbage Collector가 제거되고 실험용 Z Garbage Collector가 추가되었다.</ul><h1 id="java-15">Java 15</h1><hr /><h2 id="text-blocks--multiline-strings">Text-Blocks / Multiline Strings</h2><blockquote><p>Java 13의 실험 기능으로 도입된 Multiline Strings은 이제 production-ready 단계가 되었다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nc">String</span> <span class="n">text</span> <span class="o">=</span> <span class="sh">"""
+                Lorem ipsum dolor sit amet, consectetur adipiscing \
+                elit, sed do eiusmod tempor incididunt ut labore \
+                et dolore magna aliqua.\
+                """</span><span class="o">;</span>
+</pre></table></code></div></div><h2 id="sealed-classes-preview">Sealed Classes (Preview)</h2><ul><li>이것은 클래스가 public인 동안 <code class="language-plaintext highlighter-rouge">Shape</code>을 서브클래스로 허용하는 유일한 클래스는 <code class="language-plaintext highlighter-rouge">Circle</code>, <code class="language-plaintext highlighter-rouge">Rectangle</code> 및 <code class="language-plaintext highlighter-rouge">Square</code>임을 의미한다.</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">abstract</span> <span class="n">sealed</span> <span class="kd">class</span> <span class="nc">Shape</span>
+    <span class="n">permits</span> <span class="nc">Circle</span><span class="o">,</span> <span class="nc">Rectangle</span><span class="o">,</span> <span class="nc">Square</span> <span class="o">{...}</span>
+</pre></table></code></div></div><h2 id="zgc-production-ready">ZGC: Production Ready</h2><ul><li>Z Garbage Collector는 더 이상 실험용이 아닌 production-ready 단계가 되었다.</ul><h1 id="java-16">Java 16</h1><hr /><h2 id="unix-domain-socket-channels">Unix-Domain Socket Channels</h2><blockquote><p>이제 Unix 도메인 소켓에 연결할 수 있습니다(macOS 및 Windows(10+)에서도 지원됨).</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre> <span class="n">socket</span><span class="o">.</span><span class="na">connect</span><span class="o">(</span><span class="nc">UnixDomainSocketAddress</span><span class="o">.</span><span class="na">of</span><span class="o">(</span>
+        <span class="s">"/var/run/postgresql/.s.PGSQL.5432"</span><span class="o">));</span>
+</pre></table></code></div></div><h2 id="foreign-linker-api-preview">Foreign Linker API (Preview)</h2><ul><li>JNI(Java Native Interface)에 대한 계획된 교체로, 기본 라이브러리에 바인딩할 수 있다.</ul><h2 id="records--pattern-matching">Records &amp; Pattern Matching</h2><ul><li>Records 클래스 및 Pattern Matching 모두 production-ready 단계가 되었다.</ul><h1 id="java-17">Java 17</h1><hr /><h2 id="sealed-class-standard">Sealed Class (Standard)</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">abstract</span> <span class="n">sealed</span> <span class="kd">class</span> <span class="nc">Shape</span>
+    <span class="n">permits</span> <span class="nc">Circle</span><span class="o">,</span> <span class="nc">Rectangle</span> <span class="o">{...}</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Circle</span> <span class="kd">extends</span> <span class="nc">Shape</span> <span class="o">{...}</span> <span class="c1">// OK</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Rectangle</span> <span class="kd">extends</span> <span class="nc">Shape</span> <span class="o">{...}</span> <span class="c1">// OK</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Triangle</span> <span class="kd">extends</span> <span class="nc">Shape</span> <span class="o">{...}</span> <span class="c1">// Compile error</span>
+
+<span class="c1">// No need for default case if all permitted types are covered</span>
+<span class="kt">double</span> <span class="n">area</span> <span class="o">=</span> <span class="k">switch</span> <span class="o">(</span><span class="n">shape</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">Circle</span> <span class="n">c</span>    <span class="o">-&gt;</span> <span class="nc">Math</span><span class="o">.</span><span class="na">pow</span><span class="o">(</span><span class="n">c</span><span class="o">.</span><span class="na">radius</span><span class="o">(),</span> <span class="mi">2</span><span class="o">)</span> <span class="o">*</span> <span class="nc">Math</span><span class="o">.</span><span class="na">PI</span>
+    <span class="k">case</span> <span class="nc">Rectangle</span> <span class="n">r</span> <span class="o">-&gt;</span> <span class="n">r</span><span class="o">.</span><span class="na">a</span><span class="o">()</span> <span class="o">*</span> <span class="n">r</span><span class="o">.</span><span class="na">b</span><span class="o">()</span>
+<span class="o">};</span>
+</pre></table></code></div></div><h2 id="pattern-matching-for-switch-preview">Pattern Matching For switch (Preview)</h2><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nc">String</span> <span class="n">formatted</span> <span class="o">=</span> <span class="k">switch</span> <span class="o">(</span><span class="n">o</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">Integer</span> <span class="n">i</span> <span class="o">&amp;&amp;</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">10</span> <span class="o">-&gt;</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"a large Integer %d"</span><span class="o">,</span> <span class="n">i</span><span class="o">);</span>
+    <span class="k">case</span> <span class="nc">Integer</span> <span class="n">i</span> <span class="o">-&gt;</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"a small Integer %d"</span><span class="o">,</span> <span class="n">i</span><span class="o">);</span>
+    <span class="k">case</span> <span class="nc">Long</span> <span class="n">l</span>    <span class="o">-&gt;</span> <span class="nc">String</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"a Long %d"</span><span class="o">,</span> <span class="n">l</span><span class="o">);</span>
+    <span class="k">default</span>        <span class="o">-&gt;</span> <span class="n">o</span><span class="o">.</span><span class="na">toString</span><span class="o">();</span>
+<span class="o">};</span>
+</pre></table></code></div></div><h1 id="참고-자료">참고 자료</h1><hr /><ul><li><a href="https://en.wikipedia.org/wiki/Java_version_history">https://en.wikipedia.org/wiki/Java_version_history</a><li><a href="https://www.marcobehler.com/guides/a-guide-to-java-versions-and-features">https://www.marcobehler.com/guides/a-guide-to-java-versions-and-features</a><li><a href="https://advancedweb.hu/a-categorized-list-of-all-java-and-jvm-features-since-jdk-8-to-17/">https://advancedweb.hu/a-categorized-list-of-all-java-and-jvm-features-since-jdk-8-to-17/</a><li><a href="https://www.baeldung.com/java-11-new-features">https://www.baeldung.com/java-11-new-features</a><li><a href="https://blog.ippon.tech/comparing-java-lts-releases/">https://blog.ippon.tech/comparing-java-lts-releases/</a><li><a href="https://www.oracle.com/java/technologies/java-se-support-roadmap.html">https://www.oracle.com/java/technologies/java-se-support-roadmap.html</a><li><a href="https://dzone.com/articles/new-java-7-language-features">https://dzone.com/articles/new-java-7-language-features</a><li><a href="https://www.baeldung.com/java-8-new-features">https://www.baeldung.com/java-8-new-features</a></ul></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/%EC%A7%80%EC%8B%9D-%EB%8D%94%ED%95%98%EA%B8%B0/'>지식 더하기</a>, <a href='/categories/%EC%9D%B4%EB%A1%A0/'>이론</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/java/" class="post-tag no-text-decoration" >Java</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Java - 자바 버전별 특징 살펴보기(JAVA 7~17) - zz9z9&url=https://zz9z9.github.io/posts/java-spec-per-version/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Java - 자바 버전별 특징 살펴보기(JAVA 7~17) - zz9z9&u=https://zz9z9.github.io/posts/java-spec-per-version/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Java - 자바 버전별 특징 살펴보기(JAVA 7~17) - zz9z9&url=https://zz9z9.github.io/posts/java-spec-per-version/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/https-to-http-redirect/">HTTPS 요청이 HTTP로 리다이렉트 되는 현상</a><li><a href="/posts/after-db-role-change-issue/">DB 롤체인지 후 애플리케이션 헬스체크가 정상적으로 되지 않은 이슈 (feat. DB 커넥션 풀)</a><li><a href="/posts/4bytes-emoji-to-question-marks/">MySQL에서 4bytes 이모지가 물음표로 저장되는 이슈</a><li><a href="/posts/cyrillic-alphabet-issue/">키릴문자를 아시나요 ?</a><li><a href="/posts/api-call-through-proxy-issue/">프록시를 통해 API 호출할 때 지연되는 이슈</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/oop/">OOP</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/mybatis/">MyBatis</a> <a class="post-tag" href="/tags/%EC%9D%B8%ED%94%84%EB%9D%BC/">인프라</a> <a class="post-tag" href="/tags/apache-poi/">apache poi</a> <a class="post-tag" href="/tags/apache/">Apache</a> <a class="post-tag" href="/tags/aws/">AWS</a></div></div></div><script src="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.js"></script><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/java-generic/"><div class="card-body"> <span class="timeago small" > Apr 6, 2021 <i class="unloaded">2021-04-06T23:00:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Java - 자바 제네릭</h3><div class="text-muted small"><p> 제네릭 generic : 포괄적인, 총칭[통칭]의 자바는 여러 타입이 존재하기 때문에, 형 변환을 하면서 많은 예외가 발생할 수 있다. 따라서, Java5 부터 도입된 제네릭을 통해 타입 형 변환에서 발생할 수 있는 문제점을 사전에 방지해준다. 즉, 컴파일 시 이러한 부분을 점검할 수 있도록 해준다. public class Cas...</p></div></div></a></div><div class="card"> <a href="/posts/heap-size-and-oome/"><div class="card-body"> <span class="timeago small" > Jul 20, 2021 <i class="unloaded">2021-07-20T23:00:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Java - 자바 힙 메모리 사이즈와 OutOfMemoryError</h3><div class="text-muted small"><p> 지금까지 OutOfMemoryError(OOM)을 만나게 되면, 정확한 진단없이 그냥 성능 팀에서 하라는 대로 Xms, Xmx 옵션을 활용해서 힙 크기를 조절했던 것 같다. 내가 스스로 판단할 수 있게끔 지식을 갖추고 연습해보자. 힙 메모리 사이즈 기본값 공식 문서 에 보면 default로 세팅되는 초기 힙사이즈와 최대 힙사이즈에 대해 나와...</p></div></div></a></div><div class="card"> <a href="/posts/heap-analyze-with-jmap-and-mat/"><div class="card-body"> <span class="timeago small" > Jul 20, 2021 <i class="unloaded">2021-07-20T23:00:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Java - 자바 메모리 단면 분석하기</h3><div class="text-muted small"><p> 언제 메모리 단면을 분석해야할까 ? 메모리 단면인 ‘힙 덤프(Heap Dump)’는 생성하는데 비용이 비싸기 때문에, 메모리가 부족해지는 현상이 지속해서 발생하거나 OOM 에러가 발생했을 때 생성해야 한다. 여기서 말하는 비용이란 다음과 같다 덤프 파일을 생성하는 동안 서비스가 불가능한 상황이 된다. 덤프 생성시 많은 시간이 소요될 수 있...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/equals-and-hashcode/" class="btn btn-outline-primary" prompt="Older"><p>Java - 왜 equals()와 hashCode()는 함께 오버라이딩 해야할까 ?</p></a> <a href="/posts/java-how-java-works/" class="btn btn-outline-primary" prompt="Newer"><p>Java - 자바 애플리케이션이 실행되는 과정 살펴보기</p></a></div></div></div></div><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2025 <a href="https://twitter.com/username">Lee JaeYoon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-sm-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/oop/">OOP</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/mybatis/">MyBatis</a> <a class="post-tag" href="/tags/%EC%9D%B8%ED%94%84%EB%9D%BC/">인프라</a> <a class="post-tag" href="/tags/apache-poi/">apache poi</a> <a class="post-tag" href="/tags/apache/">Apache</a> <a class="post-tag" href="/tags/aws/">AWS</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://zz9z9.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"> {categories} {tags}</div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>', templateMiddleware: function(prop, value, template) { if (prop === 'categories') { if (value === '') { return `${value}`; } else { return `<div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>${value}</div>`; } } if (prop === 'tags') { if (value === '') { return `${value}`; } else { return `<div><i class="fa fa-tag fa-fw"></i>${value}</div>`; } } } }); </script>
