@@ -92,7 +92,7 @@ try (
 }
 ```
 ## Closable vs AutoClosable
-> Java 7에서 try-with-resources를 추가하면서 기존 Closeable을 수정하면 하위 호환성이 깨질 수 있기 때문에 AutoCloseable을 새로 만들고, Closeable이 이를 확장하는 방식으로 해결.
+> Java 7에서 try-with-resources를 추가하면서 기존 Closeable(Java 5에서 등장)을 수정하면 하위 호환성이 깨질 수 있기 때문에 AutoCloseable을 새로 만들고, Closeable이 이를 확장하는 방식으로 해결.
 
 ```java
 public interface AutoCloseable {
