@@ -1,0 +1,767 @@
+<!DOCTYPE html><html lang="en-US" mode="light" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="generator" content="Jekyll v4.4.1" /><meta property="og:title" content="간단한 웹 서버 구현하기" /><meta property="og:locale" content="en_US" /><meta name="description" content="들어가기 전 『자바 웹 프로그래밍 Next Step』 4장에 나와있는 웹 서버 요구사항들을 구현해보았다. 구현하기 전, 스스로 아래와 같은 사항을 다짐하고 진행해봤다." /><meta property="og:description" content="들어가기 전 『자바 웹 프로그래밍 Next Step』 4장에 나와있는 웹 서버 요구사항들을 구현해보았다. 구현하기 전, 스스로 아래와 같은 사항을 다짐하고 진행해봤다." /><link rel="canonical" href="https://zz9z9.github.io/posts/nextstep-toy-webserver/" /><meta property="og:url" content="https://zz9z9.github.io/posts/nextstep-toy-webserver/" /><meta property="og:site_name" content="zz9z9" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2021-06-21T22:25:00+09:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="간단한 웹 서버 구현하기" /><meta name="twitter:site" content="@twitter_username" /> <script type="application/ld+json"> {"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2021-06-21T22:25:00+09:00","datePublished":"2021-06-21T22:25:00+09:00","description":"들어가기 전 『자바 웹 프로그래밍 Next Step』 4장에 나와있는 웹 서버 요구사항들을 구현해보았다. 구현하기 전, 스스로 아래와 같은 사항을 다짐하고 진행해봤다.","headline":"간단한 웹 서버 구현하기","mainEntityOfPage":{"@type":"WebPage","@id":"https://zz9z9.github.io/posts/nextstep-toy-webserver/"},"url":"https://zz9z9.github.io/posts/nextstep-toy-webserver/"}</script><title>간단한 웹 서버 구현하기 | zz9z9</title><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/site.webmanifest"><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico"><meta name="apple-mobile-web-app-title" content="zz9z9"><meta name="application-name" content="zz9z9"><meta name="msapplication-TileColor" content="#da532c"><meta name="msapplication-config" content="/assets/img/favicons/browserconfig.xml"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css"><link rel="stylesheet" href="/assets/css/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/magnific-popup@1.1.0/dist/magnific-popup.min.css"> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script src="https://cdn.jsdelivr.net/combine/npm/lozad/dist/lozad.min.js,npm/magnific-popup@1/dist/jquery.magnific-popup.min.js"></script> <script defer src="/assets/js/dist/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id=G-Q7PWLG5WYT"></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-Q7PWLG5WYT'); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Soccerball.svg/1000px-Soccerball.svg.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">zz9z9</a></div><div class="site-subtitle font-italic">좋은 코드로, 더 나은 세상을</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/zz9z9" aria-label="github" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/twitter_username" aria-label="twitter" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['example','doamin.com'].join('@')" aria-label="email" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" > <i class="fas fa-rss"></i> </a></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>간단한 웹 서버 구현하기</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" autocomplete="off" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>간단한 웹 서버 구현하기</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="semi-bold"> Lee JaeYoon </span> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Mon, Jun 21, 2021, 10:25 PM +0900" prep="on" > Jun 21, 2021 <i class="unloaded">2021-06-21T22:25:00+09:00</i> </span></div><div> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="4797 words">26 min</span></div></div><div class="post-content"><h1 id="들어가기-전">들어가기 전</h1><hr /><p>『자바 웹 프로그래밍 Next Step』 4장에 나와있는 웹 서버 요구사항들을 구현해보았다. 구현하기 전, 스스로 아래와 같은 사항을 다짐하고 진행해봤다.</p><ol><li>최대한 책에 나온 힌트를 보지 않고 해결해보자.<li>반드시 테스트 코드를 작성하자.<li>빠르게 구현하는 것 보다 중요한건 코드 한 줄 한 줄의 의미를 제대로 아는 것.<li>의식적으로 리팩토링 연습을 하자.</ol><p>처음엔 html 페이지만 클라이언트로 전달하는 요구사항이었는데 나중엔 Map을 임시 DB로 활용하여 회원가입하는 것까지 하게되었다. 다 만들어보고 나니 엄밀히 말하면 매우 간단한 ‘WAS’라고 할 수 있을 것 같다.</p><p>연속으로 시간을 할애하진 못했지만, 다 합치면 대략 2주 정도 걸린 것 같다.</p><p>※ <a href="https://github.com/zz9z9/nextstep-web-application-server">전체 코드 repository</a></p><h1 id="요구사항-별-구현">요구사항 별 구현</h1><hr /><p>요구사항 별로 구현을 하면서 몰랐던 내용들과 배운 내용, 구현 사항 등을 기록해보았다.</p><h2 id="요구사항-1">요구사항 1</h2><blockquote><p><q><strong>http://localhost:8080/index.html로 접속했을 때 webapp 디렉토리의 index.html 파일을 읽어 클라이언트에 응답한다.</strong></q></p></blockquote><h3 id="구현하기-전-들었던-생각들">구현하기 전 들었던 생각들</h3><ul><li>index.html 파일을 어떤식으로 클라이언트에 넘겨줘야할까 ?<ul><li>index.html 파일 읽어서 byte 형태로 만들어준 뒤 DataOutputStream을 통해 response 넘기면 되지 않을까.. ?</ul><li>http://localhost:8080/index.html 라는 요청왔을 때 ‘/’ 이후의 파일명을 어떻게 가져오지 ?</ul><h3 id="구현">구현</h3><blockquote><p>베이스 코드에 있던 ‘RequestHandler’ 클래스 내부에 구현했다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+</pre><td class="rouge-code"><pre>    <span class="c1">// 클라이언트가 요청한 html 파일 이름 가져온다</span>
+    <span class="kd">private</span> <span class="nc">String</span> <span class="nf">getRequestHtmlName</span><span class="o">(</span><span class="nc">InputStream</span> <span class="n">in</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="nc">BufferedReader</span> <span class="n">bufferedReader</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">BufferedReader</span><span class="o">(</span><span class="k">new</span> <span class="nc">InputStreamReader</span><span class="o">(</span><span class="n">in</span><span class="o">));</span>
+        <span class="nc">String</span> <span class="n">requestInfo</span> <span class="o">=</span> <span class="n">bufferedReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span>
+
+        <span class="k">if</span><span class="o">(!</span><span class="n">requestInfo</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">".html"</span><span class="o">))</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="nc">String</span> <span class="n">htmlPage</span> <span class="o">=</span> <span class="n">requestInfo</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">" "</span><span class="o">)[</span><span class="mi">1</span><span class="o">];</span>
+
+        <span class="k">return</span> <span class="n">htmlPage</span><span class="o">.</span><span class="na">substring</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span> <span class="c1">// 맨 앞에 '/' 지우기 위함</span>
+    <span class="o">}</span>
+    <span class="c1">// http response를 위해 파일을 byte로 변환 (절대경로 ver)</span>
+    <span class="kd">private</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">convertHtmlToByte</span><span class="o">(</span><span class="nc">String</span> <span class="n">fileName</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">rootPath</span> <span class="o">=</span> <span class="nc">System</span><span class="o">.</span><span class="na">getProperty</span><span class="o">(</span><span class="s">"user.dir"</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">filePath</span> <span class="o">=</span> <span class="n">rootPath</span> <span class="o">+</span> <span class="s">"/webapp/"</span> <span class="o">+</span> <span class="n">fileName</span><span class="o">;</span>
+        <span class="nc">File</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">filePath</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="nc">Files</span><span class="o">.</span><span class="na">readAllBytes</span><span class="o">(</span><span class="n">file</span><span class="o">.</span><span class="na">toPath</span><span class="o">());</span>
+    <span class="o">}</span>
+    <span class="c1">// http response를 위해 파일을 byte로 변환 (상대경로 ver)</span>
+    <span class="kd">private</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">convertHtmlToByte</span><span class="o">(</span><span class="nc">String</span> <span class="n">fileName</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">filePath</span> <span class="o">=</span> <span class="s">"./webapp/"</span> <span class="o">+</span> <span class="n">fileName</span><span class="o">;</span>
+        <span class="nc">File</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">filePath</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="nc">Files</span><span class="o">.</span><span class="na">readAllBytes</span><span class="o">(</span><span class="n">file</span><span class="o">.</span><span class="na">toPath</span><span class="o">());</span>
+    <span class="o">}</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들">구현하면서 알게된 것들</h3><ul><li>브라우저에서 넘어오는 request가 어떤식으로 구성되어있는지 <code class="language-plaintext highlighter-rouge">connection.getInputStream()</code>을 디버거로 찍었는데 요청에 대한 문자열 정보가 보이지 않는다. (connection은 Socket 객체)<ul><li><code class="language-plaintext highlighter-rouge">InputStream</code>은 바이트 단위로 숫자를 저장하기 때문에 원하는 값 볼 수 없었던 것.<a href="https://docs.oracle.com/javase/7/docs/api/java/io/InputStream.html">(참고)</a><li><code class="language-plaintext highlighter-rouge">BufferdReader</code>, <code class="language-plaintext highlighter-rouge">InputStreamReader</code>를 활용하여 byte array인 <code class="language-plaintext highlighter-rouge">InputStream</code>을 읽어보니 요청의 맨 첫번째 줄에 html 파일에 관련된 정보가 있다.</ul><li>상대경로를 사용할 경우, <code class="language-plaintext highlighter-rouge">./</code> (현재 위치)는 bin, src 폴더를 포함하는 해당 자바 프로젝트 폴더의 위치이다.</ul><p><br /></p><h2 id="요구사항-2">요구사항 2</h2><blockquote><p><q><strong>GET 방식으로 회원가입하기</strong></q></p></blockquote><h3 id="구현하기-전-들었던-생각들-1">구현하기 전 들었던 생각들</h3><ul><li>요구사항1 에서 구현한 메서드를 개선해야 할 것 같다.<ul><li>js, css 파일에 대한 요청도 response로 넘겨줘야 하기 때문에 <code class="language-plaintext highlighter-rouge">getRequestHtmlName()</code>, <code class="language-plaintext highlighter-rouge">convertHtmlToByte()</code> 라는 메서드명을 좀 더 추상적으로 변경하여 html 파일 이외에도 처리가 가능하도록 만들어 보자.<li>client 관련 파일 디렉토리 최상위 폴더인 “webapp”도 변수에 추가하지 말고 클래스 변수로 선언하고 final로 상수화 하는게 나을 것 같다.</ul><li>본격적으로 회원가입에 요청에 대해 생각해보면, 지금까지 했던 페이지 응답과는 달리 회원가입 이라는 ‘비즈니스 로직’을 수행해야 한다.<ul><li>따라서, 비즈니스 로직 수행을 담당하는 ‘무언가’를 만들어야 할 것 같다.<li>또한, RequestHandler에서 현재는 페이지 응답에 관련된 것만 수행하는데 다양한 request를 적절하게 처리할 수 있도록 변경해야 할 것 같다.</ul><li>정적 자원 요청, 비즈니스 로직 요청 등 각기 다른 요청을 어떻게 구분해야 할까 ?<li>비즈니스 로직을 요구하는 요청을 처리할 실제 로직에 해당 요청을 어떻게 맵핑시키면 좋을까 ?<ul><li>사용자 요청과 해당 요청을 처리하는데 필요한 메서드를 맵핑시켜주는 역할을 하는 <code class="language-plaintext highlighter-rouge">LogicMapper</code> 생성.<li>RequestHandler 내에 코드를 추가해서 할 수도 있겠지만, 그렇게 되면 책임이 많아지기 때문에 코드가 점점 복잡해질 것이다.<li>따라서, RequestHandler의 책임을 ‘클라이언트의 요청을 받아들이고 어떤 요청인지 판단 하는 것’으로 한정하는게 좋을 것 같다고 생각했다.</ul></ul><h3 id="구현-1">구현</h3><blockquote><p>요청의 타입을 정적 자원(html, css, js 등) 요청과 비즈니스 로직 요청 두 개로 나눠보았다. 일단 아래처럼 구현해봤는데 이렇게 하드코딩으로 분기시키면 변화에 유연하게 대응하기도 어렵고 생각지 못한 케이스도 있을 것 같다. 어떻게 하는게 좋을지 고민해보고 추후에 책도 참고해보자</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">enum</span> <span class="nc">RequestType</span> <span class="o">{</span>
+    <span class="no">REQUEST_STATIC_RESOURCE</span><span class="o">,</span>
+    <span class="no">REQUEST_BUSINESS_LOGIC</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre><td class="rouge-code"><pre> <span class="kd">private</span> <span class="nc">RequestType</span> <span class="nf">getRequestType</span><span class="o">(</span><span class="nc">HttpRequest</span> <span class="n">httpRequest</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">httpMethod</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getHttpMethod</span><span class="o">();</span>
+        <span class="nc">String</span> <span class="n">requestUrl</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getRequestUrl</span><span class="o">();</span>
+
+        <span class="k">switch</span> <span class="o">(</span><span class="nc">HttpMethod</span><span class="o">.</span><span class="na">valueOf</span><span class="o">(</span><span class="n">httpMethod</span><span class="o">))</span> <span class="o">{</span>
+            <span class="k">case</span> <span class="nl">GET:</span>
+                <span class="k">if</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">"?"</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="k">return</span> <span class="nc">RequestType</span><span class="o">.</span><span class="na">REQUEST_BUSINESS_LOGIC</span><span class="o">;</span>
+                <span class="o">}</span> <span class="k">else</span> <span class="k">if</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"/"</span><span class="o">)</span> <span class="o">||</span> <span class="n">requestUrl</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">"."</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="k">return</span> <span class="nc">RequestType</span><span class="o">.</span><span class="na">REQUEST_FILE</span><span class="o">;</span>
+                <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                    <span class="k">return</span> <span class="nc">RequestType</span><span class="o">.</span><span class="na">REQUEST_BUSINESS_LOGIC</span><span class="o">;</span>
+                <span class="o">}</span>
+
+            <span class="k">case</span> <span class="nl">POST:</span>
+                <span class="k">break</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+</pre></table></code></div></div><blockquote><p>비즈니스 로직 맵핑을 위해 일단 아래와 같이 구현했는데, 리플렉션을 마구 썼다. 이 방법 말고는 없을까 ? 사실, executeMethodWithParamsForGetRequest에서 파라미터 맵핑하는 부분도 파라미터 객체에 기본 생성자가 없으면 <code class="language-plaintext highlighter-rouge">paramClass.getDeclaredConstructor().newInstance()</code> 이 부분에서 에러 난다. 그리고 LogicMapper가 최초 한 번만 생성되는 것도 보장되어야 하는 등 아직 미흡한 부분이 많다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+</pre><td class="rouge-code"><pre>  <span class="kd">public</span> <span class="kd">class</span> <span class="nc">LogicMapper</span> <span class="o">{</span>
+      <span class="c1">// 실행할 비즈니스 로직에 대한 정보</span>
+      <span class="kd">static</span> <span class="kd">class</span> <span class="nc">Execution</span> <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="o">{</span>
+          <span class="kd">private</span> <span class="no">T</span> <span class="n">targetInstance</span><span class="o">;</span> <span class="c1">// 실행될 비즈니스 로직 객체</span>
+          <span class="kd">private</span> <span class="nc">Class</span> <span class="n">logicClass</span><span class="o">;</span> <span class="c1">// 실행될 비즈니스 로직 클래스</span>
+          <span class="kd">private</span> <span class="nc">String</span> <span class="n">methodName</span><span class="o">;</span> <span class="c1">// 실행될 메서드 명</span>
+          <span class="kd">private</span> <span class="nc">Class</span> <span class="n">paramClass</span><span class="o">;</span> <span class="c1">// 파라미터 클래스</span>
+
+          <span class="kd">public</span> <span class="nf">Execution</span><span class="o">(</span><span class="no">T</span> <span class="n">targetInstance</span><span class="o">,</span> <span class="nc">Class</span> <span class="n">logicClass</span><span class="o">,</span> <span class="nc">String</span> <span class="n">methodName</span><span class="o">)</span> <span class="o">{</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">targetInstance</span> <span class="o">=</span> <span class="n">targetInstance</span><span class="o">;</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">logicClass</span> <span class="o">=</span> <span class="n">logicClass</span><span class="o">;</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">methodName</span> <span class="o">=</span> <span class="n">methodName</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="kd">public</span> <span class="nf">Execution</span><span class="o">(</span><span class="no">T</span> <span class="n">targetInstance</span><span class="o">,</span> <span class="nc">Class</span> <span class="n">logicClass</span><span class="o">,</span> <span class="nc">String</span> <span class="n">methodName</span><span class="o">,</span> <span class="nc">Class</span> <span class="n">paramClass</span><span class="o">)</span> <span class="o">{</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">targetInstance</span> <span class="o">=</span> <span class="n">targetInstance</span><span class="o">;</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">logicClass</span> <span class="o">=</span> <span class="n">logicClass</span><span class="o">;</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">methodName</span> <span class="o">=</span> <span class="n">methodName</span><span class="o">;</span>
+              <span class="k">this</span><span class="o">.</span><span class="na">paramClass</span> <span class="o">=</span> <span class="n">paramClass</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="kd">public</span> <span class="no">T</span> <span class="nf">getTargetInstance</span><span class="o">()</span> <span class="o">{</span>
+              <span class="k">return</span> <span class="n">targetInstance</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="kd">public</span> <span class="nc">Class</span> <span class="nf">getLogicClass</span><span class="o">()</span> <span class="o">{</span>
+              <span class="k">return</span> <span class="n">logicClass</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getMethodName</span><span class="o">()</span> <span class="o">{</span>
+              <span class="k">return</span> <span class="n">methodName</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="kd">public</span> <span class="nc">Class</span> <span class="nf">getParamClass</span><span class="o">()</span> <span class="o">{</span>
+              <span class="k">return</span> <span class="n">paramClass</span><span class="o">;</span>
+          <span class="o">}</span>
+      <span class="o">}</span>
+
+      <span class="kd">private</span> <span class="kd">static</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">Execution</span><span class="o">&gt;</span> <span class="n">getMappingUrl</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HashMap</span><span class="o">&lt;&gt;();</span>
+
+      <span class="kd">static</span> <span class="o">{</span>
+        <span class="n">initGetRequest</span><span class="o">();</span>
+      <span class="o">}</span>
+
+      <span class="c1">// 요청에 따른 실행 맵핑</span>
+      <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">initGetRequest</span><span class="o">()</span> <span class="o">{</span>
+          <span class="n">getMappingUrl</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"/user/create"</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Execution</span><span class="o">(</span><span class="nc">UserLogic</span><span class="o">.</span><span class="na">getInstance</span><span class="o">(),</span> <span class="nc">UserLogic</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">"signup"</span><span class="o">,</span> <span class="nc">User</span><span class="o">.</span><span class="na">class</span><span class="o">));</span>
+      <span class="o">}</span>
+
+      <span class="c1">// 비즈니스 로직 실행되도록</span>
+      <span class="kd">public</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">doRequestLogic</span><span class="o">(</span><span class="nc">HttpRequest</span> <span class="n">httpRequest</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+          <span class="nc">HttpMethod</span> <span class="n">httpMethod</span> <span class="o">=</span> <span class="nc">HttpMethod</span><span class="o">.</span><span class="na">valueOf</span><span class="o">(</span><span class="n">httpRequest</span><span class="o">.</span><span class="na">getHttpMethod</span><span class="o">());</span>
+          <span class="nc">String</span> <span class="n">requestUrl</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getRequestUrl</span><span class="o">();</span>
+          <span class="kt">byte</span><span class="o">[]</span> <span class="n">response</span> <span class="o">=</span> <span class="o">{};</span>
+
+          <span class="k">switch</span> <span class="o">(</span><span class="n">httpMethod</span><span class="o">)</span> <span class="o">{</span>
+              <span class="k">case</span> <span class="nl">GET:</span>
+                  <span class="n">response</span> <span class="o">=</span> <span class="n">requestUrl</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">"?"</span><span class="o">)</span> <span class="o">?</span> <span class="n">executeMethodWithParamsForGetRequest</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)</span> <span class="o">:</span> <span class="n">executeMethodWithoutParamsForGetRequest</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">);</span>
+                  <span class="k">break</span><span class="o">;</span>
+          <span class="o">}</span>
+
+          <span class="k">return</span> <span class="n">response</span><span class="o">;</span>
+      <span class="o">}</span>
+
+      <span class="c1">// 요청에 파라미터 있는 경우</span>
+      <span class="kd">public</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">executeMethodWithParamsForGetRequest</span><span class="o">(</span><span class="nc">String</span> <span class="n">requestUrl</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+          <span class="nc">String</span><span class="o">[]</span> <span class="n">info</span> <span class="o">=</span> <span class="n">requestUrl</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">"\\?"</span><span class="o">);</span>
+          <span class="nc">String</span> <span class="n">url</span> <span class="o">=</span> <span class="n">info</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+          <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="nc">HttpRequestUtils</span><span class="o">.</span><span class="na">parseQueryString</span><span class="o">(</span><span class="n">info</span><span class="o">[</span><span class="mi">1</span><span class="o">]);</span>
+          <span class="nc">Execution</span> <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">url</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+          <span class="nc">Class</span> <span class="n">paramClass</span> <span class="o">=</span> <span class="n">execution</span><span class="o">.</span><span class="na">getParamClass</span><span class="o">();</span>
+          <span class="nc">Object</span> <span class="n">instance</span> <span class="o">=</span> <span class="n">paramClass</span><span class="o">.</span><span class="na">getDeclaredConstructor</span><span class="o">().</span><span class="na">newInstance</span><span class="o">();</span>
+
+          <span class="k">for</span><span class="o">(</span><span class="nc">String</span> <span class="n">key</span> <span class="o">:</span> <span class="n">params</span><span class="o">.</span><span class="na">keySet</span><span class="o">())</span> <span class="o">{</span>
+              <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">paramClass</span><span class="o">.</span><span class="na">getDeclaredField</span><span class="o">(</span><span class="n">key</span><span class="o">)).</span><span class="na">ifPresent</span><span class="o">((</span><span class="n">field</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+                  <span class="n">field</span><span class="o">.</span><span class="na">setAccessible</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+                  <span class="k">try</span> <span class="o">{</span>
+                      <span class="n">field</span><span class="o">.</span><span class="na">set</span><span class="o">(</span><span class="n">instance</span><span class="o">,</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">key</span><span class="o">));</span>
+                  <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IllegalAccessException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                      <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+                  <span class="o">}</span>
+              <span class="o">});</span>
+          <span class="o">}</span>
+
+          <span class="n">execution</span><span class="o">.</span><span class="na">getLogicClass</span><span class="o">().</span><span class="na">getMethod</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getMethodName</span><span class="o">(),</span> <span class="n">execution</span><span class="o">.</span><span class="na">getParamClass</span><span class="o">()).</span><span class="na">invoke</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getTargetInstance</span><span class="o">(),</span> <span class="n">instance</span><span class="o">);</span>
+
+          <span class="k">return</span> <span class="s">"SUCCESS"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">();</span>
+      <span class="o">}</span>
+
+      <span class="c1">// 요청에 파라미터 없는 경우</span>
+      <span class="kd">public</span> <span class="kt">byte</span><span class="o">[]</span> <span class="nf">executeMethodWithoutParamsForGetRequest</span><span class="o">(</span><span class="nc">String</span> <span class="n">requestUrl</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">NoSuchMethodException</span><span class="o">,</span> <span class="nc">InvocationTargetException</span><span class="o">,</span> <span class="nc">IllegalAccessException</span> <span class="o">{</span>
+          <span class="nc">Execution</span> <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+          <span class="n">execution</span><span class="o">.</span><span class="na">getLogicClass</span><span class="o">().</span><span class="na">getMethod</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getMethodName</span><span class="o">(),</span> <span class="n">execution</span><span class="o">.</span><span class="na">getParamClass</span><span class="o">()).</span><span class="na">invoke</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getTargetInstance</span><span class="o">());</span>
+
+          <span class="k">return</span> <span class="s">"SUCCESS"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">();</span>
+      <span class="o">}</span>
+  <span class="o">}</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들-1">구현하면서 알게된 것들</h3><ul><li>리플렉션 사용해서 <code class="language-plaintext highlighter-rouge">대상클래스.getDeclaredConstructor().newInstance()</code> 실행시 대상 클래스에 기본 생성자 없으면 에러 난다.</ul><p><br /></p><h2 id="요구사항-3">요구사항 3</h2><blockquote><p><q><strong>POST 방식으로 회원가입하기</strong></q></p></blockquote><h3 id="구현하기-전-들었던-생각들-2">구현하기 전 들었던 생각들</h3><ul><li>POST 방식으로 넘어오는 (body에 담겨있는)파라미터는 어떻게 받지 ?</ul><h3 id="구현-2">구현</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre><span class="k">if</span><span class="o">(</span><span class="n">httpMethod</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"POST"</span><span class="o">))</span> <span class="o">{</span>
+    <span class="kt">int</span> <span class="n">contentLen</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+    <span class="k">for</span><span class="o">(</span><span class="nc">String</span> <span class="n">line</span> <span class="o">=</span> <span class="n">bufferedReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">();</span> <span class="o">(!</span><span class="n">line</span><span class="o">.</span><span class="na">isEmpty</span><span class="o">()</span> <span class="o">&amp;&amp;</span> <span class="n">line</span><span class="o">!=</span><span class="kc">null</span><span class="o">);</span> <span class="n">line</span><span class="o">=</span><span class="n">bufferedReader</span><span class="o">.</span><span class="na">readLine</span><span class="o">())</span> <span class="o">{</span>
+        <span class="k">if</span><span class="o">(</span><span class="n">line</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">"Content-Length"</span><span class="o">))</span> <span class="o">{</span>
+            <span class="nc">String</span><span class="o">[]</span> <span class="n">info</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="na">split</span><span class="o">(</span><span class="s">":"</span><span class="o">);</span>
+            <span class="n">contentLen</span> <span class="o">=</span> <span class="nc">Integer</span><span class="o">.</span><span class="na">parseInt</span><span class="o">(</span><span class="n">info</span><span class="o">[</span><span class="mi">1</span><span class="o">].</span><span class="na">trim</span><span class="o">());</span>
+            <span class="k">break</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="k">if</span> <span class="o">(</span><span class="n">contentLen</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="kt">char</span><span class="o">[]</span> <span class="n">body</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="o">[</span><span class="n">contentLen</span><span class="o">];</span>
+        <span class="n">bufferedReader</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="n">body</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">String</span><span class="o">(</span><span class="n">body</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들-2">구현하면서 알게된 것들</h3><ul><li>POST 방식의 경우 bufferedReader의 <code class="language-plaintext highlighter-rouge">readLine()</code> 사용하게 되면 http header는 읽지만 body는 읽어오지 못한다.<ul><li>원인을 찾아보니 header의 마지막 부분(“”) <code class="language-plaintext highlighter-rouge">readLine()</code> 하는 부분에서 계속 hanging 되어있다.<li>hanging 되는 이유는 request header 마지막 라인이 공백인데 <code class="language-plaintext highlighter-rouge">readLine()</code>의 경우 line의 끝에 개행 문자가 없는 경우, 값이 올 때 까지 계속 기다린다고 한다.<li>따라서, 공백인 경우를 체크하는 로직이 필요하고, Content-Length를 구해서 그 크기만큼 나머지를 <code class="language-plaintext highlighter-rouge">read()</code> 하면 된다.<li><code class="language-plaintext highlighter-rouge">readLine()</code> 대신 <code class="language-plaintext highlighter-rouge">read()</code>를 사용하는 이유는, body로 넘어오는 파라미터 또한 끝에 개행문자가 없기 때문에 <code class="language-plaintext highlighter-rouge">readLine()</code> 사용시 대기상태에 빠진다.</ul><li>http request 포맷<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>Request-Line
+*(( general-header
+ | request-header
+ | entity-header ) CRLF)
+CRLF
+[ message-body ]
+</pre></table></code></div></div></ul><p><br /></p><h2 id="요구사항-4">요구사항 4</h2><blockquote><p><q><strong>회원가입을 완료하면 /index.html 페이지로 이동한다. url 또한 user/create가 아닌 /index.html로 변해야 한다.</strong></q></p></blockquote><h3 id="구현하기-전-들었던-생각들-3">구현하기 전 들었던 생각들</h3><ul><li>회원가입 후 index.html을 클라이언트로 넘겨주면 페이지는 뜨겠지만 url은 user/create가 그대로 남아있을 것이다.<ul><li>회원가입 후 클라이언트가 index.html을 요청하도록 하려면 어떻게 해야할까 ?</ul><li>비즈니스 로직 수행하는 메서드의 다양한 타입의 리턴값을 LogicMapper에 추상화 시킨 두 개의 메서드 <code class="language-plaintext highlighter-rouge">executeMethodWithParams()</code>, <code class="language-plaintext highlighter-rouge">executeMethodWithoutParams()</code>에서 어떻게 받아서 처리해야할까?</ul><h3 id="구현-3">구현</h3><blockquote><p>먼저 웹 서버의 관점에서 생각해봤을때, 웹 서버에서 클라이언트로 응답하는 형태는 크게 ‘html 페이지 / 데이터(json 등)’ 이라고 생각했다. 따라서, 클라이언트의 요청에 대해 적절한 응답을 하기 위해 필요한 것은 위에서 정의한 ‘응답의 형태’와 ‘실제 데이터’ 두 가지라고 생각하여 이를 나타내는 <code class="language-plaintext highlighter-rouge">ExecutionResult</code> 클래스를 만들었다. 이에 따라 기존에 정의된 <code class="language-plaintext highlighter-rouge">executeMethodWithParams()</code>, <code class="language-plaintext highlighter-rouge">executeMethodWithoutParams()</code> 메서드의 리턴값을 <code class="language-plaintext highlighter-rouge">ExecutionResult</code>로 바꾸고 다양한 타입의 리턴값을 해당 클래스의 속성 중 ‘실제 데이터’(Object) 부분에 세팅했다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">enum</span> <span class="nc">ResponseType</span> <span class="o">{</span>
+    <span class="no">HTML_PAGE</span><span class="o">,</span>
+    <span class="no">DATA</span><span class="o">,</span>
+    <span class="no">EMPTY</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+</pre><td class="rouge-code"><pre>    <span class="kd">public</span> <span class="nc">ExecutionResult</span> <span class="nf">doRequestLogic</span><span class="o">(</span><span class="nc">HttpRequest</span> <span class="n">httpRequest</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">httpResponse</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">HttpMethod</span> <span class="n">httpMethod</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getHttpMethod</span><span class="o">();</span>
+        <span class="nc">String</span> <span class="n">requestUrl</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getRequestUrl</span><span class="o">();</span>
+        <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getParams</span><span class="o">();</span>
+        <span class="nc">Execution</span> <span class="n">execution</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+
+        <span class="k">switch</span> <span class="o">(</span><span class="n">httpMethod</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">case</span> <span class="nl">GET:</span>
+                <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+            <span class="k">case</span> <span class="nl">POST:</span>
+                <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">postMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="k">switch</span> <span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getResponseType</span><span class="o">())</span> <span class="o">{</span>
+            <span class="k">case</span> <span class="nl">HTML_PAGE:</span>
+                <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode3xx</span><span class="o">.</span><span class="na">REDIRECTION</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+            <span class="k">case</span> <span class="nl">DATA:</span>
+                <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode2xx</span><span class="o">.</span><span class="na">OK</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="nc">ExecutionResult</span> <span class="n">result</span> <span class="o">=</span> <span class="o">(</span><span class="n">params</span><span class="o">!=</span><span class="kc">null</span><span class="o">)</span> <span class="o">?</span> <span class="n">executeMethodWithParams</span><span class="o">(</span><span class="n">execution</span><span class="o">,</span> <span class="n">params</span><span class="o">,</span> <span class="n">httpResponse</span><span class="o">)</span> <span class="o">:</span> <span class="n">executeMethodWithoutParams</span><span class="o">(</span><span class="n">execution</span><span class="o">,</span> <span class="n">httpRequest</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+    <span class="o">}</span>
+
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">class</span> <span class="nc">ExecutionResult</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="nc">ResponseType</span> <span class="n">responseType</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="nc">Object</span> <span class="n">returnData</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">ExecutionResult</span><span class="o">(</span><span class="nc">ResponseType</span> <span class="n">responseType</span><span class="o">,</span> <span class="nc">Object</span> <span class="n">returnData</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">responseType</span> <span class="o">=</span> <span class="n">responseType</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">returnData</span> <span class="o">=</span> <span class="n">returnData</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">ResponseType</span> <span class="nf">getResponseType</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">responseType</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">Object</span> <span class="nf">getReturnData</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">returnData</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+</pre></table></code></div></div><blockquote><p>LogicMapper에서 실행한 결과를 RequestHandler에서 받은 후 응답 타입에 따라 HTTP Response에 적절한 데이터 세팅해준다. 페이지 리다이렉트인 경우 <code class="language-plaintext highlighter-rouge">httpResponse.setHeader("Location", redirectUrl);</code>을 통해 헤더에 <code class="language-plaintext highlighter-rouge">Location : redirectUrl</code>을 세팅해준다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre><td class="rouge-code"><pre> <span class="k">case</span> <span class="nl">REQUEST_BUSINESS_LOGIC:</span>
+   <span class="nc">ExecutionResult</span> <span class="n">result</span> <span class="o">=</span> <span class="n">requestLogicMapper</span><span class="o">.</span><span class="na">doRequestLogic</span><span class="o">(</span><span class="n">httpRequest</span><span class="o">,</span> <span class="n">httpResponse</span><span class="o">);</span>
+
+   <span class="k">switch</span> <span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">getResponseType</span><span class="o">())</span> <span class="o">{</span>
+       <span class="k">case</span> <span class="nl">HTML_PAGE:</span>
+           <span class="nc">String</span> <span class="n">redirectPage</span> <span class="o">=</span> <span class="o">(</span><span class="nc">String</span><span class="o">)</span> <span class="n">result</span><span class="o">.</span><span class="na">getReturnData</span><span class="o">();</span>
+           <span class="nc">String</span> <span class="n">redirectUrl</span> <span class="o">=</span> <span class="s">"http://localhost:8080"</span><span class="o">+</span><span class="n">redirectPage</span><span class="o">;</span> <span class="c1">// TODO : 하드코딩 말고 request origin으로 ?</span>
+           <span class="n">httpResponse</span><span class="o">.</span><span class="na">setHeader</span><span class="o">(</span><span class="s">"Location"</span><span class="o">,</span> <span class="n">redirectUrl</span><span class="o">);</span>
+           <span class="k">break</span><span class="o">;</span>
+
+       <span class="k">case</span> <span class="nl">DATA:</span>
+           <span class="k">break</span><span class="o">;</span>
+
+       <span class="k">case</span> <span class="nl">EMPTY:</span>
+           <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode2xx</span><span class="o">.</span><span class="na">OK</span><span class="o">);</span>
+           <span class="n">httpResponse</span><span class="o">.</span><span class="na">setHeader</span><span class="o">(</span><span class="s">"Content-Type"</span><span class="o">,</span> <span class="s">"text/html;charset=utf-8"</span><span class="o">);</span>
+           <span class="n">httpResponse</span><span class="o">.</span><span class="na">setHeader</span><span class="o">(</span><span class="s">"Content-Length"</span><span class="o">,</span> <span class="n">responseBody</span><span class="o">.</span><span class="na">length</span><span class="o">);</span>
+           <span class="k">break</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들-3">구현하면서 알게된 것들</h3><ul><li>HTTP Response 응답 헤더에 <code class="language-plaintext highlighter-rouge">Location : url</code>을 세팅하면 브라우저는 해당 url로 요청을 보낸다.<li>상태코드 <code class="language-plaintext highlighter-rouge">302 Found</code><ul><li>클라이언트가 요청한 리소스가 Location 헤더에 주어진 URL에 일시적으로 이동되었음을 가리킨다.</ul></ul><p><br /></p><h2 id="요구사항-5-1">요구사항 5-1</h2><blockquote><ol><li>로그인 메뉴를 클릭하면 해당 페이지로 이동한다. 로그인이 성공하면 /index.html로 이동하고, 실패하면 /user/login_failed.html로 이동해야 한다.<li>앞에서 회원가입한 사용자로 로그인할 수 있어야 한다.</ol></blockquote><h3 id="구현하기-전-들었던-생각들-4">구현하기 전 들었던 생각들</h3><ul><li>비즈니스 로직 수행하는 메서드들의 파라미터는 개수도 다양하고 타입도 다양한데 LogicMapper에 추상화 시킨 두 개의 메서드 <code class="language-plaintext highlighter-rouge">executeMethodWithParams()</code>, <code class="language-plaintext highlighter-rouge">executeMethodWithoutParams()</code>에서 어떻게 받아서 처리해야할까?<ul><li>RequestHandler에서 LogicMapper로 넘어오는 파라미터의 형태는 Map인데, LogicMapper에서 맵핑시켜줄 다양한 비즈니스 로직 메서드의 파라미터를 일일이 맞추려면 추상화된 두 개의 메서드만 갖고는 불가능하다고 생각했다.<li>왜 이렇게 됐을까를 생각해보니 LogicMapper 입장에서 실제로 실행되는 비즈니스 로직 클래스, 파라미터 타입, 개수 등 알아야할게 너무 많은 것 같았다.<li>요구사항 2에 보면 LogicMapper의 미흡함에 대해 적어놨는데, 그 때 더 깊게 생각하지 않았던게 결국 발목을 잡은 것 같다.</ul></ul><h3 id="구현-4">구현</h3><blockquote><p>LogicMapper 개선 (RequestLogicMapper)</p><ul><li>LogicMapper에서 실제 비즈니스 로직을 바로 실행하는게 아니라, 중간에 LogicExecutor라는 객체를 둔다.<li>LogicMapper에서는 들어온 요청에 따라 실제 로직 메서드가 아닌 LogicExecutor의 특정 메서드를 실행하고 파라미터도 Map 형태로만 넘기도록 수정.<li>하지만, 로직에서 추가적으로 필요한 파라미터로 HttpRequest, HttpResponse 등도 있을 수 있으므로 일단은 아래 코드처럼 Map, HttpRequest, HttpResponse했는데 해당 파라미터가 필요하지 않더라 받아야하므로 비효율적이다.<li>실제 Spring MVC에서는 Controller 단에서 HttpServletRequest, HttpServletRespone 등을 자유롭게 받을 수 있던데, 어떻게 가능한건지 공부해보자.</ul></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">class</span> <span class="nc">RequestLogicMapper</span> <span class="o">{</span>
+    <span class="kd">static</span> <span class="kd">class</span> <span class="nc">Execution</span> <span class="o">{</span>
+        <span class="kd">private</span> <span class="nc">String</span> <span class="n">methodName</span><span class="o">;</span>
+        <span class="kd">private</span> <span class="nc">ResponseType</span> <span class="n">responseType</span><span class="o">;</span>
+
+        <span class="kd">public</span> <span class="nf">Execution</span><span class="o">(</span><span class="nc">String</span> <span class="n">methodName</span><span class="o">,</span> <span class="nc">ResponseType</span> <span class="n">responseType</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">methodName</span> <span class="o">=</span> <span class="n">methodName</span><span class="o">;</span>
+            <span class="k">this</span><span class="o">.</span><span class="na">responseType</span> <span class="o">=</span> <span class="n">responseType</span><span class="o">;</span>
+       <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getMethodName</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">methodName</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="kd">public</span> <span class="nc">ResponseType</span> <span class="nf">getResponseType</span><span class="o">()</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="n">responseType</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="nc">LogicExecutor</span> <span class="n">logicExecutor</span> <span class="o">=</span> <span class="nc">LogicExecutor</span><span class="o">.</span><span class="na">getInstance</span><span class="o">();</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">Execution</span><span class="o">&gt;</span> <span class="n">getMappingUrl</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HashMap</span><span class="o">&lt;&gt;();</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">Execution</span><span class="o">&gt;</span> <span class="n">postMappingUrl</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HashMap</span><span class="o">&lt;&gt;();</span>
+
+    <span class="kd">static</span> <span class="o">{</span>
+        <span class="n">initGetRequest</span><span class="o">();</span>
+        <span class="n">initPostRequest</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">initGetRequest</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">getMappingUrl</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"/user/create"</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Execution</span><span class="o">(</span><span class="s">"signup"</span><span class="o">,</span> <span class="nc">ResponseType</span><span class="o">.</span><span class="na">HTML_PAGE</span><span class="o">));</span>
+        <span class="n">getMappingUrl</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"/user/list"</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Execution</span><span class="o">(</span><span class="s">"getUserList"</span><span class="o">,</span> <span class="nc">ResponseType</span><span class="o">.</span><span class="na">HTML_PAGE</span><span class="o">));</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">initPostRequest</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">postMappingUrl</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"/user/create"</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Execution</span><span class="o">(</span><span class="s">"signup"</span><span class="o">,</span> <span class="nc">ResponseType</span><span class="o">.</span><span class="na">HTML_PAGE</span><span class="o">));</span>
+        <span class="n">postMappingUrl</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"/user/login"</span><span class="o">,</span> <span class="k">new</span> <span class="nc">Execution</span><span class="o">(</span><span class="s">"login"</span><span class="o">,</span> <span class="nc">ResponseType</span><span class="o">.</span><span class="na">HTML_PAGE</span><span class="o">));</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">ExecutionResult</span> <span class="nf">doRequestLogic</span><span class="o">(</span><span class="nc">HttpRequest</span> <span class="n">httpRequest</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">httpResponse</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">HttpMethod</span> <span class="n">httpMethod</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getHttpMethod</span><span class="o">();</span>
+        <span class="nc">String</span> <span class="n">requestUrl</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getRequestUrl</span><span class="o">();</span>
+        <span class="nc">Execution</span> <span class="n">execution</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+
+        <span class="k">switch</span> <span class="o">(</span><span class="n">httpMethod</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">case</span> <span class="nl">GET:</span>
+                <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">getMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+            <span class="k">case</span> <span class="nl">POST:</span>
+                <span class="n">execution</span> <span class="o">=</span> <span class="nc">Optional</span><span class="o">.</span><span class="na">ofNullable</span><span class="o">(</span><span class="n">postMappingUrl</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">)).</span><span class="na">orElseThrow</span><span class="o">(</span><span class="nl">NoSuchMethodError:</span><span class="o">:</span><span class="k">new</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+        <span class="o">}</span>
+
+        <span class="k">switch</span> <span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getResponseType</span><span class="o">())</span> <span class="o">{</span>
+            <span class="k">case</span> <span class="nl">HTML_PAGE:</span>
+                <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode3xx</span><span class="o">.</span><span class="na">Found</span><span class="o">);</span>
+                <span class="k">break</span><span class="o">;</span>
+            <span class="k">case</span> <span class="nl">DATA:</span>
+                <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode2xx</span><span class="o">.</span><span class="na">OK</span><span class="o">);</span>
+        <span class="o">}</span>
+
+        <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getParams</span><span class="o">();</span>
+        <span class="nc">ExecutionResult</span> <span class="n">result</span> <span class="o">=</span> <span class="o">(</span><span class="n">params</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">?</span> <span class="n">executeMethodWithParams</span><span class="o">(</span><span class="n">execution</span><span class="o">,</span> <span class="n">params</span><span class="o">,</span> <span class="n">httpRequest</span><span class="o">,</span> <span class="n">httpResponse</span><span class="o">)</span> <span class="o">:</span> <span class="n">executeMethodWithoutParams</span><span class="o">(</span><span class="n">execution</span><span class="o">,</span> <span class="n">httpRequest</span><span class="o">,</span> <span class="n">httpResponse</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="n">result</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">ExecutionResult</span> <span class="nf">executeMethodWithParams</span><span class="o">(</span><span class="nc">Execution</span> <span class="n">execution</span><span class="o">,</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span><span class="o">,</span> <span class="nc">HttpRequest</span> <span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">response</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">Method</span> <span class="n">logic</span> <span class="o">=</span> <span class="n">logicExecutor</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getMethod</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getMethodName</span><span class="o">(),</span> <span class="nc">Map</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">HttpRequest</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">HttpResponse</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="nc">Object</span> <span class="n">returnObj</span> <span class="o">=</span> <span class="n">logic</span><span class="o">.</span><span class="na">invoke</span><span class="o">(</span><span class="n">logicExecutor</span><span class="o">,</span> <span class="n">params</span><span class="o">,</span> <span class="n">request</span><span class="o">,</span> <span class="n">response</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="k">new</span> <span class="nf">ExecutionResult</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getResponseType</span><span class="o">(),</span> <span class="n">returnObj</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">ExecutionResult</span> <span class="nf">executeMethodWithoutParams</span><span class="o">(</span><span class="nc">Execution</span> <span class="n">execution</span><span class="o">,</span> <span class="nc">HttpRequest</span> <span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">response</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">Method</span> <span class="n">logic</span> <span class="o">=</span> <span class="n">logicExecutor</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getMethod</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getMethodName</span><span class="o">(),</span> <span class="nc">HttpRequest</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="nc">HttpResponse</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="nc">Object</span> <span class="n">returnObj</span> <span class="o">=</span> <span class="n">logic</span><span class="o">.</span><span class="na">invoke</span><span class="o">(</span><span class="n">logicExecutor</span><span class="o">,</span> <span class="n">request</span><span class="o">,</span> <span class="n">response</span><span class="o">);;</span>
+
+        <span class="k">return</span> <span class="k">new</span> <span class="nf">ExecutionResult</span><span class="o">(</span><span class="n">execution</span><span class="o">.</span><span class="na">getResponseType</span><span class="o">(),</span> <span class="n">returnObj</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><blockquote><p>LogicExecutor 구현</p><ul><li>LogicExcecutor에서는 Map형태로 받은 파라미터를 가공하여 실제 로직 메서드에 필요한 파라미터 형태로 만들고 해당 메서드를 호출한다.<li>이렇게 하고 보니 LogicExecutor가 MVC 모델에서 Controller와 약간 비슷한 역할이지 않나 하는 생각이 든다.</ul></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">class</span> <span class="nc">LogicExecutor</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">LogicExecutor</span> <span class="n">logicExecutor</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">LogicExecutor</span><span class="o">();</span>
+
+    <span class="kd">private</span> <span class="nf">LogicExecutor</span><span class="o">(){}</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="nc">LogicExecutor</span> <span class="nf">getInstance</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">logicExecutor</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="nc">UserLogic</span> <span class="n">userLogic</span> <span class="o">=</span> <span class="nc">UserLogic</span><span class="o">.</span><span class="na">getInstance</span><span class="o">();</span>
+
+    <span class="kd">public</span> <span class="nc">String</span> <span class="nf">signup</span><span class="o">(</span><span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span><span class="o">,</span> <span class="nc">HttpRequest</span> <span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">id</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"userId"</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">pw</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"password"</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">name</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"name"</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">email</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"email"</span><span class="o">);</span>
+        <span class="nc">User</span> <span class="n">newUser</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">User</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="n">pw</span><span class="o">,</span> <span class="n">name</span><span class="o">,</span> <span class="n">email</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="n">userLogic</span><span class="o">.</span><span class="na">signup</span><span class="o">(</span><span class="n">newUser</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nc">String</span> <span class="nf">login</span><span class="o">(</span><span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">String</span><span class="o">&gt;</span> <span class="n">params</span><span class="o">,</span> <span class="nc">HttpRequest</span> <span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">id</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"userId"</span><span class="o">);</span>
+        <span class="nc">String</span> <span class="n">pw</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">"password"</span><span class="o">);</span>
+
+        <span class="k">return</span> <span class="n">userLogic</span><span class="o">.</span><span class="na">login</span><span class="o">(</span><span class="n">id</span><span class="o">,</span><span class="n">pw</span><span class="o">,</span><span class="n">response</span><span class="o">);</span>
+    <span class="o">}</span>
+
+<span class="o">}</span>
+</pre></table></code></div></div><h2 id="요구사항-5-2">요구사항 5-2</h2><blockquote><ol><li>로그인이 성공하면 로그인 상태를 유지할 수 있어야 한다.<ul><li>즉, 로그인이 성공할 경우 요청 헤더의 Cookie 헤더 값이 <code class="language-plaintext highlighter-rouge">logined = true</code>. 로그인이 실패하면 <code class="language-plaintext highlighter-rouge">logined = false</code>로 전달되어야 한다.</ul></ol></blockquote><h3 id="구현-5">구현</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="kd">public</span> <span class="nc">String</span> <span class="nf">login</span><span class="o">(</span><span class="nc">String</span> <span class="n">id</span><span class="o">,</span> <span class="nc">String</span> <span class="n">pw</span><span class="o">,</span> <span class="nc">HttpResponse</span> <span class="n">response</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span> <span class="o">{</span>
+    <span class="nc">User</span> <span class="n">findUser</span> <span class="o">=</span> <span class="n">findUser</span><span class="o">(</span><span class="n">id</span><span class="o">);</span>
+    <span class="k">if</span><span class="o">(</span><span class="n">findUser</span><span class="o">!=</span><span class="kc">null</span> <span class="o">&amp;&amp;</span> <span class="n">pw</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">findUser</span><span class="o">.</span><span class="na">getPassword</span><span class="o">()))</span> <span class="o">{</span>
+        <span class="n">response</span><span class="o">.</span><span class="na">setCookie</span><span class="o">(</span><span class="s">"logined=true; Path=/"</span><span class="o">);</span>
+        <span class="k">return</span> <span class="s">"/index.html"</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="n">response</span><span class="o">.</span><span class="na">setCookie</span><span class="o">(</span><span class="s">"logined=false; Path=/"</span><span class="o">);</span>
+    <span class="k">return</span> <span class="s">"/user/login_failed.html"</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들-4">구현하면서 알게된 것들</h3><ul><li>Set-Cookie 헤더의 속성 중 Path값을 따로 설정하지 않으면 쿠키를 응답한 화면이 포함된 디렉토리와 그 하위 디렉토리로 요청하는 경우에만 쿠키를 송신한다. <a href="https://zz9z9.github.io/posts/cookie-not-setting/">(참고)</a></ul><p><br /></p><h2 id="요구사항-6">요구사항 6</h2><blockquote><p>접근하고 있는 사용자가 “로그인” 상태일 경우(Cookie로 판별) 사용자 리스트 페이지로 접근했을 때 사용자 목록을 출력한다. 만약 로그인하지 않은 상태라면 로그인 페이지로 이동한다.</p></blockquote><h3 id="구현-6">구현</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>    <span class="kd">public</span> <span class="nc">String</span> <span class="nf">getUserList</span><span class="o">(</span><span class="nc">HttpRequest</span> <span class="n">request</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">String</span> <span class="n">isLogined</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="na">getCookie</span><span class="o">(</span><span class="s">"logined"</span><span class="o">);</span>
+        <span class="k">if</span><span class="o">(</span><span class="n">isLogined</span><span class="o">!=</span><span class="kc">null</span> <span class="o">&amp;&amp;</span> <span class="n">isLogined</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"true"</span><span class="o">))</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="s">"/user/list.html"</span><span class="o">;</span>
+        <span class="o">}</span>
+        <span class="k">return</span> <span class="s">"/user/login.html"</span><span class="o">;</span>
+    <span class="o">}</span>
+</pre></table></code></div></div><p><br /></p><h2 id="요구사항7">요구사항7</h2><blockquote><p>“CSS 지원하기”</p></blockquote><h3 id="구현하기-전-들었던-생각들-5">구현하기 전 들었던 생각들</h3><ul><li>초반에 요청할 때 css 파일도 요청하고 응답받는데 왜 css 파일이 적용이 안된 화면이 렌더링될까 ?</ul><h3 id="구현-7">구현</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre> <span class="k">case</span> <span class="nl">REQUEST_STATIC_RESOURCE:</span>
+     <span class="nc">String</span> <span class="n">requestUrl</span> <span class="o">=</span> <span class="n">httpRequest</span><span class="o">.</span><span class="na">getRequestUrl</span><span class="o">();</span>
+     <span class="n">responseBody</span> <span class="o">=</span> <span class="o">(</span><span class="n">requestUrl</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="s">"/"</span><span class="o">))</span> <span class="o">?</span> <span class="nc">IOUtils</span><span class="o">.</span><span class="na">convertFileToByte</span><span class="o">(</span><span class="n">indexPage</span><span class="o">)</span> <span class="o">:</span> <span class="nc">IOUtils</span><span class="o">.</span><span class="na">convertFileToByte</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">);</span>
+     <span class="nc">String</span> <span class="n">contentType</span> <span class="o">=</span> <span class="s">"text/html;charset=utf-8"</span><span class="o">;</span>
+
+     <span class="k">if</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">".css"</span><span class="o">))</span> <span class="o">{</span>
+         <span class="n">contentType</span> <span class="o">=</span> <span class="s">"text/css"</span><span class="o">;</span>
+     <span class="o">}</span> <span class="k">else</span> <span class="k">if</span><span class="o">(</span><span class="n">requestUrl</span><span class="o">.</span><span class="na">contains</span><span class="o">(</span><span class="s">".js"</span><span class="o">))</span> <span class="o">{</span>
+         <span class="n">contentType</span> <span class="o">=</span> <span class="s">"application/javascript"</span><span class="o">;</span>
+     <span class="o">}</span>
+
+     <span class="n">httpResponse</span><span class="o">.</span><span class="na">setStatusCode</span><span class="o">(</span><span class="nc">HttpStatusCode2xx</span><span class="o">.</span><span class="na">OK</span><span class="o">);</span>
+     <span class="n">httpResponse</span><span class="o">.</span><span class="na">setHeader</span><span class="o">(</span><span class="s">"Content-Type"</span><span class="o">,</span> <span class="n">contentType</span><span class="o">);</span>
+     <span class="n">httpResponse</span><span class="o">.</span><span class="na">setHeader</span><span class="o">(</span><span class="s">"Content-Length"</span><span class="o">,</span> <span class="n">responseBody</span><span class="o">.</span><span class="na">length</span><span class="o">);</span>
+     <span class="k">break</span><span class="o">;</span>
+</pre></table></code></div></div><h3 id="구현하면서-알게된-것들-5">구현하면서 알게된 것들</h3><ul><li>브라우저가 css 파일을 읽고 적용하기 위해선 <code class="language-plaintext highlighter-rouge">Content-type</code>을 <code class="language-plaintext highlighter-rouge">"text/css"</code>로 세팅해줘야 한다<li>js 파일은 <code class="language-plaintext highlighter-rouge">Content-type</code> <code class="language-plaintext highlighter-rouge">"application/javascript"</code>로 세팅해줘야한다.</ul><h1 id="정리">정리</h1><hr /><ul><li>구현한 웹 서버를 도식화 해보면 아래와 같다.<ul><li>요구사항 5~6에서 파라미터를 원하는 것만 받게 하려면 어떻게 해야할지는 좀 더 공부해보자. <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="https://user-images.githubusercontent.com/64415489/131258896-540717fe-18d6-48d0-ba76-5ca07a271540.png" alt="image" /></ul></ul></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/%EA%B2%BD%ED%97%98%ED%95%98%EA%B8%B0/'>경험하기</a>, <a href='/categories/%EC%9E%91%EC%97%85-%EB%85%B8%ED%8A%B8/'>작업 노트</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/http/" class="post-tag no-text-decoration" >HTTP</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=간단한 웹 서버 구현하기 - zz9z9&url=https://zz9z9.github.io/posts/nextstep-toy-webserver/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=간단한 웹 서버 구현하기 - zz9z9&u=https://zz9z9.github.io/posts/nextstep-toy-webserver/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=간단한 웹 서버 구현하기 - zz9z9&url=https://zz9z9.github.io/posts/nextstep-toy-webserver/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/try-with-resources/">Java - try-with-resources 알아보기</a><li><a href="/posts/https-to-http-redirect/">HTTPS 요청이 HTTP로 리다이렉트 되는 현상</a><li><a href="/posts/after-db-role-change-issue/">DB 롤체인지 후 애플리케이션 헬스체크가 정상적으로 되지 않은 이슈 (feat. DB 커넥션 풀)</a><li><a href="/posts/4bytes-emoji-to-question-marks/">MySQL에서 4bytes 이모지가 물음표로 저장되는 이슈</a><li><a href="/posts/cyrillic-alphabet-issue/">키릴문자를 아시나요 ?</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/oop/">OOP</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/mybatis/">MyBatis</a> <a class="post-tag" href="/tags/%EC%9D%B8%ED%94%84%EB%9D%BC/">인프라</a> <a class="post-tag" href="/tags/apache-poi/">apache poi</a> <a class="post-tag" href="/tags/apache/">Apache</a> <a class="post-tag" href="/tags/aws/">AWS</a></div></div></div><script src="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.js"></script><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/http-post-request-body-size-limit/"><div class="card-body"> <span class="timeago small" > Jan 10, 2023 <i class="unloaded">2023-01-10T10:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>POST 요청 사이즈 제한으로 인해 겪었던 이슈(http-max-post-size, max-http-form-post-size)</h3><div class="text-muted small"><p> 상황 클라이언트로부터 상품 수신자 리스트 데이터를 받아 처리하는데, 수신자가 일정 수를 넘어가면 제대로 처리되지 않고 애플리케이션에서 예외 발생함 로그 추적 1. 아파치 로그 1 Connection reset by peer : ... AH01084: pass request body failed to ... 2. 애플리케이션 로그 ...</p></div></div></a></div><div class="card"> <a href="/posts/https-to-http-redirect/"><div class="card-body"> <span class="timeago small" > Jun 14, 2023 <i class="unloaded">2023-06-14T22:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>HTTPS 요청이 HTTP로 리다이렉트 되는 현상</h3><div class="text-muted small"><p> 상황 서버 이전 작업 후 담당 웹사이트에서 URL 리다이렉트시 페이지 응답이 없는 경우가 발생함 특정 사용자에게서는 이런 현상이 발생하지 않음 확인해보니 HTTPS 요청이 HTTP로 바껴서 리다이렉트됨 원인 파악하기 요청이 WAS에 도달하기까지의 흐름 (브라우저) ---- https ---- (L4/L7 스...</p></div></div></a></div><div class="card"> <a href="/posts/my-di-container/"><div class="card-body"> <span class="timeago small" > Apr 9, 2021 <i class="unloaded">2021-04-09T22:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>간단한 DI 컨테이너 구현해보기</h3><div class="text-muted small"><p> 들어가기 전 순수 자바코드로 간단한 스프링 DI 컨테이너를 구현해보면서 DI의 필요성, 스프링 컨테이너 동작 원리 등을 이해해보기 위해 약 일주일간 토이 프로젝트를 진행했다. 아래의 요구사항들을 구현하며 간단한 컨테이너를 구현해보았다. 컨테이너 생성자 파라미터로 AppConfig.class를 전달받고 해당 클래스의 정의된 메서드를 기반으로 빈...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/my-wedding-manager-communication-architecture/" class="btn btn-outline-primary" prompt="Older"><p>【나만의 웨딩 매니저】 통신 방식 구조 정의</p></a> <a href="/posts/api-gateway-comparison/" class="btn btn-outline-primary" prompt="Newer"><p>API Gateway 비교해보기</p></a></div></div></div></div><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2025 <a href="https://twitter.com/username">Lee JaeYoon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-sm-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/oop/">OOP</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/mybatis/">MyBatis</a> <a class="post-tag" href="/tags/%EC%9D%B8%ED%94%84%EB%9D%BC/">인프라</a> <a class="post-tag" href="/tags/apache-poi/">apache poi</a> <a class="post-tag" href="/tags/apache/">Apache</a> <a class="post-tag" href="/tags/aws/">AWS</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://zz9z9.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"> {categories} {tags}</div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>', templateMiddleware: function(prop, value, template) { if (prop === 'categories') { if (value === '') { return `${value}`; } else { return `<div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>${value}</div>`; } } if (prop === 'tags') { if (value === '') { return `${value}`; } else { return `<div><i class="fa fa-tag fa-fw"></i>${value}</div>`; } } } }); </script>
