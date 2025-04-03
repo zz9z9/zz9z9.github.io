@@ -42,7 +42,7 @@ tags: [OS]
 > 1분, 5분, 15분 동안의 평균은 어떻게 계산되는걸까 ?
 
 - load average 관련 커널 소스 코드를 참고해보았다.
-  - [loadavg.c]([https://github.com/torvalds/linux/blob/402de7f/kernel/sched/loadavg.c])
+  - [loadavg.c](https://github.com/torvalds/linux/blob/402de7f/kernel/sched/loadavg.c)
   - [loadavg.h](https://github.com/torvalds/linux/blob/402de7fc880fef055bc984957454b532987e9ad0/include/linux/sched/loadavg.h)
 
 - 평균 계산과 관련하여 참고한 주석과 코드는 아래와 같다.
