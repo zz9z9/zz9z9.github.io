@@ -1,5 +1,5 @@
 ---
-title: Content-Security-Policy(CSP) 살펴보기
+title: WEB - Content-Security-Policy(CSP) 살펴보기
 date: 2025-03-15 22:25:00 +0900
 categories: [지식 더하기, 이론]
 tags: [WEB]
