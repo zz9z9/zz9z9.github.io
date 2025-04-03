@@ -18,7 +18,7 @@ tags: [OS]
     - 예 : 빠른 swap 디스크에서 느린 swap 디스크로 바꾼 경우
       - 빠른 디스크 : 프로세스가 swap을 빨리 끝내고 다시 CPU 실행 대기열에 들어감. runnable 상태가 많아짐 → load average가 높게 나옴
       - 느린 디스크 : 프로세스가 swap 중 I/O wait 상태로 오래 머무름 → runnable 상태에서 빠짐 (uninterruptible sleep 상태로 바뀜) → load average에서 제외됨 → load average가 낮게 나옴
-  - 따라서, 실행 가능한 태스크만 포함하게되면 시스템 성능이 저하되는데 load average가 낮아지게되고, 시스템 이상이 생겼을 때 해당 지표가 직관적이지 않게됨
+  - 따라서, 실행 가능한 태스크만 포함하게되면 부하로 인해 시스템 성능이 저하되는데 load average는 낮아질 수 있기 때문에 해당 지표가 직관적이지 않게됨
 
 ### 왜 uninterruptible sleep 상태의 작업이 많아지면 시스템이 느려질까 ?
 >  예시 : swap-in/out, 파일 시스템 락, 디바이스 응답 대기, I/O wait 중인 프로세스 (보통 디스크 I/O 등)
@@ -97,7 +97,7 @@ calc_load(unsigned long load, unsigned long exp, unsigned long active)
 
 ```
 - 가정: 매 샘플 주기(LOAD_FREQ)마다 nr_active = 10 (즉, 실행 또는 대기 중인 프로세스 수가 10으로 일정함)
-- 초기 값: t=0일 때 load average 값 old_load = 0
+- 초기 값: t=0일 때 load average 값=0
 - exp_1: 0.9200 (1분에 해당하는 지수 상수, 5초 간격으로 1분 평균을 맞추기 위한 감쇠율)
 ```
 
