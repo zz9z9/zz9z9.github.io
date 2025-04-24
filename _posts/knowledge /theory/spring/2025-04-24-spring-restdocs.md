@@ -14,8 +14,7 @@ tags: [Spring]
   - 테스트를 실행하면 요청과 그에 대한 응답에 대한 문서 스니펫이 자동으로 생성
 
 **Asciidoctor ?**
-> https://asciidoctor.org/
-> Asciidoc이라는 마크업 언어를 HTML, PDF 등의 문서로 변환해주는 도구
+> Asciidoc이라는 마크업 언어를 HTML, PDF 등의 문서로 변환해주는 도구 ([공식 사이트](https://asciidoctor.org/))
 
 - Spring REST Docs는 API 설명서의 본문을 Asciidoc 형식으로 작성하게 하고, 이를 Asciidoctor로 변환해서 최종 문서를 생성
 
