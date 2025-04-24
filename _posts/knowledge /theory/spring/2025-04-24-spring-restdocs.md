@@ -22,7 +22,6 @@ tags: [Spring]
 **Asciidoctor로 작성한 수동 문서와 Spring MVC Test를 통해 자동 생성된 스니펫 ?**
 > Spring REST Docs는 테스트 코드를 실행할 때, API 요청과 응답을 자동으로 캡처해서 "스니펫(snippet)"이라고 불리는 작은 문서 조각들을 생성
 
-
 - Spring MVC 테스트
 ```java
 @Test
