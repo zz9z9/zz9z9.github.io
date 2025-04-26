@@ -5,10 +5,11 @@ categories: [지식 더하기, 이론]
 tags: [Spring]
 ---
 
-## Spring REST Docs란 ?
+## Spring REST Docs
 > RESTful 서비스를 문서화하는 데 도움을 주는 도구
 
 - Asciidoctor로 작성한 수동 문서와 Spring MVC Test를 통해 자동 생성된 스니펫을 결합하여 사용
+  - Spring WebFlux의 `WebTestClient`나 `REST Assured 5` 사용도 가능
 - 이 프로젝트의 핵심 철학 중 하나는 **테스트를 통해 문서를 생성한다**는 점
   - 이는 API의 실제 동작과 항상 일치하는 정확한 문서가 생성되도록 보장
   - 테스트를 실행하면 요청과 그에 대한 응답에 대한 문서 스니펫이 자동으로 생성
@@ -64,3 +65,4 @@ include::{snippets}/hello/http-request.adoc[]
 ## 참고 자료
 - [https://spring.io/projects/spring-restdocs#overview](https://spring.io/projects/spring-restdocs#overview)
 - [https://www.baeldung.com/spring-rest-docs](https://www.baeldung.com/spring-rest-docs)
+- [https://docs.spring.io/spring-restdocs/docs/current/reference/htmlsingle/](https://docs.spring.io/spring-restdocs/docs/current/reference/htmlsingle/)
