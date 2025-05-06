@@ -1,7 +1,7 @@
 ---
 title: Controller는 어떤 부분을 테스트 해야할까 ?
 date: 2025-04-29 22:20:00 +0900
-categories: [생각해보기, 테스트코드]
+categories: [생각해보기, 코드 작성]
 tags: []
 ---
 
@@ -109,3 +109,18 @@ class SearchControllerTest {
 
 
 - 이런 테스트들을 기반으로 [Spring Rest Docs](https://spring.io/projects/spring-restdocs) 등을 활용하여 API 명세까지 제공한다면, 호출하는 입장에서도 우리 서비스가 좀 더 예측 가능하지 않을까하는 생각이든다.
+
+
+## 실제 사례 참고
+- https://techblog.woowahan.com/14874/
+  - 컨트롤러 유닛 테스트는 mockMvc를 사용하고, Service는 테스트 대역으로 대체합니다.
+
+
+=> 지금 선물하기 시스템에는 테스트의 피드백 속도가 더 중요했기에 이런 트레이드오프의 결과로 ‘유닛 테스트 작성 시 테스트 대상 유닛과 다른 유닛의 협동, 위임 관계가 존재하는 테스트는 단독 테스트와 테스트 대역을 적극 사용한다.’ 라는 원칙이 합의되고 @SpringBootTest 애너테이션을 제거하게 됩니다.
+
+=> 기본적으로 격리된 방식으로 쉽게 테스트할 수 있는 유닛에 대한 테스트는 협동 테스트를 적극 사용한다.
+테스트 대상 유닛과 다른 유닛의 협동, 위임 관계가 존재하는 테스트는 단독 테스트와 테스트 대역을 사용할 수 있다.
+
+- https://rieckpil.de/how-to-test-spring-boot-web-controller-the-right-way/
+- https://mosyarch.com/guide-spring-boot-controller-tests/
+  => 이해해보자
