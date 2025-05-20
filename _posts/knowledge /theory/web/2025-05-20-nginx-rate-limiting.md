@@ -126,7 +126,7 @@ server {
 
 
 <figure align = "center">
-  <img width="723" alt="Image" src="https://github.com/zz9z9/zz9z9.github.io/assets/a5045d45-ed0b-44ec-bda7-e07be101becb" />
+  <img width="723" alt="Image" src="/assets/img/nginx-rate-limiting-img1.png" />
   <figcaption align="center">출처 : <a href="https://blog.nginx.org/blog/rate-limiting-nginx" target="_blank"> https://blog.nginx.org/blog/rate-limiting-nginx</a> </figcaption>
 </figure>
 
