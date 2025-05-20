@@ -125,11 +125,13 @@ server {
 - delay를 지정하면 일정 개수까지는 바로 처리하고, 나머지는 초당 요청 제한(rate)을 지키며 처리
 
 
+![image](/assets/img/nginx-rate-limiting-img1.png)
+
+<br>
+
 <figure align = "center">
-  <img width="723" alt="Image" src="/assets/img/nginx-rate-limiting-img1.png" />
   <figcaption align="center">출처 : <a href="https://blog.nginx.org/blog/rate-limiting-nginx" target="_blank"> https://blog.nginx.org/blog/rate-limiting-nginx</a> </figcaption>
 </figure>
-
 
 ### 특정 IP 별도 처리
 
