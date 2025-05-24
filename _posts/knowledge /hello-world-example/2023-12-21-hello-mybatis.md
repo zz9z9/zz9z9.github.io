@@ -5,7 +5,7 @@ categories: [지식 더하기, Hello-World 구현]
 tags: [Mybatis]
 ---
 
-> JDBC부터 mysql-spring까지 간단하게 사용해보면서 드는 개인적인 생각을 적어보자.
+> JDBC부터 mybatis-spring까지 간단하게 사용해보면서 드는 개인적인 생각을 적어보자.
 
 - 시나리오 : 회원 테이블에 회원 정보 저장 후, 회원 이력 테이블에 이력 저장하기 전 예외 발생
   - 상황1 : 회원 정보는 저장됨
