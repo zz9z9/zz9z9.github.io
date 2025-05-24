@@ -127,8 +127,6 @@ server {
 
 ![image](/assets/img/nginx-rate-limiting-img1.png)
 
-<br>
-
 <figure align = "center">
   <figcaption align="center">출처 : <a href="https://blog.nginx.org/blog/rate-limiting-nginx" target="_blank"> https://blog.nginx.org/blog/rate-limiting-nginx</a> </figcaption>
 </figure>
@@ -195,6 +193,51 @@ http {
 | ---------- |---------------------| ---------------------- | ---------------------- |
 | 허용된 IP     | X (key가 "")         | O (binary IP로 적용됨)      | 15r/s 제한               |
 | 허용되지 않은 IP | O                   | O                       | 5r/s 제한 (더 엄격한 제한 적용됨) |
+
+## 드는 생각
+**1. 정확한 요청 수로 제한해야하는 경우에는 적합하지 않은 것 같다.**
+- 예를 들어, **1초에 최대 1000개의 요청을 허용**하는 것을 기대하고 `1000r/s`로 세팅한 경우, `busrt`, `nodelay`를 사용하면 한번에 동시에 1000개 요청이 업스트림 서버로 전달될 수 있지만, 0.99초에 1000개가 한번에 들어오고 1.01초에 1000개가 또 들어오면 아직 점유된 슬롯들이 대부분 해제되지 않은 상태라 대부분의 요청이 거절될 것
+- 또한, `limit_req_zone`의 sync 설명에서처럼 요청량이 많은 상황에서 공유 메모리가 어느정도로 잘 동기화 되는지는 미지수인 것 같음
+- 가장 길게 줄 수 있는 지연이 `1r/m` 이기 때문에 그 이상으로 제한하기는 어렵다.
+- `rate=1r/60m` 이런식의 설정이 안되는 이유 (아래 코드 참고, `r/s`, `r/m`만 가능)
+
+※ [ngx_http_limit_req_module.c](https://github.com/nginx/nginx/blob/master/src/http/modules/ngx_http_limit_req_module.c)
+```
+// ngx_http_limit_req_module.c
+static char *ngx_http_limit_req_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ...
+
+      if (ngx_strncmp(value[i].data, "rate=", 5) == 0) {
+          len = value[i].len;
+          p = value[i].data + len - 3;
+
+          if (ngx_strncmp(p, "r/s", 3) == 0) {
+              scale = 1;
+              len -= 3;
+
+          } else if (ngx_strncmp(p, "r/m", 3) == 0) {
+              scale = 60;
+              len -= 3;
+          }
+
+          rate = ngx_atoi(value[i].data + 5, len - 5);
+          if (rate <= 0) {
+              ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                 "invalid rate \"%V\"", &value[i]);
+        return NGX_CONF_ERROR;
+      }
+
+      continue;
+  }
+
+  ...
+}
+```
+
+**2. 1차적인 어뷰징 방지 수단으로는 적절할 수 있을 것 같다.**
+- 예를 들어 웹사이트의 메인 페이지에서 로그인하지 않아도 이용할 수 있는 기능들이 있을 때, (사용자에 의해서든, 봇에 의해서든) 불필요하게 많이 호출되는 것을 방지하기 위해 IP 기반으로 처리율을 제한하면 불필요하게 업스트림 서버까지 요청이 가는 것을 어느정도는 막을 수 있을 것으로 생각
+
 
 ## 참고 자료
 - [https://blog.nginx.org/blog/rate-limiting-nginx](https://blog.nginx.org/blog/rate-limiting-nginx)
