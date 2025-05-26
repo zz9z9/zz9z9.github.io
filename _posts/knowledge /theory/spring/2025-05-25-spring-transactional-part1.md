@@ -6,8 +6,8 @@ tags: [Spring]
 ---
 
 ## AOP Proxy
-> 스프링 : https://docs.spring.io/spring-framework/reference/core/aop/introduction-proxies.html <br>
-> 스프링 부트 : https://docs.spring.vmware.com/spring-boot/docs/3.0.14/reference/htmlsingle/#features.aop
+> 스프링 : [https://docs.spring.io/spring-framework/reference/core/aop/introduction-proxies.html](https://docs.spring.io/spring-framework/reference/core/aop/introduction-proxies.html) <br>
+> 스프링 부트 : [https://docs.spring.vmware.com/spring-boot/docs/3.0.14/reference/htmlsingle/#features.aop](https://docs.spring.vmware.com/spring-boot/docs/3.0.14/reference/htmlsingle/#features.aop)
 
 | 프레임워크                     | AOP 프록시 기본값    | 조건                                        | 설명                           |
 | ------------------------- | -------------- | ----------------------------------------- | ---------------------------- |
