@@ -177,6 +177,7 @@ public interface MethodInterceptor extends Callback {
 }
 ```
 
+**예제**
 ```java
 public class TempInterceptor implements MethodInterceptor {
 
@@ -230,13 +231,13 @@ Caused by: org.springframework.aop.framework.AopConfigException: Could not gener
 
 **DynamicAdvisedInterceptor**
 - 실제 프록시 메서드 실행 시 AOP advice를 연결하는 핵심 인터셉터
-- `DynamicAdvisedInterceptor#intercept()`는 언제 호출되나요?
-- 프록시된 메서드가 호출될 때, 실제 메서드 호출 전 이 메서드가 먼저 실행됨
+- `DynamicAdvisedInterceptor#intercept()`는 프록시된 메서드가 호출될 때, 실제 메서드 호출 전 이 메서드가 먼저 실행됨
 
 ![image](/assets/img/transactional-proxy-img3.png)
 
 - 실제 호출흐름
-  ![image](/assets/img/transactional-proxy-img4.png)
+
+![image](/assets/img/transactional-proxy-img4.png)
 
 ※ 참고 : AOP 관련 용어
 - Advice : 실제로 실행되는 부가 기능 로직 (예: 로깅, 트랜잭션 시작/커밋, 보안 체크 등)
