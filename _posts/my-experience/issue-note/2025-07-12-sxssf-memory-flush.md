@@ -34,7 +34,7 @@ tags: [Java]
 
 ![image](/assets/img/sxssf-flush-img4.png)
 
-![image](/assets/img/sxssf-flush-img5.png)
+![image](/assets/img/sxssf-flush-img5.jpeg)
 
 **2. 엑셀 파일 생성 관련 코드**
 
