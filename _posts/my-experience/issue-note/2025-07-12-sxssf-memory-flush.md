@@ -1,5 +1,5 @@
 ---
-title: SXSSF 사용하는데 OOM이 발생한다 ?
+title: SXSSF를 사용하는데 OOM이 발생한다 ?
 date: 2025-07-12 22:25:00 +0900
 categories: [경험하기, 이슈 노트]
 tags: [Java]
