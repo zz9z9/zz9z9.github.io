@@ -1,8 +1,8 @@
 ---
-title: MySQL ReadView 알아보기
+title: MySQL - ReadView 들여다보기
 date: 2025-06-30 22:00:00 +0900
 categories: [지식 더하기, 들여다보기]
-tags: [Java]
+tags: [MySQL]
 ---
 
 > MySQL InnoDB에서 트랜잭션 격리수준이 READ COMMITTED이면 다른 트랜잭션에서 커밋 완료한걸 읽을 수 있고, <br> REPEATABLE READ이면 다른 트랜잭션에서 커밋을 완료했더라도 해당 데이터를 무조건 읽을 수 있는 것은 아니다. <br> 이게 어떻게 가능한걸까 ?
