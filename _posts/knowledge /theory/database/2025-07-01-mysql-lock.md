@@ -189,8 +189,8 @@ SELECT * FROM product WHERE id = 123 FOR UPDATE LIMIT 1;
 ### Next-Key Lock
 > 인덱스 레코드에 대한 레코드 락과, 그 앞에 있는 갭에 대한 갭 락의 조합
 
-- InnoDB는 테이블 **인덱스를 검색하거나 스캔할 때, 발견한 인덱스 레코드에 공유 또는 배타 잠금을 설정**하는 방식으로 행 수준 잠금을 수행한다.
-- 따라서, 행 수준 잠금은 실제로는 인덱스 레코드 잠금이다. ??
+- InnoDB는 테이블 인덱스를 검색하거나 스캔할 때, **발견한 인덱스 레코드에 공유 또는 배타 잠금을 설정**하는 방식으로 행 수준 잠금을 수행한다.
+  - 따라서, 행 수준 잠금은 실제로는 인덱스 레코드 잠금이다.
 
 | 인덱스 유형 | next-key lock 기준 컬럼 |
 | ------------------- | -------------------------------------------------------------- |
@@ -287,6 +287,216 @@ mysql> INSERT INTO child (id) VALUES (101);
 
 - 트랜잭션 B에서 101을 삽입하려고 하지만, A의 `FOR UPDATE가 id > 100` 범위의 갭을 이미 잠가버렸기 때문에, B는 insert intention lock을 걸고 기다리게 됨.<br> (즉, 갭 락과는 호환되지 않음)
 
+## 확인해보기
+
+> 데이터 세팅
+
+```sql
+CREATE TABLE students (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_no INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    age INT,
+    INDEX idx_class_no_name (class_no, name)
+);
+
+INSERT INTO students (class_no, name, age) VALUES
+
+(1, 'Alice', 14),
+(1, 'Bob', 15),
+(2, 'Charlie', 13),
+(2, 'Alice', 14),
+(3, 'David', 16),
+(1, 'Eve', 14),
+(2, 'Frank', 15),
+(3, 'Grace', 13),
+(1, 'Bob', 15),
+(3, 'Heidi', 14);
+```
+
+```sql
+SELECT * FROM students
+ORDER BY class_no;
+```
+
+| id | class_no | name    | age |
+|----|----------|---------|-----|
+| 1  | 1        | Alice   | 14  |
+| 2  | 1        | Bob     | 15  |
+| 6  | 1        | Eve     | 14  |
+| 9  | 1        | Bob     | 15  |
+| 3  | 2        | Charlie | 13  |
+| 4  | 2        | Alice   | 14  |
+| 7  | 2        | Frank   | 15  |
+| 5  | 3        | David   | 16  |
+| 8  | 3        | Grace   | 13  |
+| 10 | 3        | Heidi   | 14  |
+
+※ 참고
+- 쿼리 수행후 락 관련 정보는 다음 쿼리로 확인
+
+```sql
+SELECT object_name, index_name, lock_type, lock_mode, lock_data
+FROM performance_schema.data_locks;
+```
+
+**performance_schema.data_locks에서의 lock_mode 해석**
+- `X`
+  - 보통 Next-Key Lock을 의미
+  - 하지만, 이 정보만으로는 정확하게 Record-only Lock인지 Next-Key Lock인지 구분이 안 될 수도 있음
+
+- `X_REC_NOT_GAP`
+  - 명확하게 Record-only Lock을 의미
+  - 즉, 해당 레코드만 잠그고 GAP은 잠그지 않음
+  - 대표적으로 Unique Index로 정확하게 일치하는 값을 조회할 때 발생
+
+- `X,GAP`
+  - Gap Lock만 발생한 경우로, 보통 범위 조건이나 범위 외 레코드가 없을 때 발생
+
+### TEST1
+
+```sql
+SELECT * FROM students
+WHERE class_no = 1
+FOR UPDATE;
+```
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | idx\_class\_no\_name | RECORD     | X,GAP            | 2, 'Alice', 4 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Alice', 1 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 2   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Eve', 6   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 9   |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 1             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 2             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 6             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 9             |
+
+
+### TEST2
+
+```sql
+SELECT * FROM students
+WHERE class_no = 1
+AND age < 15
+FOR UPDATE;
+```
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | idx\_class\_no\_name | RECORD     | X,GAP            | 2, 'Alice', 4 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Alice', 1 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 2   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Eve', 6   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 9   |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 1             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 2             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 6             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 9             |
+
+
+- `age < 15`인 조건에 포함되는 레코드는 2개지만, `age = 15`인 레코드도 스캔 대상에 들어가서 불필요하게 락이 잡히게된다.
+
+### TEST3
+
+```sql
+SELECT * FROM students
+WHERE class_no = 1
+LIMIT 2
+FOR UPDATE;
+```
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Alice', 1 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 2   |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 1             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 2             |
+
+- 처음부터 2개만 스캔하기 때문에, 정렬된 순서대로 2개만 락이 걸림
+
+```sql
+SELECT * FROM students
+WHERE class_no = 1
+LIMIT 2, 2
+FOR UPDATE;
+```
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Alice', 1 |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 2   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Eve', 6   |
+| students     | idx\_class\_no\_name | RECORD     | X                | 1, 'Bob', 9   |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 1             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 2             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 6             |
+| students     | PRIMARY              | RECORD     | X\_REC\_NOT\_GAP | 9             |
+
+- LIMIT으로 2개만 리턴하지만 2부터이므로, 결국 4개 스캔하는거라 4개 모두 락 걸림
+
+### TEST4
+
+```sql
+SELECT * FROM students
+WHERE id < 5
+FOR UPDATE;
+```
+
+| object\_name | index\_name | lock\_type | lock\_mode | lock\_data |
+| ------------ |-------------| ---------- |------------|------------|
+| students     | *(NULL)*    | TABLE      | IX         | *(NULL)*   |
+| students     | PRIMARY     | RECORD     | X,GAP      | 5          |
+| students     | PRIMARY     | RECORD     | X          | 1          |
+| students     | PRIMARY     | RECORD     | X          | 2          |
+| students     | PRIMARY     | RECORD     | X          | 3          |
+| students     | PRIMARY     | RECORD     | X          | 4          |
+
+
+- 4,5 사이에 아무것도 들어갈 수 없는데 왜 갭락이 걸릴까 ?
+  - 사용자가 어떤 제약 조건을 갖고 있든 간에, InnoDB는 B+Tree 인덱스 구조만 보고 범위를 판단하고 잠금을 건다.
+  - 즉, id가 AUTO_INCREMENT든, PRIMARY KEY든, 중간 삽입이 불가능하든 그건 InnoDB 입장에서 알 수 없는 정보
+
+| 범위        | 걸리는 잠금 종류             |
+| --------- | --------------------- |
+| `(-∞, 1)` | `GAP` only            |
+| `[1]`     | `X` (Next-Key Lock)   |
+| `(1, 2)`  | `GAP` 포함 → \[2]도 마찬가지 |
+| `[2]`     | `X` (Next-Key Lock)   |
+| ...       | ...                   |
+| `[4]`     | `X` (Next-Key Lock)   |
+| `(4, 5)`  | → `id=5`에 `X,GAP`     |
+
+### TEST5
+> 유니크 인덱스 `email` 추가
+
+- Tx1
+   - `INSERT STUDENTS (class_no, email, name, age, flag) VALUES (5, 'email@test.com', 'lee', 10, 'N');`
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+
+- Tx2
+  - `INSERT STUDENTS (class_no, email, name, age, flag) VALUES (5, 'email@test.com', 'kim', 10, 'N');`
+
+| object\_name | index\_name          | lock\_type | lock\_mode       | lock\_data    |
+| ------------ | -------------------- | ---------- | ---------------- | ------------- |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | *(NULL)*             | TABLE      | IX               | *(NULL)*      |
+| students     | idx_email             | RECORD      | X,REC_NOT_GAP  | 'email@test.com', 17      |
+| students     | idx_email             | RECORD      | S  | 'email@test.com', 17      |
+
+- Tx2도 동일한 이메일로 INSERT를 시도함.
+- MySQL은 UNIQUE 제약 위반 가능성이 있으므로 다음을 수행:
+  - UNIQUE 인덱스를 조회하여 `email@test.com`이 존재하는지 확인
+  - 이 과정에서 인덱스 키 `email@test.com'에`대해 S Lock (공유 잠금)을 걸어 존재 유무를 확인
+  - 하지만, Tx1이 이미 인덱스 레코드 락 (X, REC_NOT_GAP)을 잡고 있어서, Tx2는 대기(blocking) 상태
 
 ## 참고 자료
 - [https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html)
