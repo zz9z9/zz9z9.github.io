@@ -4,6 +4,15 @@
 > https://whatismyipaddress.com/dual-stack
 > https://docs.oracle.com/javase/8/docs/technotes/guides/net/ipv6_guide/
 
+![img_1.png](img_1.png)
+=> -Djava.net.preferIPv6Addresses=true
+=> `http://[::1]:8080/api/foo`, `http://127.0.0.1:8080/api/foo` 모두 통신 가능
+
+
+![img_2.png](img_2.png)
+=> -Djava.net.preferIPv4Stack=true
+=> `http://[::1]:8080/api/foo` 로 통신 불가능
+
 ## 왜 어떨때는 IPv4 주소이고 어떨때는 IPv6 주소일까 ?
 - ✔ IPv6 활성 상태 (disable_ipv6=0)
   클라이언트가 127.0.0.1로 요청했더라도,
