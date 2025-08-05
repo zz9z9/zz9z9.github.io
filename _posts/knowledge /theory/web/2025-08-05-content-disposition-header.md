@@ -40,20 +40,17 @@ Content-Disposition: attachment; filename*=UTF-8''file%20name.jpg
 | `파일 이름.png` | `파일%20이름.png` |
 
 - filename에서 percent 인코딩이 문제되는 이유
+  - 브라우저별로 처리방식이 다를 수 있음 (아래 예시 기준):
+    - `%20`을 공백으로 잘 디코딩함
+    - 디코딩 안 함 → 그대로 `file%20name.png` 저장됨
+    - 오류 발생하거나 파일명이 깨짐
 
 ```
 Content-Disposition: attachment; filename="파일 이름.png"
 Content-Disposition: attachment; filename="file%20name.png"
 ```
 
-| 브라우저             | 처리 방식                               |
-| ---------------- | ----------------------------------- |
-| Chrome / Firefox | `%20`을 공백으로 잘 디코딩함                  |
-| Safari           | 디코딩 안 함 → 그대로 `file%20name.png` 저장됨 |
-| 일부 IE/Edge 구버전   | 오류 발생하거나 파일명이 깨짐                    |
-
 - `filename*`은 RFC 5987에 따라 UTF-8 + percent 인코딩을 정식으로 허용
-
 - 예시 : `filename*` → 인코딩된 진짜 이름, `filename` → fallback용 ASCII 이름 (구형 브라우저 대응)
 ```
 Content-Disposition: attachment; filename="fallback.png"; filename*=UTF-8''파일%20이름.png
