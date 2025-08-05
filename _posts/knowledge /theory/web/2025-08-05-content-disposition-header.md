@@ -23,6 +23,42 @@ Content-Disposition: attachment; filename*=UTF-8''file%20name.jpg
 - 브라우저는 `/` 또는 `\` 같은 경로 구분자를 `_`로 바꾸는 등의 변환을 수행할 수 있음
 - Chrome 및 Firefox 82 이상에서는 `<a download>` 속성이 `Content-Disposition: inline`보다 우선시됨 (같은 출처의 URL에 한함)
 
+<br>
+**※ percent 인코딩 ?**
+- 일반적으로 HTTP 헤더나 URL에는 다음과 같은 제약이 존재:
+  - 공백이나 특수문자는 문제가 될 수 있음 (HTTP 파서 오류, 잘못된 URL 인식 등)
+  - ASCII 이외의 문자 (예: 한글, 일본어 등)는 깨질 수 있음
+- 따라서, URL이나 HTTP 헤더에서 특수 문자, 공백, 비ASCII 문자(예: 한글) 등을 안전하게 전송하기 위해 사용하는 인코딩 방식으로 percent 인코딩(URL 인코딩)이 사용됨
+
+- 예시 : 문자들을 `% + ASCII 코드의 16진수` 값으로 변경
+
+| 원래 문자       | Percent 인코딩   |
+| ----------- | ------------- |
+| 공백 (space)  | `%20`         |
+| `"` (큰따옴표)  | `%22`         |
+| 한글 `가`      | `%EA%B0%80`   |
+| `파일 이름.png` | `파일%20이름.png` |
+
+- filename에서 percent 인코딩이 문제되는 이유
+
+```
+Content-Disposition: attachment; filename="파일 이름.png"
+Content-Disposition: attachment; filename="file%20name.png"
+```
+
+| 브라우저             | 처리 방식                               |
+| ---------------- | ----------------------------------- |
+| Chrome / Firefox | `%20`을 공백으로 잘 디코딩함                  |
+| Safari           | 디코딩 안 함 → 그대로 `file%20name.png` 저장됨 |
+| 일부 IE/Edge 구버전   | 오류 발생하거나 파일명이 깨짐                    |
+
+- `filename*`은 RFC 5987에 따라 UTF-8 + percent 인코딩을 정식으로 허용
+
+- 예시 : `filename*` → 인코딩된 진짜 이름, `filename` → fallback용 ASCII 이름 (구형 브라우저 대응)
+```
+Content-Disposition: attachment; filename="fallback.png"; filename*=UTF-8''파일%20이름.png
+```
+
 
 **multipart/form-data**
 - multipart/form-data 본문에서는 각 필드에 대한 정보를 제공하기 위해 Content-Disposition 헤더가 필수
