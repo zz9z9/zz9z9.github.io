@@ -9,6 +9,8 @@ tags: [Spring]
 - "Spring"이라는 용어는 문맥에 따라 다른 의미를 가진다.
   - 원래는 Spring Framework 프로젝트 자체를 가리키는 말이었으며, 거기서 모든 것이 시작됐다.
   - 시간이 지나면서 Spring Framework 위에 다른 Spring 프로젝트들이 만들어졌다.
+    - 즉, 각 프로젝트들은 spring-core, spring-aop, spring-context 등의 핵심 모듈들을 사용하면서
+      자신만의 기능을 추가하거나 확장한다.
 
 - Spring Framework는 여러 모듈로 나누어져 있으며, 애플리케이션은 필요한 모듈만 선택해서 사용할 수 있다.
 - 가장 중심에는 설정 모델과 의존성 주입(Dependency Injection) 메커니즘을 포함한 코어 컨테이너 모듈이 있다.
@@ -146,8 +148,87 @@ public class MemberServiceBean implements SessionBean {
   - Spring Batch → 배치 작업 실행 및 관리
   - 즉, 개발자가 복잡한 인프라(Infra) 코드를 직접 작성하지 않고, 스프링이 제공하는 모듈을 가져다 쓰면 됨.
 
+## 스프링 핵심 개념
+> **IoC(Inversion of Control)** <br>
+> **DI(Dependency Injection)** <br>
+> **AOP(Aspect-Oriented Programming)**
 
+- "핵심"인 이유는 이를 통해 개발자는 비즈니스 로직에 집중할 수 있으며, 애플리케이션의 결합도를 낮추고, 재사용성을 높이며, 유지보수를 용이하게 만들어 주기 때문
 
+### IoC (Inversion of Control)
+> 제어 : 객체의 생성, 주입, 생명주기 등을 관리하는 것
+> 제어의 역전 : 개발자가 객체를 직접 생성하고 관리하는 대신, 프레임워크가 대신 관리해주는 것
+
+- 개발자가 직접 제어
+
+```java
+OrderService orderService = new OrderService(new OrderRepository());
+```
+
+- 프레임워크가 제어
+  - 객체 생성, 라이프사이클 관리, 의존성 주입은 Spring이 처리하므로 개발자는 비즈니스 로직에 집중할 수 있음.
+  - 의존 관계를 **외부 설정(ApplicationContext)**에서 관리하기 때문에, 코드 변경 최소화.
+    - 설정만 바꾸면 다른 구현체를 주입할 수 있음.
+    - 이로 인해, 테스트 용이성도 높아짐 (ex : 쉽게 `MockRepository`로 교체 가능)
+
+```java
+@Service
+class OrderService {
+    private final OrderRepository orderRepository;
+
+    @Autowired
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository; // 컨테이너가 넣어줌
+    }
+}
+```
+
+### DI (Dependency Injection)
+> 의존성 주입 : 객체 간의 의존 관계를 외부에서 주입해주는 것 <br>
+> DI는 제어의 역전을 하기 위한 방식 중 하나
+
+- DI가 아닌 다른 IoC 방식 : Service Locator
+  - 객체를 직접 생성하지 않고, 필요한 객체를 찾는 방식
+  - 하지만, Service Locator는 코드가 Service Locator에 의존하게 되어 테스트가 어려워짐.
+  - DI는 의존성을 외부에서 주입받기 때문에, 코드가 더 유연하고 테스트하기 쉬움.
+
+```java
+public class OrderController {
+    private OrderService orderService;
+
+    public OrderController() {
+      // new는 없지만, 여전히 코드가 ServiceLocator에 묶여있음.
+      this.orderService = ServiceLocator.getBean(OrderService.class);
+    }
+}
+```
+
+### AOP (Aspect-Oriented Programming)
+> 횡단 관심사(트랜잭션, 보안, 로깅 등)를 별도의 Aspect로 분리하여 비즈니스 로직에 집중할 수 있게해줌
+
+- 예를 들어, 트랜잭션 처리시 AOP를 활용하지 않는다면 아래와 같은 코드가 곳곳에 중복되어 나타나게 될 것이다.
+
+```java
+public class OrderService {
+    public void placeOrder() {
+        System.out.println("트랜잭션 시작");
+        // 주문 처리 로직
+        System.out.println("트랜잭션 커밋");
+    }
+}
+```
+
+- AOP를 사용하면 비즈니스 로직에 집중할 수 있고, 코드의 중복을 줄일 수 있다.
+
+```java
+@Service
+public class OrderService {
+    @Transactional
+    public void placeOrder() {
+        // 주문 처리 로직만 집중
+    }
+}
+```
 
 ## 참고 자료
 - [https://docs.spring.io/spring-framework/reference/overview.html](https://docs.spring.io/spring-framework/reference/overview.html)
