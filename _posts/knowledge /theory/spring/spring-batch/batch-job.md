@@ -1,5 +1,5 @@
 ---
-title: Spring Batch - Job & Step
+title: Spring Batch - Job
 date: 2025-09-05 21:25:00 +0900
 categories: [지식 더하기, 이론]
 tags: [Spring Batch]
@@ -306,33 +306,52 @@ public enum BatchStatus {
 
 ```
 
-
-
-
-아직 실행중일때 처리 어떤식으로 ?? flag ??
-
-
 ### JobParameters를 아예 안넘기는 경우에는 ?
 - JobLauncher.run(Job, JobParameters) 를 실행할 때 JobParameters를 비워서(null 또는 empty) 넘기면, 내부적으로는 빈 JobParameters 객체가 사용됩니다.
 - 이 경우 항상 동일한 JobInstance로 인식됩니다.
 - 즉, 같은 Job을 아무리 다시 실행해도 새로운 JobInstance가 만들어지지 않고, 동일한 JobInstance에 새로운 JobExecution이 추가됩니다.
 
 ## JobExecution
+> '실행 시도'를 나타내는 개념
 
-==================
+- 해당 실행과 연결된 JobInstance는 실행이 성공적으로 완료될 때까지 완료된 것으로 간주되지 않는다.
+- 예를 들어 앞서 설명한 EndOfDay Job을 기준으로, 2017년 1월 1일의 JobInstance가 첫 실행에서 실패했다고 가정해 보자.
+- 동일한 식별 JobParameters(2017-01-01)로 다시 실행하면 새로운 JobExecution이 생성된다.
+- 그러나 여전히 JobInstance는 하나뿐이다.
 
-- Job, Step 정의
-- 구현 ??
-- 실행원리 ??
-- Job Config 구성하는법 ?
-  - 각 Job마다 @Configuration ??
-- 관련된 배치 메타테이블 ??
-- Step 재실행 가능한 이유 ??
-- 동일한 job id, 파라미터로 실행 불가능한 이유 ??
-- job 안에 여러 step vs job 여러개
-- stepScope, jobScope ?
+| 속성                    | 정의                                                                      |
+| --------------------- | ----------------------------------------------------------------------- |
+| **Status**            | 실행 상태(`BatchStatus`). 실행 중이면 `STARTED`, 실패하면 `FAILED`, 성공하면 `COMPLETED` |
+| **startTime**         | 실행이 시작된 시각 (`LocalDateTime`)                                            |
+| **endTime**           | 실행이 끝난 시각 (`LocalDateTime`) – 성공/실패와 무관                                 |
+| **exitStatus**        | 실행 결과(`ExitStatus`). 실행이 끝난 경우 반환 코드 포함                                 |
+| **createTime**        | JobExecution이 처음 저장된 시각. 시작 전일 수도 있지만 항상 존재                             |
+| **lastUpdated**       | JobExecution이 마지막으로 저장된 시각                                              |
+| **executionContext**  | 실행 간에 유지해야 할 사용자 데이터 저장 공간                                              |
+| **failureExceptions** | 실행 중 발생한 예외 목록. 실패 시 여러 개 있을 수 있음                                       |
 
-- Step 안에 Tasklet, Chunk
+### 예시 상황
+
+> EndOfDayJob 2017-01-01 실행 (21:00 시작 → 21:30 실패) <br>
+> 다음날 같은 파라미터로 재실행 → 성공 (21:00 → 21:30) <br>
+> 이어서 2017-01-02 실행 → 성공 (21:31 → 22:29)
+
+- `BATCH_JOB_INSTANCE` 테이블
+
+| JOB\_INST\_ID | JOB\_NAME   |
+| ------------- | ----------- |
+| 1             | EndOfDayJob |
+| 2             | EndOfDayJob |
+
+
+- `BATCH_JOB_EXECUTION` 테이블
+
+| JOB\_EXEC\_ID | JOB\_INST\_ID | START\_TIME      | END\_TIME        | STATUS    |
+| ------------- | ------------- | ---------------- | ---------------- | --------- |
+| 1             | 1             | 2017-01-01 21:00 | 2017-01-01 21:30 | FAILED    |
+| 2             | 1             | 2017-01-02 21:00 | 2017-01-02 21:30 | COMPLETED |
+| 3             | 2             | 2017-01-02 21:31 | 2017-01-02 22:29 | COMPLETED |
+
 
 ## 참고 자료
 - [https://docs.spring.io/spring-batch/reference/domain.html](https://docs.spring.io/spring-batch/reference/domain.html)
