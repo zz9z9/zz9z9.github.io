@@ -127,6 +127,191 @@ public JobInstance createJobInstance(String jobName, JobParameters jobParameters
 }
 ```
 
+
+- batch.core.job.SimpleStepHandler     : Step already complete or not restartable, so no action to execute: StepExecution: id=10, version=5, name=step1, status=COMPLETED, exitStatus=COMPLETED, readCount=5, filterCount=0, writeCount=5 readSkipCount=0, writeSkipCount=0, processSkipCount=0, commitCount=3, rollbackCount=0, exitDescription=
+
+![img.png](img.png)
+
+- job이름 , 파라미터로 실행 내역을 찾는다.
+
+```java
+// org.springframework.batch.core.launch.support.TaskExecutorJobLauncher#run
+jobExecution = jobRepository.createJobExecution(job.getName(), jobParameters);
+
+		try {
+			taskExecutor.execute(new Runnable() {
+
+				@Override
+				public void run() {
+            ...
+						job.execute(jobExecution);
+```
+
+- 찾은 실행 내역에서 `JobInstance`를 가져온다.
+
+```java
+// org.springframework.batch.core.job.SimpleStepHandler#handleStep
+JobInstance jobInstance = execution.getJobInstance();
+
+StepExecution lastStepExecution = jobRepository.getLastStepExecution(jobInstance, step.getName());
+if (stepExecutionPartOfExistingJobExecution(execution, lastStepExecution)) {
+	// If the last execution of this step was in the same job, it's
+	// probably intentional so we want to run it again...
+	if (logger.isInfoEnabled()) {
+		logger.info(String.format(
+				"Duplicate step [%s] detected in execution of job=[%s]. "
+						+ "If either step fails, both will be executed again on restart.",
+				step.getName(), jobInstance.getJobName()));
+	}
+	lastStepExecution = null;
+}
+StepExecution currentStepExecution = lastStepExecution;
+
+if (shouldStart(lastStepExecution, execution, step)) {
+  ...
+}
+```
+
+- // org.springframework.batch.core.repository.dao.JdbcStepExecutionDao#GET_LAST_STEP_EXECUTION
+  // => jobRepository.getLastStepExecution 호출로 실행되는 쿼리
+
+```sql
+SELECT ...
+FROM BATCH_JOB_EXECUTION JE
+    JOIN BATCH_STEP_EXECUTION SE ON SE.JOB_EXECUTION_ID = JE.JOB_EXECUTION_ID
+WHERE JE.JOB_INSTANCE_ID = ?
+  AND SE.STEP_NAME = ?
+```
+
+- StepExecution의 stepStatus 가 COMPLETED인데 `allowStartIfComplete` 속성이 `false`이거나 stepStatus가 `ABANDONED` 이면 특정 job을 동일한 파라미터로 재실행 불가능
+
+```java
+// org.springframework.batch.core.job.SimpleStepHandler#shouldStart
+protected boolean shouldStart(StepExecution lastStepExecution, JobExecution jobExecution, Step step)
+		throws JobRestartException, StartLimitExceededException {
+
+	BatchStatus stepStatus;
+	if (lastStepExecution == null) {
+		stepStatus = BatchStatus.STARTING;
+	}
+	else {
+		stepStatus = lastStepExecution.getStatus();
+	}
+
+  ...
+
+	if ((stepStatus == BatchStatus.COMPLETED && !step.isAllowStartIfComplete())
+			|| stepStatus == BatchStatus.ABANDONED) {
+		// step is complete, false should be returned, indicating that the
+		// step should not be started
+		if (logger.isInfoEnabled()) {
+			logger.info("Step already complete or not restartable, so no action to execute: " + lastStepExecution);
+		}
+		return false;
+	}
+
+  ...
+
+}
+```
+
+
+
+- Caused by: org.springframework.batch.core.repository.JobExecutionAlreadyRunningException: A job
+execution for this job is already running: JobInstance: id=1, version=0, Job=[importUserJob]
+
+=>
+```java
+// org.springframework.batch.core.repository.support.SimpleJobRepository#createJobExecution
+@Override
+public JobExecution createJobExecution(String jobName, JobParameters jobParameters)
+		throws JobExecutionAlreadyRunningException, JobRestartException, JobInstanceAlreadyCompleteException {
+
+	Assert.notNull(jobName, "Job name must not be null.");
+	Assert.notNull(jobParameters, "JobParameters must not be null.");
+
+	JobInstance jobInstance = jobInstanceDao.getJobInstance(jobName, jobParameters);
+	ExecutionContext executionContext;
+
+	if (jobInstance != null) {
+
+		List<JobExecution> executions = jobExecutionDao.findJobExecutions(jobInstance);
+
+		if (executions.isEmpty()) {
+			throw new IllegalStateException("Cannot find any job execution for job instance: " + jobInstance);
+		}
+
+		for (JobExecution execution : executions) {
+			if (execution.isRunning()) {
+				throw new JobExecutionAlreadyRunningException(
+						"A job execution for this job is already running: " + jobInstance);
+			}
+
+      ...
+		}
+		executionContext = ecDao.getExecutionContext(jobExecutionDao.getLastJobExecution(jobInstance));
+	}
+
+  ...
+
+	return jobExecution;
+
+}
+```
+
+```java
+// org.springframework.batch.core.BatchStatus
+public enum BatchStatus {
+
+  /**
+   * The batch job has successfully completed its execution.
+   */
+  COMPLETED,
+  /**
+   * Status of a batch job prior to its execution.
+   */
+  STARTING,
+  /**
+   * Status of a batch job that is running.
+   */
+  STARTED,
+  /**
+   * Status of batch job waiting for a step to complete before stopping the batch job.
+   */
+  STOPPING,
+  /**
+   * Status of a batch job that has been stopped by request.
+   */
+  STOPPED,
+  /**
+   * Status of a batch job that has failed during its execution.
+   */
+  FAILED,
+  /**
+   * Status of a batch job that did not stop properly and can not be restarted.
+   */
+  ABANDONED,
+  /**
+   * Status of a batch job that is in an uncertain state.
+   */
+  UNKNOWN;
+
+  public boolean isRunning() {
+    return this == STARTING || this == STARTED || this == STOPPING;
+  }
+
+  ...
+
+}
+
+```
+
+
+
+
+아직 실행중일때 처리 어떤식으로 ?? flag ??
+
+
 ### JobParameters를 아예 안넘기는 경우에는 ?
 - JobLauncher.run(Job, JobParameters) 를 실행할 때 JobParameters를 비워서(null 또는 empty) 넘기면, 내부적으로는 빈 JobParameters 객체가 사용됩니다.
 - 이 경우 항상 동일한 JobInstance로 인식됩니다.
