@@ -12,6 +12,7 @@ tags: [Spring Batch]
 > 배치 작업
 
 ![img](/assets/img/spring-batch-job-step.png)
+<br>
 (출처 : [https://docs.spring.io/spring-batch/reference/domain.html](https://docs.spring.io/spring-batch/reference/domain.html))
 
 - 하나의 Job은 하나 이상의 Step을 가지며, 각각의 Step은 하나의 `ItemReader`, 하나의 `ItemProcessor`, 그리고 하나의 `ItemWriter`를 가진다.
@@ -23,6 +24,7 @@ tags: [Spring Batch]
 > 배치 작업의 실행 단위
 
 ![img](/assets/img/spring-batch-jobinstance-jobparameters.png)
+<br>
 (출처 : [https://docs.spring.io/spring-batch/reference/domain.html](https://docs.spring.io/spring-batch/reference/domain.html))
 
 - 예를 들어 (위 그림의) `EndOfDay` Job의 경우 **하루마다 하나의 논리적 JobInstance**가 존재한다.
