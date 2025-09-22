@@ -1,8 +1,8 @@
 ---
-title: Spring - Spring Batch 알아보기
+title: Spring Batch 알아보기
 date: 2025-08-22 21:25:00 +0900
 categories: [지식 더하기, 이론]
-tags: [Spring]
+tags: [Spring Batch]
 ---
 
 ## Spring Batch
