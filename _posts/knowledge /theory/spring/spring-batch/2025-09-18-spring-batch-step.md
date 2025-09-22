@@ -485,6 +485,35 @@ public StepExecution handleStep(Step step, JobExecution execution)
 }
 ```
 
+```java
+// org.springframework.batch.core.step.AbstractStep#execute
+@Override
+public final void execute(StepExecution stepExecution)
+		throws JobInterruptedException, UnexpectedJobExecutionException {
+
+  ...
+
+	try (Observation.Scope scope = observation.openScope()) {
+		getCompositeListener().beforeStep(stepExecution);
+		open(stepExecution.getExecutionContext());
+
+		try {
+			doExecute(stepExecution);
+		}
+		catch (RepeatException e) {
+			throw e.getCause();
+		}
+		exitStatus = ExitStatus.COMPLETED.and(stepExecution.getExitStatus());
+
+    ...
+
+	}
+
+}
+
+protected abstract void doExecute(StepExecution stepExecution) throws Exception;
+```
+
 - `Tasklet.execute`는 하나의 트랜잭션 내에서 실행된다. (`TransactionTemplate.execute`의 콜백 메서드로 호출되는 `ChunkTransactionCallback#doInTransaction`내에서 `Tasklet.execute`가 호출됨)
 - `stepOperations.iterate(new StepContextRepeatCallback(stepExecution) { ... }`를 통해 chunk 단위로 반복 (따라서, chunk 단위로 트랜잭션 보장됨)
 
