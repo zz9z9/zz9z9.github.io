@@ -518,11 +518,6 @@ $ ./gradlew --version
 $ ./gradlew wrapper --gradle-version 7.2
 ```
 
-```
-$ gradlew.bat --version
-$ gradlew.bat wrapper --gradle-version 7.2
-```
-
 ## 참고 자료
 ---
 - [https://docs.gradle.org/current/userguide/gradle_basics.html](https://docs.gradle.org/current/userguide/gradle_basics.html)
