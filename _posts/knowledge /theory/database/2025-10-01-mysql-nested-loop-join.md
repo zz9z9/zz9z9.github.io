@@ -9,6 +9,7 @@ tags: [MySQL]
 ---
 
 - MySQL은 테이블 간 조인을 수행할 때, **중첩 루프 조인(Nested-Loop Join, NLJ) 알고리즘(및 그 변형)**을 사용한다.
+  - MySQL 8.0.18부터는 [Hash Join](https://dev.mysql.com/doc/refman/8.4/en/hash-joins.html)도 지원
 - NLJ : 바깥(outer) 테이블에서 한 행씩 가져와 안쪽(inner) 테이블과 조인한다.
   - outer : driving 테이블 / inner : driven 테이블 이라고도 불림
 - 이 과정은 조인해야 할 모든 테이블에 대해 반복된다.
