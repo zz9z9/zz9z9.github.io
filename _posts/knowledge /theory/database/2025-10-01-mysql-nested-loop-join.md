@@ -35,6 +35,11 @@ FOR each row in Outer {
 | **Hybrid / Pushdown 변형** | 조건을 가능한 바깥 루프로 이동 | N/A (상황 의존) | `EXISTS`, `IN` 서브쿼리 최적화 등                                                         |
 
 
+**※ 참고 : Block NLJ는 더 이상 사용되지 않는다.**
+> [공식 문서](https://docs.oracle.com/cd/E17952_01/mysql-8.0-en/mysql-nutshell.html) `Hash Join Optimization` 부분 참고
+
+- MySQL 8.0.20 버전 이후부터, Block Nested Loop가 더 이상 사용되지 않으며, 이전까지 Block Nested Loop이 사용되던 경우에는 언제나 Hash Join이 대신 사용된다.
+
 ## INNER JOIN과 NLJ
 ---
 
