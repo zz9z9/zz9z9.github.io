@@ -88,6 +88,64 @@ JOIN countries ON persons.country_id = countries.country_id;
   - 해시 테이블 메모리도 `join_buffer_allocator`가 release
 
 
+## 사용 조건
+---
+
+| 유형                               | 설명                                                         | 사용 가능한 조인 조건                                                                   |
+| -------------------------------- |------------------------------------------------------------|--------------------------------------------------------------------------------|
+| **(1) Hash Equi Join**           | build 테이블의 조인 키를 해시 테이블로 만들고,<br>probe 테이블에서 같은 키 탐색       | 등가 조인 (`=`) 및 해당 조인 조건에 사용 가능한 인덱스가 없는 경우<br>(물리적으로 인덱스가 있어도, 활용할 수 없는 경우도 포함) |
+| **(2) Hash Join (no condition)** | 해시 테이블로 임시 저장 후,<br>probe 단계에서 **필터 조건**(`>`, `<`, 등)으로 비교 | 비등가 조인, 조인 조건 없는 경우                                                            |
+
+- 예시
+
+```sql
+-- 기본 Hash Join (equi-join), c1에 인덱스 없음
+SELECT * FROM t1 JOIN t2 ON t1.c1 = t2.c1;
+```
+
+```sql
+-- 필터 조건만 있는 Hash Join (조인 조건 없음)
+SELECT * FROM t1 JOIN t2
+WHERE t1.c2 > 50;
+```
+
+```sql
+-- Inner Non-Equi Join (비등가 조인)
+SELECT * FROM t1 JOIN t2 ON t1.c1 < t2.c1;
+```
+
+```sql
+-- Semijoin (IN 서브쿼리)
+SELECT * FROM t1
+WHERE t1.c1 IN ( SELECT t2.c2 FROM t2 );
+```
+```sql
+-- Antijoin (NOT EXISTS)
+SELECT * FROM t2
+WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.c1 = t2.c1);
+```
+
+```sql
+-- Left Outer Join
+SELECT * FROM t1
+  LEFT JOIN t2 ON t1.c1 = t2.c1;
+```
+
+- 실행계획 결과
+
+| 상황                     | Extra 출력                                            | 의미                                             |
+| ---------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| 등가조인                   | `Using join buffer (hash join)`                     | 일반 hash join (키 기반)                            |
+| 비등가조인 (`<`, `>`, `!=`) | `Using where; Using join buffer (hash join)`        | hash join (no condition) — 키 매칭 없음, 필터 조건으로 비교 |
+| 조인 조건 없음 (카티션 곱)       | `Using join buffer (hash join)` 또는 `Using where` 없이 | hash join (no condition) — 전 행 조합              |
+
+### 메모리 관련
+- Hash Join에서 사용하는 메모리는 `join_buffer_size` 변수로 제어된다.
+  - Hash Join은 필요할 때마다(join 진행 중) 메모리를 점진적으로 할당한다.
+  - 따라서, `join_buffer_size`를 크게 설정해도 작은 쿼리가 불필요하게 큰 버퍼를 점유하지 않는다.
+  - 단, Outer Join의 경우 전체 버퍼를 한 번에 할당한다.
+- Hash Join이 필요로 하는 메모리가 이 크기를 초과하면, MySQL은 디스크 임시 파일을 사용(spill)한다.
+- 이때 디스크 파일 수가 `open_files_limit`을 넘으면 조인이 실패할 수도 있다.
 
 ## 참고 자료
 ---
