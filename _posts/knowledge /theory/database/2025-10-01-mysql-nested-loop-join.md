@@ -30,7 +30,7 @@ FOR each row in Outer {
 |----------|---------|--------------|-----------------------------------------------------------------------------------|
 | **Simple NLJ** | Outer 행마다 Inner 전체 스캔 | O(N × M) | 인덱스 없고 최적화 불가할 때 (거의 안 씀)                                                         |
 | **Index NLJ** |  Outer 행마다 Inner 인덱스 lookup | O(N × logM) | 가장 일반적인 형태, Inner 테이블에 조인 키 인덱스 존재 (데이터가 적은 테이블을 outer, 많은 테이블을 inner로 두는 것이 효율적) |
-| **Block NLJ** | Outer 여러 행을 메모리에 담아 Inner 한 번 스캔 | O(N × M) (but buffer 최적화) | Inner에 인덱스 없음, `join_buffer_size` 활용                                              |
+| **Block NLJ** | Outer 여러 행을 메모리에 담아 Inner 한 번 스캔 | O(N × M) (buffer 최적화) | Inner에 인덱스 없음, `join_buffer_size` 활용                                              |
 | **Batched Key Access** | Outer 여러 키를 모아 batch로 인덱스 lookup | O(N × logM) (batched) | MySQL 5.6+, `optimizer_switch='batched_key_access=on'`                            |
 | **Hybrid / Pushdown 변형** | 조건을 가능한 바깥 루프로 이동 | N/A (상황 의존) | `EXISTS`, `IN` 서브쿼리 최적화 등                                                         |
 
