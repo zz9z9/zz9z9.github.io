@@ -17,7 +17,7 @@ timezone: Asia/Seoul
 # --------------------------
 title: zz9z9                    # the main title
 
-tagline: 좋은 코드로, 더 나은 세상을   # it will display as the sub-title
+tagline: 거창한 계획보다는, 꾸준한 실행을   # it will display as the sub-title
 
 description: >-                        # used by seo meta and the atom feed
   A minimal, portfolio, sidebar,
