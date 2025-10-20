@@ -62,7 +62,33 @@ Kafka Connect (플랫폼)
 ## 실습
 ---
 
-- 실제 사례 : https://techblog.uplus.co.kr/debezium%EC%9C%BC%EB%A1%9C-db-synchronization-%EA%B5%AC%EC%B6%95%ED%95%98%EA%B8%B0-1b6fba73010f
+- 실제 사례
+  - https://techblog.uplus.co.kr/debezium%EC%9C%BC%EB%A1%9C-db-synchronization-%EA%B5%AC%EC%B6%95%ED%95%98%EA%B8%B0-1b6fba73010f
+  - https://techblog.lycorp.co.jp/ko/migrating-large-data-with-kafka-and-etl => cdc 사용해서 DB 마이그레이션
+
+```
+성공적으로 발행된 ETL 메시지를 MongoDB에 저장할 때 긴 시간이 걸린다면 뒤에 이어지는 CDC 기반 마이그레이션 작업에서 처리할 메시지양이 많아집니다. 그렇게 되면 메시지 보관 기간이 길어지면서 Kafka 리소스를 더 많이 차지합니다. 또한 CDC 기반 마이그레이션 작업은 멱등성을 보장할 수 있도록 구성하긴 했지만 예상치 못한 상황이 발생할 수도 있기에 마이그레이션 시간이 늘어나는 것은 피하고자 했습니다.
+
+따라서 최대한 빠르고 안전하게 메시지를 소비해 ETL 기반 마이그레이션을 완료해야 한다는 목표가 생겼습니다. 쿠버네티스의 리소스는 충분해서 처리량을 높이기 위해 토픽의 파티션을 늘리고 그에 맞게 파드를 실행할 수 있었는데요. 고민했던 점은 '어떻게 MongoDB가 이 높은 처리량을 감당할 수 있도록 만들까?'였습니다.
+
+짧은 시간에 너무 많은 데이터가 삽입되면 복제가 설정된 DB에서는 복제 지연이 발생할 수 있고, 지연이 너무 길어지면 서비스 불가 상태가 될 수 있습니다. 따라서 복제 지연이 너무 커진다면 삽입 속도 조절을 고려해야 합니다.
+
+ETL 이후부터 현재까지의 변경 사항을 MongoDB에 적용하려면 CDC 토픽에 들어온 MySQL CDC 메시지를 MongoDB에 반영하면 되는데 이때 언제부터의 메시지를 소비할 것인지를 정해야 합니다. 사실 ETL 데이터가 정확히 어느 시점의 데이터인지는 알 수 없으며, 시점을 정했을 때 오차가 발생할 확률도 높습니다. 따라서 우선 누락된 메시지를 없애기 위해 ETL을 내리는 시점 직전으로 MySQL CDC 오프셋을 조절했습니다.
+
+이렇게 조치하면 누락된 메시지는 없을 테지만 이미 ETL 테이블에 반영된 메시지가 존재할 수 있는데요. 각 CDC 메시지는 멱등성이 보장된 데이터가 아니기에 중복 처리를 하면 문제가 발생합니다. 즉, 중복된 메시지는 다시 처리되지 않게 로직을 구현해야 합니다.
+=> 이미지 테이블에 updatedDate라는 필드가 존재했기에 해당 필드를 사용해서 최신 메시지만 적용하도록 메시지를 판별하는 함수를 구현했습니다. 이로써 중복 메시지가 들어와도 최신 변경 사항만 적용할 수 있습니다.
+=> fun isNewerMessage(message: Value): Boolean {
+        val existingImage = imageRepository.findById(message.id)
+        return existingImage.isEmpty || mapper.convertValue(message.updateDate.get(), OffsetDateTime::class.java).isAfter(existingImage.get().updatedDate)
+
+Debezium MySQL Connector는 기본적으로 PK를 메시지의 키로 사용합니다. 따라서 파티션을 분배할 때 ID가 다르면 다른 파티션으로 분배될 수 있습니다.
+
+메시지 처리 순서에 따라 결과가 달라지는 것을 막기 위해서는 CDC 메시지의 키를 변경해야 합니다. 동일한 의미를 갖는 데이터는 같은 파티션에 할당돼야 멱등성을 보장할 수 있습니다. 저희가 사용하고 있는 Debezium MySQL Connector에서는 message.key.columns라는 속성으로 키를 정의하는 방식을 변경할 수 있는데요. 이를 이용해 아래와 같이 동일한 의미의 메시지는 같은 파티션에 할당되도록 설정해서 CDC 메시지 처리의 멱등성을 보장했습니다.
+
+"message.key.columns": "db_name.table_name:image_id,reference_id,reference_type"
+```
+
+=> 멱등성, 토픽/파티션, Kafka 리소스 부하, DB 부하, CDC 시점
 
 - Kafka 설치 디렉토리 트리 구조 (메시지 브로커 + Connect 포함)
 
@@ -334,6 +360,26 @@ mysql-connector-j-9.1.0.jar
 ## 변경 감지 이벤트 형태
 ---
 
+```java
+@Component
+public class OrderConsumer {
+
+    @KafkaListener(topics = "mysql-cdc.ordersdb.orders", groupId = "cdc-group")
+    public void consume(ConsumerRecord<String, String> record) {
+        String key = record.key();
+        String value = record.value();
+
+        System.out.println("---- CDC Event ----");
+        System.out.println("Key: " + key);
+        System.out.println("Value: " + value);
+        System.out.println("-------------------");
+    }
+
+}
+```
+
+- Key, Value 둘 다 아래와 같은 포맷
+
 ```json
 {
   "schema" : {
@@ -345,7 +391,29 @@ mysql-connector-j-9.1.0.jar
 }
 ```
 
-- insert
+**insert**
+
+- Key
+
+```json
+{
+  "schema" : {
+    "type" : "struct",
+    "fields" : [ {
+      "type" : "int64",
+      "optional" : false,
+      "field" : "id"
+    } ],
+    "optional" : false,
+    "name" : "mysql-cdc.ordersdb.orders.Key"
+  },
+  "payload" : {
+    "id" : 13
+  }
+}
+```
+
+- Value
 
 ```json
 {
@@ -535,35 +603,35 @@ mysql-connector-j-9.1.0.jar
   "payload" : {
     "before" : null,
     "after" : {
-      "id" : 9,
-      "customer_name" : "LEE22",
-      "amount" : "LuA=",
-      "created_at" : "2025-10-19T14:46:20Z"
+      "id" : 13,
+      "customer_name" : "LEE66",
+      "amount" : "Opg=",
+      "created_at" : "2025-10-20T14:34:09Z"
     },
     "source" : {
       "version" : "3.2.4.Final",
       "connector" : "mysql",
       "name" : "mysql-cdc",
-      "ts_ms" : 1760885180000,
+      "ts_ms" : 1760970849000,
       "snapshot" : "false",
       "db" : "ordersdb",
       "sequence" : null,
-      "ts_us" : 1760885180000000,
-      "ts_ns" : 1760885180000000000,
+      "ts_us" : 1760970849000000,
+      "ts_ns" : 1760970849000000000,
       "table" : "orders",
       "server_id" : 1,
       "gtid" : null,
       "file" : "binlog.000040",
-      "pos" : 203732050,
+      "pos" : 203734562,
       "row" : 0,
-      "thread" : 410,
+      "thread" : 411,
       "query" : null
     },
     "transaction" : null,
     "op" : "c",
-    "ts_ms" : 1760885180748,
-    "ts_us" : 1760885180748329,
-    "ts_ns" : 1760885180748329000
+    "ts_ms" : 1760970849105,
+    "ts_us" : 1760970849105848,
+    "ts_ns" : 1760970849105848000
   }
 }
 ```
@@ -712,6 +780,17 @@ mysql-connector-j-9.1.0.jar
 - 여러 컨슈머에서 동일한 테이블 이벤트를 처리하면 안되지않을까 ??
 - 그럼 컨슈머 구성을 어떻게하는게 좋을까
 
+### 정확히 원하는 시점의 이벤트부터 쌓는게 가능할까 ?
+
+| 시각       | 액션             | 비고 |
+|----------|-----------| ---- |
+| 03:59:57 | Cubrid commit  | |
+| 03:59:58 | Cubrid commit  | |
+| 03:59:59 | Cubrid commit  | |
+| 04:00:00 | 이 시점의 스냅샷을 기준으로 MySQL로 데이터 마이그레이션 | |
+| 04:00:01 | Cubrid commit | Kafka Connect에서 감지해서 이벤트 발행 |
+
+- 즉, 정확히 스냅샷 이후 커밋부터 카프카 큐에 적재하는게 가능한가 ?
 
 
 
