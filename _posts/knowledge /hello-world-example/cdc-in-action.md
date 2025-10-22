@@ -817,6 +817,101 @@ public class OrderConsumer {
 | **7️⃣ Oracle 쓰기 재개**       | Oracle에서 서비스 정상 운영                                  |
 
 
+※ 개인적으로 생각해본 zero downtime
+- 애플리케이션 인스턴스 3개라고 가정
+- 1개만 먼저 Oracle로 붙임 (1: oracle, 2,3 : mysql)
+- oracle -> mysql도 cdc 구성
+- 1번 인스턴스는 oracle에 커밋하게됨 - cdc 흐름 : oracle -> mysql --이미 처리된건지 확인하고 반영하지 않음--> oracle
+- 2,3번 인스턴스는 mysql에 커밋하게됨 - cdc 흐름 : mysql -> oracle --이미 처리된건지 확인하고 반영하지 않음--> mysql
+- 2,3번도 순차적으로 oracle로 붙음
+
+=> 이론적으로 완전 무중단 DB 전환이 가능한 이상적 설계예요. 다만 실무에서는 루프 방지 / 충돌 해결 / idempotent 처리 를 완벽히 구현해야 해서,
+Debezium 단독으론 어렵고 중간에 custom filtering layer가 꼭 필요합니다.
+
+
+⚠️ (1) 루프(Loop) 방지 문제
+
+가장 치명적이에요.
+
+MySQL -> Oracle (CDC)
+Oracle -> MySQL (CDC)
+
+
+이벤트가 round-trip으로 계속 도는 무한 루프가 발생할 수 있어요.
+그래서 변경 출처(source) 를 구분해야 합니다.
+
+예:
+
+Debezium event header에 "source.system": "mysql"
+
+Oracle connector가 이걸 감지해서 “자기 자신이 만든 변경”은 무시
+
+Debezium의 source 필드나 transaction.id를 활용하거나,
+CDC 이벤트에 origin tag 를 붙여야 해요.
+
+{
+"op": "u",
+"source": {
+"db": "oracle",
+"instance": "app-instance-1"
+},
+"after": { "id": 100, "status": "SHIPPED" }
+}
+
+
+Consumer는 이걸 보고
+“이미 Oracle→MySQL에서 발생한 이벤트면 다시 반영하지 않음”
+하는 로직을 넣어야 합니다.
+
+⚠️ (2) Primary Key 충돌 / Conflict 해결
+
+양방향 쓰기에서 같은 row를 양쪽에서 수정하면 충돌 납니다.
+
+예:
+
+app1 (Oracle) → status = "paid"
+
+app2 (MySQL) → status = "cancelled"
+
+CDC가 교차 반영하면 마지막 commit이 이깁니다.
+즉, 최종 일관성(eventual consistency) 이고
+동시 수정 충돌(conflict resolution) 정책을 명시해야 합니다.
+
+보통 3가지 전략 중 하나를 선택해요:
+
+정책	설명
+Last Write Wins (기본)	타임스탬프 최신 변경이 승자
+Source Priority	Oracle > MySQL 같은 우선순위 부여
+Custom Merge	컬럼별 머지 로직 적용 (예: 재고량 합산 등)
+⚠️ (3) 트랜잭션 순서 유지 (순서 불일치 문제)
+
+Oracle CDC와 MySQL CDC는 commit 타이밍이 다르기 때문에
+서로 반영 순서가 달라질 수 있습니다.
+
+이건 Kafka partition key 를 PK 기반으로 고정하고
+Debezium의 transaction.id 를 활용하면 상당 부분 완화됩니다.
+
+⚠️ (4) Idempotent 처리
+
+중복 이벤트가 들어오더라도 안전하게 무시할 수 있게 해야 합니다.
+
+방법:
+
+Oracle/MySQL 쿼리에서 upsert(MERGE INTO, INSERT ... ON DUPLICATE KEY UPDATE) 사용
+
+CDC consumer는 “변경된 컬럼이 실제로 다를 때만 update” 수행
+
+⚠️ (5) 스키마 차이 문제
+
+MySQL ↔ Oracle 간엔
+
+데이터 타입 차이 (VARCHAR vs NVARCHAR, DATETIME vs TIMESTAMP)
+
+AUTO_INCREMENT vs SEQUENCE
+
+NULL/DEFAULT 처리 차이
+이 존재하기 때문에 CDC 이벤트 매핑 시 변환 레이어가 필요합니다.
+
 ### 토픽
 - Debezium은 `<topic.prefix>.<database>.<table>` 조합으로 토픽을 자동 생성
 - 예시:
