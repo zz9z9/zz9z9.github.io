@@ -780,6 +780,15 @@ public class OrderConsumer {
 - 여러 컨슈머에서 동일한 테이블 이벤트를 처리하면 안되지않을까 ??
 - 그럼 컨슈머 구성을 어떻게하는게 좋을까
 
+## 실전 시나리오
+---
+> db 마이그레이션에서 서비스 중단 시간을 최소화하는거야, 예를 들어 mysql -> oracle로 이관한다고 했을때 특정 시점의 스냅샷 데이터를 mysql -> oracle로 이관하고, 이관되는 동안 mysql에 commit된 내역들은 CDC로 수집하는거지. 그리고 스냅샷 이관이 완료되면, 이관되는 동안 commit된 내역에 대한 이벤트들을 oracle에 반영하는거야. 그래서, 쌓인 이벤트들을 최대한 빠르게 Oracle DB에 반영하게 하고싶은거지.(대신 Oracle DB에 큰 부하는 주지 않으면서) 그럼 파티션 개수, 컨슈머 그룹 구성을 어떻게 하는게 좋을것 같아 ? 내 생각엔 티션 : 컨슈머 수 = 1:1 -> 2:2 -> 이런식으로 늘려가면서 최적의 개수를 찾는게 좋지 않나 생각이드는데, 그리고 Oracle db 이상있으면 잠깐 이벤트 cosume을 멈추는? 그런것도 가능한가 ?
+
+- 즉, 주요 목표는:
+  - **서비스 중단 없이(또는 최소로)** DB 마이그레이션 (Zero Downtime DB Migration)
+  - 마이그레이션 동안 쌓인 DML 이벤트를 **최대한 빠르게 target db에 반영**
+
+
 ### 정확히 원하는 시점의 이벤트부터 쌓는게 가능할까 ?
 
 | 시각       | 액션             | 비고 |
@@ -790,11 +799,118 @@ public class OrderConsumer {
 | 04:00:00 | 이 시점의 스냅샷을 기준으로 MySQL로 데이터 마이그레이션 | |
 | 04:00:01 | Cubrid commit | Kafka Connect에서 감지해서 이벤트 발행 |
 
-- 즉, 정확히 스냅샷 이후 커밋부터 카프카 큐에 적재하는게 가능한가 ?
+- 즉, 정확히 스냅샷 이후 커밋부터(04:00:01) 카프카 큐에 적재하는게 가능한가 ?
+
+### 완전한 무중단 마이그레이션이 가능할까 ?
+> '스냅샷 마이그레이션 -> cdc 이벤트 target db에 동기화' 하더라도 mysql cdc 이벤트가 계속 발생하는한 완전하게 두 db가 일치된 상태인 경우는 없을것 같은데
+
+현실적인 목표는 “Near-Zero Downtime”  보통 이런 식으로 접근합니다
+
+| 단계                         | 설명                                                  |
+| -------------------------- | --------------------------------------------------- |
+| **1️⃣ Snapshot Migration** | MySQL 데이터를 Oracle로 bulk dump/import (대부분 Read-only) |
+| **2️⃣ CDC 동기화 시작**         | Debezium이 MySQL 변경 이벤트를 Oracle에 실시간 반영              |
+| **3️⃣ 동기화 상태 확인**          | Kafka Lag이 거의 0일 때 → Oracle과 MySQL이 거의 일치           |
+| **4️⃣ 서비스 Freeze (잠깐)**    | MySQL 쓰기 중단 or Lock (수초~수분)                         |
+| **5️⃣ 잔여 CDC 이벤트 반영**      | 남은 이벤트 전부 Oracle에 적용                                |
+| **6️⃣ 서비스 DB 전환**          | 애플리케이션 DB URL → Oracle 로 변경                         |
+| **7️⃣ Oracle 쓰기 재개**       | Oracle에서 서비스 정상 운영                                  |
 
 
+### 토픽
+- Debezium은 `<topic.prefix>.<database>.<table>` 조합으로 토픽을 자동 생성
+- 예시:
+```
+"topic.prefix": "mysql-cdc",
+"database.include.list": "ordersdb,usersdb",
+"table.include.list": "ordersdb.orders,ordersdb.payments,usersdb.user_profiles"
+```
+=> 토픽 : `mysql-cdc.ordersdb.orders`, `mysql-cdc.ordersdb.payments`, `mysql-cdc.usersdb.user_profiles`
+
+- 스냅샷 데이터 마이그레이션이 완전 끝나고 이벤트 consume을 시작하는게 아닌, 마이그레이션이 끝난 테이블 (토픽)은 먼저 consume하는건 ?
+=> Sink Connector 여러 개로 분리
+=> Spring Boot Application이면 ?
+
+### 파티션 / 컨슈머 그룹
+- 그래서 Debezium이 새 토픽으로 이벤트를 publish하면, Kafka 브로커가 내부 설정값을 기준으로 자동 생성합니다.
+- Kafka에는 자동 생성 토픽의 구성을 제어하는 설정들이 있습니다:
+
+| 설정 항목                        | 설명                               | 기본값    |
+| ---------------------------- | -------------------------------- | ------ |
+| `auto.create.topics.enable`  | 존재하지 않는 토픽으로 publish할 때 자동 생성 여부 | `true` |
+| `num.partitions`             | 자동 생성되는 토픽의 기본 파티션 수             | `1`    |
+| `default.replication.factor` | 자동 생성되는 토픽의 복제본 개수               | `1`    |
+
+- Debezium 입장에서는 “토픽을 지정”할 뿐, Kafka가 어떤 설정으로 토픽을 생성할지는 브로커 설정에 위임
+
+### 파티션 수 변경 방법
+
+**브로커 설정 변경 (글로벌 기본값)**
+> Kafka 전체 기본값을 바꿔서 자동 생성 토픽의 파티션 수를 조정할 수 있습니다.
+
+```
+# server.properties
+num.partitions=4
+default.replication.factor=3
+```
+
+**토픽 생성 스크립트 실행**
+
+```
+kafka-topics.sh --create \
+  --topic mysql-cdc.ordersdb.orders \
+  --partitions 4 \
+  --replication-factor 3 \
+  --bootstrap-server localhost:9092
+```
+
+**자동 생성 끄고, 명시적으로 관리**
+> 운영 환경에서는 보통 이렇게 합니다
+
+```
+auto.create.topics.enable=false
+```
+
+### Target DB에서 받을 부하 ?
+> 순식간에 커밋이 많이 발생하면 ?? 근데 서비스중인 DB가 아니니까 괜찮지 않나 ?
+
+- 부하 조절 방법 ?
+
+“서비스 중이 아니라면 부하 자체는 덜 민감하지만”,
+DB 자체의 트랜잭션 처리 구조나 리소스 관리 한계 때문에
+한꺼번에 커밋이 몰리면 실제로는 심각한 성능 저하나 병목이 생깁니다.
+
+| 병목 요소                      | 증상                              |
+| -------------------------- | ------------------------------- |
+| **Redo Log flush**         | 디스크 I/O 병목 (commit latency 급상승) |
+| **Undo space 부족**          | ORA-30036 / rollback segment 확장 |
+| **Row-level lock 경합**      | PK 중복 update 시 lock 대기          |
+| **Buffer cache thrashing** | 대량 DML 시 cache hit ratio 저하     |
+| **Index maintenance 부하**   | 인덱스 재정렬로 CPU 폭증                 |
+
+
+그래서 실무에서는 “CDC 배치 제어”를 둡니다
+
+CDC consumer (예: Spring Boot 애플리케이션) 또는 Sink Connector 쪽에서
+DB 반영 속도를 인위적으로 제어합니다.
+
+| 전략                            | 설명                               |
+| ----------------------------- | -------------------------------- |
+| **① 배치 크기 제한 (Batch Size)**   | 500건, 1000건 단위로 모아 커밋            |
+| **② 지연 주입 (Throttle)**        | 커밋 사이에 짧은 sleep(수 ms~수십ms)       |
+| **③ 병렬 제한 (Thread Pool)**     | DB insert 스레드 수 제한 (예: 2~4개)     |
+| **④ 트랜잭션 크기 조절**              | auto-commit 대신 명시적 commit으로 조절   |
+| **⑤ DLQ (Dead Letter Queue)** | DB 오류나 constraint 위반 시 재처리용 큐 분리 |
+
+
+### 장애 시나리오
+- Target DB 장애시
+- 이벤트 유실
+  - connect <--> kafka
+  - kafka <--> consumer
 
 ## 참고 자료
 ---
+- [https://kafka.apache.org/documentation.html#connect](https://kafka.apache.org/documentation.html#connect)
 
 - [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html)
