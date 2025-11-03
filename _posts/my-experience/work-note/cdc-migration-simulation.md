@@ -1,44 +1,35 @@
 ---
-title: Cubrid에서 MySQL로의 여정(번외) - CDC 활용 상상
-date: 2025-11-01 22:00:00 +0900
+title: Cubrid에서 MySQL로의 여정(번외) - CDC 활용 생각해보기
+date: 2025-11-03 22:00:00 +0900
 categories: [경험하기, 작업 노트]
 tags: [MySQL]
 ---
 
-
-> DBMS 마이그레이션 때 CDC를 활용할 수 있었다면 ?
-
 ## 기존 방식의 한계점
 ---
 
-- 실제 작업은 서비스를 Read Only DB에 붙여서 Cubrid(Target DB)에서의 변경을 막고 데이터 마이그레이션을 진행했다.
+- 실제 작업은 서비스를 Read Only DB에 붙여서 Cubrid(Source DB)에서의 변경을 막고 데이터 마이그레이션을 진행했다.
 - 따라서, 마이그레이션 동안 조회를 제외한 요청은 실패처리됐다.
 - 마이그레이션은 약 20분 정도 소요됐다.
-- 하지만, 서비스 다운타임이 이 정도까지 허용되지 않는 서비스들의 경우 이런 방식으로 처리할 수는 없다.
+
+> 하지만, 서비스 다운타임이 이 정도까지 허용되지 않는 서비스들의 경우 어떤 전략을 사용하면 좋을까 ?
 
 ## CDC (Change Data Capture) 적용해보기
 ---
-> Cubrid는 지원되는 Source Connector가 없어서 CDC를 적용하기가 어렵기 때문에, Source DB도 MySQL이라고 가정했을때
+> Cubrid는 지원되는 Source Connector가 없어서 CDC를 적용하기가 어렵기 때문에, Source DB가 MySQL이라고 가정했을때
 
-- 상상해보기
+- 흐름 상상해보기
 
 ![img.png](db-mig-cdc-simulation2.png)
 
 ```
 1. 데이터 마이그레이션
-
-(마이그레이션 되는 동안 발생한 DML 이벤트가 Kafka 큐(?)에 쌓임)
-
+(마이그레이션 되는 동안 발생한 DML 이벤트가 Kafka 토픽에 쌓임)
 2. 마이그레이션 완료
-
 3. 쌓인 DML 이벤트 처리
-
 4. 이벤트 처리 거의다 됐을때 더이상 DML 이벤트 발생하지 않도록 서비스 점검
-
 (서비스 중단)
-
 5. 모든 이벤트 처리 완료됐으면 Target DB를 서비스 DB로 변경
-
 (서비스 재개)
 ```
 
@@ -51,14 +42,41 @@ tags: [MySQL]
 **debezium connector initial snapshot**
 - 장점
   - 현재 상태의 데이터 마이그레이션 + 마이그레이션되는 동안 발생한 변경을 자연스럽게 이어줌 (스냅샷 완료 이후 변경 이벤트 스트리밍)
-  - 스키마 변경(DDL)까지 이벤트로 전달 가능 => 이게 왜 장점일까 ?
 
 - 단점
   - 글로벌 읽기 잠금시 테이블 락이 발생
-  - 테이블 크기가 클수록 수 시간 이상 걸릴 수 있음 => 카프카에 변경 이벤트 많이 쌓인다
-  - `SELECT * FROM <table>` => 운영 DB에 부하
-  - Repeatable Read 오래 잡고있는다 ? => I/O 부담 큼 ??
-  - 특정 조건 필터링 불가 (예: “3개월치 데이터만” 같은 조건부 snapshot 불가능, 이력 테이블의 경우 전날 자정까지 쌓인건 이미 완료되어있음, 손해임)
+  - 테이블 크기가 클수록 오래 걸린다
+  - `SELECT * FROM <table>`
+    - 인덱스를 쓰지 않으므로 테이블 전체를 읽음 → 대량의 sequential read.
+    - InnoDB buffer pool이 밀려서 실제 서비스 쿼리 캐시가 떨어질 수 있음.
+  -  snapshot이 끝날 때까지:
+    - long-running transaction이 유지되고,
+    - MVCC snapshot을 유지하기 위한 undo log를 InnoDB가 보관합니다.
+
+| 항목              | 영향                                    |
+| --------------- | ------------------------------------- |
+| undo log 보관     | 스냅샷 시점 이후 변경된 row의 undo version 계속 유지 |
+| buffer pool I/O | 대량 SELECT로 인한 디스크 read 폭증             |
+| redo log 영향     | 거의 없음 (read-only이므로)                  |
+| row lock        | 없음                                    |
+| binlog          | snapshot 이후 DML은 binlog로 별도 처리        |
+
+```
+t0:   FLUSH TABLES WITH READ LOCK
+t0.1: SHOW MASTER STATUS → binlog pos = 12345
+t0.2: UNLOCK TABLES
+t0.3: START TRANSACTION WITH CONSISTENT SNAPSHOT
+t0.4: SELECT * FROM users; → emit user row events (op=r)
+t1.0: SELECT * FROM orders; → emit order row events (op=r)
+t2.0: COMMIT
+t2.1: start binlog streaming from pos=12345
+t2.2: new inserts/updates/deletes → emit op=c/u/d
+```
+
+- 특정 조건 필터링 불가(예: 이력 테이블의 경우 전날 자정까지 쌓인건 이미 완료되어있기 때문에 자정 ~ 마이그레이션 시작하는 새벽시간대까지 쌓인것만 옮겨주면되는데)
+
+
+
 
 **ETL 도구**
 > PDI (Pentaho Data Integration) / ETL 기반 로딩
@@ -93,6 +111,8 @@ tags: [MySQL]
   - update : 해당 pk 행이 없거나, 변경일시가 변경 이벤트의 after에 있는 변경일시보다 이후이면 skip
      - 애플리케이션에서 update 처리시 무조건 변경일시도 업데이트 되도록 해놓는게 보장되어야한다 ?
      - 변경 이벤트 before의 updated_at과 after의 updated_at이 같으면 ?? (즉, 업데이트는 하지만 변경일시는 업데이트 처리를 제대로 안해놓은 경우)
+     - ms까지 관리하지 않는 이상, 04:00:01.100에 업데이트 04:00:01.111에 ETL 시작한 경우, 또는 그 반대인 경우, 업데이트를 해야할지 말아야할지 판단이 어렵다
+     - `updated_at`이 같은 경우 ? => 변경 컬럼들 다 비교해서 동일하지 않으면 update
   - delete : 해당 pk 조회했을 때 없으면 skip
   - 4시에 ETL 시작했다고 하면, 4시 1분정도 까지의 변경 이벤트의 테이블,pk 확보해서 추후에 배치로 제대로 정합성 맞는지 비교 ??
 
@@ -108,45 +128,93 @@ ETL 이후부터 현재까지의 변경 사항을 MongoDB에 적용하려면 CDC
         return existingImage.isEmpty || mapper.convertValue(message.updateDate.get(), OffsetDateTime::class.java).isAfter(existingImage.get().updatedDate)
 ```
 
-실무에서 많이 쓰는 안전한 변형 패턴
-(A) MERGE 기반 처리 (idempotent sink)
+근데 중복처리 되더라도 결국 쌓인거 다 소비하면 최종 상태는 같은거 아닌가 ?
 
-대부분의 CDC Sink는 이 패턴을 권장합니다:
+> "최종 상태는 같은거 아닌가?"
 
-MERGE INTO target_table AS t
-USING (SELECT ? AS pk, ? AS col1, ? AS updated_at) AS s
-ON (t.pk = s.pk)
-WHEN MATCHED AND t.updated_at < s.updated_at THEN
-UPDATE SET col1 = s.col1, updated_at = s.updated_at
-WHEN NOT MATCHED THEN
-INSERT (pk, col1, updated_at) VALUES (s.pk, s.col1, s.updated_at);
+**→ 네, 맞습니다!**
 
+하지만:
+- **성능**: 중복 제거가 훨씬 빠름
+- **비용**: 불필요한 Write 감소
+- **안정성**: Downstream 영향 최소화
 
-→ Kafka Sink Connector (e.g., JDBC Sink) 레벨에서도 이 논리를 적용할 수 있습니다.
-Debezium의 event.ts_ms를 활용하면 CDC 이벤트 순서에 기반한 비교도 가능합니다.
+지만 현실적으로 이런 문제가 생김
+🔹 ① offset 조정 시 ‘1️⃣만 일부 다시 읽히는’ 경우
 
+Kafka 오프셋을 “ETL 종료 직전”으로 되돌린다고 했죠?
+그런데 그 오프셋이 1️⃣ 직후, 2️⃣ 직전에 저장된 상태라면?
 
-(3) timestamp 비교 대신 idempotent merge 사용
-
-timestamp를 “정확히 경계로 자르려” 하지 말고,
-그 시점 근처의 중복을 허용하되 최종적으로 최신 상태로 수렴하도록 처리하는 방식입니다.
-
-예시 (Sink merge SQL):
-
-MERGE INTO user AS t
-USING (SELECT ? AS id, ? AS name, ? AS updated_at, ? AS ts_ms) AS s
-ON (t.id = s.id)
-WHEN MATCHED AND (t.updated_at < s.updated_at OR t.ts_ms < s.ts_ms)
-THEN UPDATE SET name=s.name, updated_at=s.updated_at, ts_ms=s.ts_ms
-WHEN NOT MATCHED THEN
-INSERT (id, name, updated_at, ts_ms)
-VALUES (s.id, s.name, s.updated_at, s.ts_ms);
+…offset=12345(1️⃣ 끝), offset=12346(2️⃣ 시작)
 
 
-👉 이렇게 하면
-ETL이 넣은 데이터가 CDC 이벤트보다 약간 늦거나 빨라도
-결국 “가장 최신 이벤트로 수렴”합니다.
-즉, “경계 정확성”을 포기하고 “결과 정합성(eventual consistency)”을 보장하는 접근입니다.
+CDC connector를 재시작하면
+
+offset=12345부터 다시 읽음 → 1️⃣ 재처리
+
+하지만 2️⃣ 이벤트는 Kafka log retention 정책 때문에 이미 사라짐 or skip됨
+
+결과:
+
+이벤트	MongoDB 최종 상태
+1️⃣ (replay only)	❌ rollback to 200
+
+즉, 2️⃣은 다시 적용되지 못해 결과가 과거 상태로 돌아갑니다.
+
+🔹 ② connector가 한 번에 여러 파티션을 병렬 consume할 때
+
+Debezium → Kafka → Sink connector 체인에서
+MySQL row → Kafka record → MongoDB write
+이게 모두 exactly-once가 아닙니다.
+
+예:
+1️⃣, 2️⃣ 이벤트가 서로 다른 Kafka 배치에 나뉘어 전송
+→ Mongo sink에서 2️⃣ 커밋 성공
+→ connector crash → offset 커밋 실패
+→ 재시작 시 offset=1️⃣ 부터 다시 읽음
+→ 1️⃣만 재적용됨
+→ 2️⃣은 Kafka 측에서 skip됨 (이미 ack 처리된 batch)
+
+결과: rollback 💥
+
+🔹 ③ MongoDB sink connector 자체의 재시작 타이밍
+
+MongoDB sink는 “Kafka offset commit”과 “DB write commit”이 원자적이지 않습니다.
+즉, 다음 순서로 일어날 수 있어요 👇
+
+MongoDB에 2️⃣ (200→300) 적용
+
+connector crash
+
+offset commit 누락
+
+재시작 → 1️⃣부터 다시 읽음
+
+1️⃣ (100→200) 재적용됨 → rollback 발생
+
+💥 최종적으로 MongoDB는 200,
+Kafka offset은 1️⃣ 재처리 중 → 데이터 불일치 발생.
+
+🧠 3️⃣ 핵심 원인 요약
+원인	설명
+offset rewind 시점 부정확	일부 이벤트만 재처리됨
+Kafka log retention	재처리 구간 일부 손실 가능
+connector crash 타이밍	Mongo write는 됐는데 offset 커밋 안 됨
+sink idempotency 없음	재적용 시 과거 상태로 overwrite
+이벤트 순서 깨짐	동일 PK라도 순서 역전 가능 (다중 topic 병합 등)
+✅ 4️⃣ 안전하게 하려면
+전략	설명
+idempotent write	MongoDB에 적용할 때 ts_ms나 transaction_id 기준으로 최신 이벤트만 반영
+CDC 이벤트 deduplication	MongoDB 문서에 “last_cdc_pos” 저장 → pos 작으면 skip
+exactly-once connector 설정	Kafka Connect transactional producer/sink 활성화
+offset rewind 폭 최소화	ETL 종료 직전이 아니라 snapshot anchor 직전으로 조정
+replay 검증 로직 추가	replay 후 row count, checksum 비교로 이상 탐지
+✅ 5️⃣ 결론 요약
+항목	설명
+“2번째 이벤트도 다시 처리되면 결국 3 되지 않나?”	이론적으로는 맞지만,
+실제 환경에서는	offset 조정, crash, 순서 불일치로 인해 일부 이벤트만 재처리될 수 있음
+결과	최신 상태(3)가 과거 상태(2)로 rollback될 수 있음
+예방	idempotent 처리 or latest-event-only 적용 필요
 
 ### Consumer 선택
 >  Sink Connector vs Spring boot application
@@ -320,11 +388,10 @@ Broker:   append(1, 2, 3, 4, 5)
 
 - TCP는 이 바이트 스트림 순서를 그대로 유지하므로 결국 Kafka log에도 같은 순서로 append됩니다.
 
-### 마이그레이션 끝난 테이블은 계속 이벤트 쌓지않고, 큐에서 소진되게 할 수 있을까 ?? (kafka 리소스 계속 잡아먹게되니까)
 
 ### 서비스 한번도 안멈추고 할 수 있는 방법 ??
 
-### 이벤트가 너무 많이 쌓인 경우 ?? => mysql 부하 ??
+
 
 ### 이벤트 유실될때 ??
 
@@ -336,7 +403,53 @@ Broker:   append(1, 2, 3, 4, 5)
 ### 각 컴포넌트 장애 상황
 - connector, kafka, consumer, target db, binlog 지워지면 ? 등
 
+### PDI로 마이그레이션 되는동안 변경 이벤트를 붙잡고(?)있는건 어떻게 해야돼 ?
+> 즉, CDC는 계속 읽되, Target에는 반영하지 않고 대기시켜야 한다
+
+**Sink Connector 사용하는 경우**
+- Sink Connector 멈춰놓기
+
+```
+curl -X PUT localhost:8083/connectors/mysql-sink/pause
+# 마이그레이션 완료 후
+curl -X PUT localhost:8083/connectors/mysql-sink/resume
+```
+
+**직접 구현한 경우**
+
+Spring Kafka의 `KafkaMessageListenerContainer` 또는 `ConcurrentMessageListenerContainer` 객체에는
+Kafka의 native pause/resume 기능이 그대로 노출되어 있습니다.
+
+```java
+@Autowired
+private KafkaListenerEndpointRegistry registry;
+
+public void pauseSink() {
+    registry.getListenerContainer("my-sink-listener").pause();
+}
+
+public void resumeSink() {
+    registry.getListenerContainer("my-sink-listener").resume();
+}
+```
+
+- `@KafkaListener(id = "my-sink-listener", topics = "dbserver1.mydb.user")`
+- 이렇게 id를 지정해두면, 나중에 registry로 접근 가능합니다.
+- 이 방법은 Kafka Consumer Group 레벨에서 실제로 poll()을 멈추는 방식이라,
+- Broker 입장에서는 “이 Consumer가 더 이상 데이터를 읽지 않음” 상태가 됩니다.
+→ 메시지는 Kafka topic에 계속 쌓입니다 (offset도 증가하지 않음).
+
+| 항목                        | 설명                                                     |
+| ------------------------- | ------------------------------------------------------ |
+| **Kafka Topic Retention** | pause된 동안에도 Kafka의 `retention.ms` 설정보다 오래 쌓이면 삭제됨 (주의) |
+| **Consumer Group Lag**    | pause 동안 lag가 폭증할 수 있음 (정상 현상)                         |
+| **순서 보장**                 | partition별 순서 유지됨 (pause/resume로는 깨지지 않음)              |
+| **Rebalance 주의**          | stop()/start()보단 pause()/resume() 추천                   |
+
+
 ### 마이그레이션 동안 쌓인 DML 이벤트가 많은 경우 이슈 ?
+> Kafka 이슈 ? target mysql 이슈 ? 대역폭 ?
+
 snapshot이 완료될 때까지 binlog를 읽긴 하지만
 아직 Kafka로 “적용(commit)”하지 않습니다.
 
@@ -375,6 +488,51 @@ snapshot 동안 buffer된 이벤트가 많으면
 snapshot 완료 직전까지 DML이 지속적으로 발생하면,
 snapshot의 특정 row보다 더 “오래된” 변경 이벤트가 나중에 들어올 수 있음.
 → Downstream에서 merge logic이 필요할 수도 있음.
+
+### 마이그레이션 끝난 테이블은 계속 이벤트 쌓지않고, 큐에서 소진되게 할 수 있을까 ?? (kafka 리소스 계속 잡아먹게되니까)
+> PDI에서 마이그레이션 끝나기까지 이벤트가 계속 쌓이는것 보다는, 완료된 테이블은 먼저 CDC 이벤트 반영해도 될 것 같은데, pause, resume을 토픽별로 다르게 할 수도 있나 ?
+
+- Debezium의 기본 동작은 다음과 같습니다:
+
+| 테이블     | Kafka Topic              |
+| ------- | ------------------------ |
+| user    | `dbserver1.mydb.user`    |
+| order   | `dbserver1.mydb.order`   |
+| product | `dbserver1.mydb.product` |
+
+- 즉, 테이블 단위로 Topic이 분리되어 있기 때문에
+  - 토픽 단위로 consumer를 분리하거나,
+  - 동일 컨슈머 그룹에서 특정 토픽만 pause 할 수 있습니다.
+
+```java
+@Autowired
+private KafkaListenerEndpointRegistry registry;
+
+public void pauseTopic(String listenerId, String topicName) {
+    var container = registry.getListenerContainer(listenerId);
+    container.getAssignedPartitions().stream()
+        .filter(tp -> tp.topic().equals(topicName))
+        .forEach(tp -> container.pause(Collections.singleton(tp)));
+}
+
+public void resumeTopic(String listenerId, String topicName) {
+    var container = registry.getListenerContainer(listenerId);
+    container.getAssignedPartitions().stream()
+        .filter(tp -> tp.topic().equals(topicName))
+        .forEach(tp -> container.resume(Collections.singleton(tp)));
+}
+```
+
+- 또는 토픽별로 리스너 분리도 가능
+
+```java
+@KafkaListener(id = "user-sink", topics = "dbserver1.mydb.user")
+public void consumeUser(...) { ... }
+
+@KafkaListener(id = "order-sink", topics = "dbserver1.mydb.order")
+public void consumeOrder(...) { ... }
+```
+
 
 ## 공부
 ---
