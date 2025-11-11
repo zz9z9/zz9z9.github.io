@@ -1,4 +1,83 @@
 
+## 우선순위
+---
+
+### 내부 협의
+- 기술 스택 선정 & 프로젝트 모듈 & github repository 구성
+- 패키지 구조 정의
+- 도메인 / 테이블 설계
+- 역할 분담
+- 1차 스펙 개발 범위 확정 및 일정 픽스
+
+### 개인 공부
+- JPA
+- DDD
+- AWS 관련
+  - ECR, VPC, Zone, Consul, Route53, ALB, ELK, MKS, Waf, Secret Manager
+- Github actions 파이프라인
+- GitSubmodule
+- Docker
+- 스프링 배치 운영 (with 젠킨스 ? 딴것도 괜찮은거 있나?)
+- 실습
+  - 멀티모듈 프로젝트 세팅
+  - 도커, AWS 배포
+  - AWS 상품들
+
+### 플젝 구성 ?
+```
+[console-repository]
+
+nb-settlement-master-console
+├── nbass-settlement-master-console-api
+└── nbass-settlement-master-console-front
+
+nb-settlement-partner-console
+├── nbass-settlement-partner-console-api
+└── nbass-settlement-partner-console-front
+```
+
+```
+[data-loader-repository]
+nb-payment-data-loader
+```
+
+```
+[batch-repository]
+nb-settlement-batch
+```
+
+```
+nb-settlement
+├── web-console
+│   ├── admin-console
+│   │    ├── admin-console-front
+│   │    └── admin-console-api
+│   └── client-console
+│        ├── client-console-front
+│        └── client-console-api
+├── domain ??
+├── batch
+├── data-loader (더 적절한 이름 없을까?)
+└── external (외부 연동 ?)
+```
+
+### 패키지 구성
+
+========
+
+- jpa
+=> 느낌, 실무할때 신경써야할 것 같은 부분, 고민해야하는 부분, 연관관계 / 내부구현 => 형님이 적어놨던거 참고 (연관관계 다 맺었을때 ,,)
+=> mybatis 실무에서 쓸때 하는 방식 jpa에서는 어떻게 ??
+  - 어떤 컬럼이 어떤 쿼리에서 변경되는지
+  - 특정 테이블에 insert 하는 로직이 어떤건지 (insert into table 찾고 해당 dao 호출하는거 `ctrl+h`로 찾아보는거)
+
+- 테이블 설계
+
+- 모듈, 프로젝트 시작하는 법 / 실행하는 법 / 생산성 도구 (devtools 등)
+- git
+- 코드 컨벤션, 배포, 태깅 등
+- jdk 버전 / 밴더사 비교
+
 
 ## 결제 데이터를 어떻게 가져올까
 ---
@@ -152,4 +231,10 @@ dataflow:> stream create cdc-pipeline \
 인증/인가는 ??
 
 기술 선택 (어떤걸 고려해서 선택해야할까) 및 PoC 해봐야할부분
+
+## 모니터링
+---
+
+- CPU, 메모리, 디스크
+- 슬로우 쿼리 ??
 
