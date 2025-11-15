@@ -93,13 +93,7 @@ Gradle 기반 스프링 부트 프로젝트를 세팅해보자.
 | 빌드/실행 방법                             | 컴파일 수행 주체<br>(누가 `javac`을 실행시키는가?) | 사용되는 `javac`의 JDK 버전                            |
 | ------------------------------------ |----------------------------------| --------------------------------------------- |
 | IntelliJ Build                  | IntelliJ IDE                     | **Project SDK**의 javac                        |
-| Gradle Build (`./gradlew` build or Run) | Gradle(JavaCompile task)         | **Gradle JVM**의 javac 또는 **Gradle toolchain** |
-
-- Spring Boot + Gradle 프로젝트에서는 Gradle이 모든 빌드/실행을 담당하게 설정하는게 안정적이라고 한다.
-- IntelliJ Build시, 다음과 같은 문제가 생길 수도 있음:
-  - IntelliJ에서는 빌드 성공 → Gradle 빌드는 실패
-  - 테스트는 IntelliJ에서 되는데 Gradle에서는 안 됨
-  - Java 21 기능을 썼는데 실제 빌드 산출물은 Java 17 바이트코드로 나오는 문제
+| Gradle Build (`./gradlew build` or Run) | Gradle(JavaCompile task)         | **Gradle JVM**의 javac 또는 **Gradle toolchain** |
 
 ## Gradle
 ---
@@ -145,17 +139,29 @@ java {
   - Jenkins: Java 11로 빌드 → 실패
 - “로컬은 되는데 서버에서는 안된다” 문제 발생
 
+## 애플리케이션 실행
+---
+
+| 실행 방식                                                            | 실행 주체    | 실행 JDK                  | 특징             |
+|------------------------------------------------------------------| -------- |-------------------------|----------------|
+| **Build and Run using IntelliJ**                                 | IntelliJ | Project SDK             | 개발 편의성 좋음      |
+| **Build and Run using Gradle**<br> (./gradlew bootRun 실행한 것과 동일) | Gradle   | Gradle JVM or Toolchain | IDE/Gradle 일관성 |
+| **./gradlew bootRun**                                            | Gradle   | JAVA_HOME or Toolchain   | 터미널/CI 친화적     |
+| **./gradlew bootJar** --> **java -jar**                          | OS JVM   | 서버 JDK                   | 운영 배포 방식       |
+| **Docker 실행**                                                    | Docker   | Docker JDK               | 환경 완전 격리       |
+
+
 ## 정리
 ---
 
 | 설정                               | 설정                       |
-| ----------------------------------- | ------------------------ |
+| ----------------------------------- |--------------------------|
 | **Project SDK**                     | Temurin 21               |
 | **Project Language Level**          | SDK Default              |
 | **Module Language Level**           | Project Default          |
 | **Compiler – bytecode version**     | 21                       |
 | **Gradle JVM**                      | Project SDK (Temurin 21) |
-| **Gradle Toolchain (build.gradle)** | 없음 또는 same(21)           |
+| **Gradle Toolchain (build.gradle)** | 없음 또는 같음(21)             |
 
 - IntelliJ 빌드, Gradle 빌드, 런타임 모두 JDK 21로 통일되므로 예상치 못한 빌드 오류, bytecode mismatch, IDE/Gradle 충돌 문제 등을 방지 할 수 있음
 
