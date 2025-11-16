@@ -173,7 +173,7 @@ project(":common").projectDir = file("common")
 5. git push origin master
 ```
 
-![img_4.png](/assets/img/git-submodule-img5.png)
+![img.png](/assets/img/git-submodule-img5.png)
 
 - 지금 오류 상황은 submodule을 detached HEAD 상태에서 작업했기 때문에 발생
   - HEAD : 현재 체크아웃된 브랜치 또는 커밋을 가리키는 포인터
@@ -183,16 +183,9 @@ project(":common").projectDir = file("common")
   - 하지만 특정 브랜치가 아니라, 특정 커밋(SHA)을 직접 checkout하면 이렇게 됨: `HEAD → (a1b2c3)`
     - master 같은 브랜치에 연결되지 않음 즉, HEAD가 "분리(detached)"된 상태.
 
-```
-1) detached HEAD(e3a7fb17) 상태에서 변경 → 커밋(foo5 반영: a33f7410)
-2) push 하려다 실패 (브랜치가 아님)
-3) git checkout master
-4) git pull 하면서 fast-forward로 common repo의 최신 변경을 가져옴
-```
-
 - foo5 반영 커밋(`a33f7410`)은 아직 사라지지 않았고, 브랜치에서 연결되지 않은 “떠 있는 커밋” 상태로 남아 있다.
-- Git에서는 이런 커밋을 **dangling commit**이라고 한다.
-- `git fsck --lost-found` : dangling commit 확인
+  - Git에서는 이런 커밋을 **dangling commit**이라고 한다.
+  - `git fsck --lost-found` : dangling commit 확인
 
 ![img](/assets/img/git-submodule-img6.png)
 
@@ -225,4 +218,4 @@ project(":common").projectDir = file("common")
 
 ![img.png](/assets/img/git-submodule-img8.png)
 
-![img_1.png](/assets/img/git-submodule-img9.png)
+![img.png](/assets/img/git-submodule-img9.png)
