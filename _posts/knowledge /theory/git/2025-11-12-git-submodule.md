@@ -128,3 +128,101 @@ dependencies {
 ```
 
 - core 코드는 같은 워크스페이스에 존재하므로, AWS 환경에서도 별도 Nexus 없이 빌드 가능해진다.
+
+
+- 이때 common은 별도의 Git 레포지토리이며, main-project 안에는 그 레포지토리의 특정 커밋을 submodule로 연결
+- 빌드 시 common의 소스 코드가 로컬에 그대로 존재하므로, AWS 환경에서도 네트워크를 통한 Nexus 접근 없이 바로 빌드 가능.
+- 즉, common 코드를 라이브러리처럼 직접 포함시키는 형태가 되는 것
+- `main-project/settings.gradle:`
+
+```
+include(":app", ":common")
+project(":common").projectDir = file("common")
+```
+
+## 실습
+---
+> submodule을 참조하는 repo : repo1 <br>
+> submodule repo : repo2
+
+### repo2에서 반영한 최신 내역 repo1에서 가져오기
+
+- repo1에서는 foo3 호출중
+![img](/assets/img/git-submodule-img1.png)
+
+- repo2에서는 foo4로 메서드명 변경해서 반영한 상태
+![img](/assets/img/git-submodule-img2.png)
+
+- repo1에서 repo2의 변경사항 반영하기
+```
+1. git submodule update --remote common
+2. push
+```
+
+![img](/assets/img/git-submodule-img3.png)
+
+![img](/assets/img/git-submodule-img4.png)
+
+### repo1에서 repo2 코드 변경하고 반영하기
+
+```
+1. 코드 수정
+2. cd common
+3. git add .
+4. git commit -m "foo5 반영"
+5. git push origin master
+```
+
+![img_4.png](/assets/img/git-submodule-img5.png)
+
+- 지금 오류 상황은 submodule을 detached HEAD 상태에서 작업했기 때문에 발생
+  - HEAD : 현재 체크아웃된 브랜치 또는 커밋을 가리키는 포인터
+  - detached HEAD : **브랜치가 아닌 특정 커밋 위에서** 작업하는 상태
+- Git은 항상 `HEAD → 브랜치 → 커밋` 순으로 연결되어 있어야 한다.
+  - ex : `HEAD → master → (a1b2c3)`
+  - 하지만 특정 브랜치가 아니라, 특정 커밋(SHA)을 직접 checkout하면 이렇게 됨: `HEAD → (a1b2c3)`
+    - master 같은 브랜치에 연결되지 않음 즉, HEAD가 "분리(detached)"된 상태.
+
+```
+1) detached HEAD(e3a7fb17) 상태에서 변경 → 커밋(foo5 반영: a33f7410)
+2) push 하려다 실패 (브랜치가 아님)
+3) git checkout master
+4) git pull 하면서 fast-forward로 common repo의 최신 변경을 가져옴
+```
+
+- foo5 반영 커밋(`a33f7410`)은 아직 사라지지 않았고, 브랜치에서 연결되지 않은 “떠 있는 커밋” 상태로 남아 있다.
+- Git에서는 이런 커밋을 **dangling commit**이라고 한다.
+- `git fsck --lost-found` : dangling commit 확인
+
+![img](/assets/img/git-submodule-img6.png)
+
+- 즉, `a33f7410` 커밋은 브랜치(master)가 아닌, detached HEAD에서 만든 커밋이었기 때문에 master 브랜치로 이동하면서 브랜치 히스토리에서 보이지 않게 된 것. (dangling commit)
+- dangling commit을 submodule master에 붙이고 싶으면
+  - `git checkout master`
+  - `git cherry-pick a33f7410`
+  - `git push origin master`
+
+![img](/assets/img/git-submodule-img7.png)
+
+**submodule이 detached HEAD 되는 이유**
+- 서브모듈은 항상 “커밋 SHA”를 기준으로 체크아웃됨.
+- 즉, 브랜치를 checkout 한 게 아니라 SHA를 checkout 함 → detached HEAD
+- 여기서 작업 후 커밋하면 “임시 커밋”이 됨
+- 다시 master checkout 하니까 foo5 커밋은 잃어버린 것처럼 보임
+- 그러니 push 시도해도 안 됐던 것
+
+**submodule 코드 수정할 때 올바른 절차**
+
+```
+1. git submodule update --remote
+2. cd common
+3. git switch master # 이제 HEAD가 정상 브랜치에 연결됨: HEAD → master
+4. 코드 수정
+5. git add .
+6. git commit -m "message"
+7. git push
+```
+
+![img.png](/assets/img/git-submodule-img8.png)
+
+![img_1.png](/assets/img/git-submodule-img9.png)
