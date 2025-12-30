@@ -1,0 +1,113 @@
+
+## ALB (Application Load Balancer)
+
+- 외부
+
+Internet
+  ↓
+Route53 (jenkins.example.com)
+  ↓
+ALB (HTTPS 443, ACM)
+  ↓
+ECS Service (Fargate)
+  ↓
+Jenkins Container
+      ↳ /var/jenkins_home → EFS Access Point
+
+
+
+- 내부
+
+사내 네트워크 / VPN / VPC Peering
+        ↓
+Route53 Private Hosted Zone
+        ↓
+Internal ALB (HTTPS 443)
+        ↓
+ECS Service (Fargate)
+        ↓
+Jenkins
+   └─ /var/jenkins_home → EFS Access Point
+
+
+### 타겟 그룹
+> 로드밸런서가 실제로 트래픽을 전달할 대상들의 묶음
+
+- ALB는 직접 서버(ECS/Fargate)에 요청을 보내지 않는다.
+
+Client
+  ↓
+ALB Listener (443)
+  ↓
+Target Group
+  ↓
+ECS Task (Jenkins)
+
+- 즉, **어디로 트래픽을 보낼지, 살아있는지(헬스체크)**를 타겟 그룹이 담당
+
+**주요 설정**
+
+| 항목                    | 의미                     |
+| --------------------- | ---------------------- |
+| Target type           | ip (Fargate는 무조건 IP) |
+| Protocol              | HTTP (또는 HTTPS)        |
+| Port                  | 8080 (Jenkins)         |
+| Health check path     | /login               |
+| Health check interval | 30s                    |
+
+**Jenkins + Fargate 예시**
+
+Target Group
+  ├─ Type: ip
+  ├─ Port: 8080
+  ├─ Health Check: /login
+  └─ Targets:
+       - 10.0.2.15:8080 (Jenkins Task #1)
+       - 10.0.3.21:8080 (Jenkins Task #2)
+
+- Jenkins 태스크가 재기동되면:
+  - IP 바뀜
+  - ECS가 자동으로 타겟 그룹에 새 IP 등록
+
+### 보안 그룹
+> 누가, 어디서, 어떤 포트로 접근할 수 있는지 정하는 방화벽
+
+[Security Group A] → ALB
+[Security Group B] → ECS Task (Jenkins)
+
+**보안 그룹의 기본 동작 원칙**
+- Inbound: 허용 규칙만 통과
+- Outbound: 기본적으로 전부 허용
+
+**예시 : Jenkins + Internal ALB 기준 보안 그룹 구조**
+> [사내망] ──(SG#1)──> [ALB] ──(SG#2)──> [Jenkins]
+
+- ALB 보안 그룹 (SG#1)
+> 내부망에서만 접근 가능
+
+ALB-SG
+Inbound:
+  - HTTPS 443 ← 사내 CIDR / VPN / Peering
+Outbound:
+  - ALL → Jenkins-SG
+
+- Jenkins(ECS Task) 보안 그룹 (SG#2)
+> Jenkins는 ALB에서 오는 요청만 받음
+> IP 기반이 아니라 보안 그룹 참조 (best practice)
+
+Jenkins-SG
+Inbound:
+  - TCP 8080 ← ALB-SG
+Outbound:
+  - ALL
+
+## Jenkins
+
+[Route53]
+  jenkins.internal.company.com
+          ↓
+[ALB]
+          ↓
+[Jenkins]
+   ├─ SAML (사내 계정으로 로그인)
+   └─ Matrix Auth (팀별 권한 분리)
