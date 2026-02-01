@@ -1,7 +1,7 @@
 ---
 title: EntityManager와 영속성 컨텍스트
 date: 2026-01-25 23:00:00 +0900
-categories: [지식 더하기, 이론]
+categories: [지식 더하기, 이론, JPA]
 tags: [JPA, Hibernate]
 ---
 
@@ -263,6 +263,7 @@ spring:
 - 엔티티 클래스는 @Entity 어노테이션이 붙은 클래스들을 자동 스캔하여 등록합니다.
 
 - @Transactional로 선언적 관리
+
 ```Java
 @Service
 @RequiredArgsConstructor
