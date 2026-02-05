@@ -1,7 +1,7 @@
 ---
 title: EntityManager와 영속성 컨텍스트
 date: 2026-01-25 23:00:00 +0900
-categories: [지식 더하기, 이론, JPA]
+categories: [JPA]
 tags: [JPA, Hibernate]
 ---
 

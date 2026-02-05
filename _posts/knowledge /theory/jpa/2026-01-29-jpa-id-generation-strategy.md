@@ -1,7 +1,7 @@
 ---
 title: JPA/Hibernate ID 생성 전략
 date: 2026-01-29 23:00:00 +0900
-categories: [지식 더하기, 이론, JPA]
+categories: [JPA]
 tags: [JPA, Hibernate]
 ---
 
