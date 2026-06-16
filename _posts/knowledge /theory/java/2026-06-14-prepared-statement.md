@@ -6,6 +6,8 @@ tags: [Java]
 ---
 
 ## java.sql.Statement (Interface)
+---
+
 > [공식문서](https://docs.oracle.com/javase/8/docs/api/java/sql/Statement.html) : "The object used for executing a static SQL statement and returning the results it produces."
 
 **users 테이블**
@@ -68,6 +70,8 @@ StatementImpl.executeQuery(sql)
 
 
 ## PreparedStatement(Interface)
+---
+
 > [공식문서](https://docs.oracle.com/javase/8/docs/api/java/sql/PreparedStatement.html) : "An object that represents a precompiled SQL statement. A SQL statement is precompiled and stored in a PreparedStatement object. This object can then be used to efficiently execute this statement multiple times."
 
 ```java
@@ -105,7 +109,6 @@ prepareStatement(sql)
 ```
 
 - useServerPrepStmts && canServerPrepare 가 둘 다 참일 때만 `ServerPreparedStatement` 그 외엔 `ClientPreparedStatement`
-
 
 ### 왜 SQL Injection이 불가능할까 ? (ClientPreparedStatement)
 > 앞서 살펴본 Statement와 흐름은 동일하지만, **작은따옴표를 escape 처리**함
@@ -281,8 +284,57 @@ ps.close()
 
 > 한 줄 정리: 여기서 "캐시"는 `ConnectionImpl.serverSideStatementCache` — 커넥션마다 가진 `(db, sql) → ServerPreparedStatement(statementId)` LRU 캐시다. `close()` 때 `statementId`를 이 캐시에 반납하고, 같은 SQL 재요청 시 꺼내 재사용해 PREPARE를 생략한다.
 
+## ClientPreparedStatement vs ServerPreparedStatement
+---
+
+> useServerPrepStmts의 기본값이 false(= ClientPreparedStatement)인 이유는, 대부분의 쿼리에서 server prepare가 오히려 손해
+
+**1. 왕복 횟수**
+
+```
+ClientPreparedStatement:  COM_QUERY                           → 왕복 1회
+ServerPreparedStatement:  COM_STMT_PREPARE + COM_STMT_EXECUTE  → 왕복 2회
+```
+
+- 쿼리를 한 번만 실행하면 server prepare는 PREPARE 왕복이 통째로 추가 비용이다. 네트워크 RTT가 1ms라면 그 한 번 더가 그대로 지연으로 잡힌다.
+- 그런데 실제 애플리케이션 쿼리의 상당수는 "한 번 만들어 한 번 실행하고 버리는" 패턴이라 → 이 경우 client 쪽이 빠르다.
+
+**2. server prepare의 이점은 "조건부"**
+
+> server prepare가 이기려면 두 조건이 동시에 충족돼야 한다.
+
+1. 같은 SQL을 여러 번 실행하고 (그래야 PREPARE 1회를 N번에 분산)
+2. 커넥션이 재사용돼서 `statementId` 캐시가 살아있어야 함 (앞서 본 `serverSideStatementCache`)
+
+- 매번 새 커넥션을 열거나 SQL이 매번 다르면 → PREPARE를 매번 다시 하니 왕복만 2배다. 기본값을 server로 두면 이런 케이스에서 전부 손해를 본다. 그래서 "공통 케이스에 안전한 쪽"인 client를 기본으로 둔 것이다.
+
+**3. 서버 자원 소모**
+- server prepare는 `statementId`마다 서버 메모리를 잡고, `max_prepared_stmt_count`(기본 16382) 한도가 있다.
+- 캐시/정리가 어긋나면 누수·초과 장애로 이어질 수 있다.
+- client emulation은 서버에 아무 상태도 남기지 않는다.
+
+**4. 그러면서도 핵심 이점은 그대로**
+
+- 기본값이 client여도 사람들이 PreparedStatement에 기대하는 것 — 파라미터 바인딩 + 인젝션 방어(`StringUtils.escapeString`) + 통일된 API — 은 추가 왕복 없이 다 제공된다.
+- 즉 "안전은 챙기되 비용은 안 무는" 절충이 client emulation이다.
+
+| | client (기본) | server |
+| --- | --- | --- |
+| 왕복 | 1회 | 2회 |
+| 1회성 쿼리 | 유리 | 불리 |
+| 반복 + 커넥션 재사용 | 불리 | 유리 (파싱 1회 재사용) |
+| 서버 자원 | 안 씀 | `statementId` 점유 |
+| 인젝션 방어 |  (escape) |  (구조적) |
+
+> 한 줄: 기본값 client는 "대다수인 1회성/다양한 쿼리에서 추가 왕복 없이 안전을 보장"하는 무난한 선택. server prepare의 진가(파싱 재사용)는 반복 실행 + 커넥션 재사용이라는 특정 조건에서만 나오므로, 필요한 사람이 `useServerPrepStmts=true`로 명시적으로 켜도록 설계한 것이다.
+
+> 참고: 과거엔 "server prepared statement는 MySQL query cache를 못 탄다"는 이유도 컸는데, query cache 자체가 MySQL 8.0에서 제거돼 지금은 의미 없는 historical 이유다.
+
+실무 팁으로, 반복 실행이 많은 서비스(배치, 핫패스 쿼리)는 `useServerPrepStmts=true&cachePrepStmts=true`를 켜는 게 정석이다.
+
 
 ## 정리
+---
 
 | | Statement | ClientPreparedStatement | ServerPreparedStatement |
 | --- | --- | --- | --- |
