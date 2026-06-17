@@ -68,6 +68,70 @@ StatementImpl.executeQuery(sql)
 - 즉, 악의적인 입력이 의도한대로 `SELECT id FROM users WHERE id = 'alice' AND pw = '' OR '1' = '1'` 쿼리가 날아가게됨
 - SQL 파서는 작은따옴표로 감싸진 문자열 리터럴을 컬럼명/키워드 등이 아닌 **값으로 인식**
 
+### SQL 파서 동작 방식
+
+**기본 원칙**
+
+- 파서는 SQL을 왼쪽→오른쪽으로 한 번 훑으면서(single pass) 토큰으로 쪼갠다.
+- 따옴표를 만나면 그 자리에서 즉시 "여는 거냐 / 닫는 거냐"를 판정한다. 앞으로 멀리 스캔하지 않는다.
+
+**규칙 1 — 리터럴 밖에서 `'`를 만나면**
+
+문자열 리터럴 시작. 이 따옴표 자체는 값이 아니라 구조(경계)다.
+
+**규칙 2 — 리터럴 안에서 `'`를 만나면 (바로 다음 글자를 peek)**
+
+| 다음 글자 | 판정 | 동작 |
+| --- | --- | --- |
+| 또 `'` | escape 쌍 (`''`) | 값에 `'` 한 개 넣고 계속 진행 (두 따옴표 소비) |
+| `'` 아님 | 짝 없는 따옴표 | 리터럴 종료 (닫는 따옴표) |
+
+> 즉 "짝 없는 따옴표 하나 = 무조건 끝". 따옴표를 값으로 넣으려면 반드시 `''`로 짝을 지어야 한다(escape).
+
+**규칙 3 — 닫힌 뒤의 글자들**
+
+리터럴이 닫히면 그 뒤는 다시 SQL 문법 영역이다.
+
+- `OR`, `AND`, `=`, `--` 등이 키워드/연산자로 해석된다.
+- 인젝션이 성립하는 지점이 바로 여기다 (값이 일찍 닫혀서 공격 문자열이 문법으로 새어든다).
+
+**토큰 종류 (리터럴 vs 식별자 vs 키워드)**
+
+| 종류 | 감싸는 문자 | 예 | 의미 |
+| --- | --- | --- | --- |
+| 문자열 리터럴 | `'...'` | `'alice'` | 데이터 값 |
+| 식별자(컬럼/테이블) | 백틱 `` `...` `` (MySQL) | `` `users` `` | 이름 |
+| 키워드/연산자 | 없음 (맨몸) | `SELECT` `OR` `=` | 문법 |
+| 숫자 리터럴 | 없음 | `42` | 데이터 값 |
+
+**Statement (취약) — `pw = '' OR '1'='1'`**
+
+```
+pw =  '   '   OR   '   1   '   =   '   1   '
+      Q1  Q2        Q3      Q4      Q5      Q6
+```
+
+| 위치 | 적용 규칙 | 판정 |
+| --- | --- | --- |
+| Q1 `'` | 규칙1 (밖) | 리터럴 시작 |
+| Q2 `'` | 규칙2 (안) — 다음=공백 | 짝 없음 → 종료. 값 = `""` (빈 문자열) |
+| `OR` | 규칙3 (밖) | SQL 연산자 OR |
+| Q3 `'` | 규칙1 (밖) | 리터럴 시작 |
+| `1` | (안) | 값에 누적 |
+| Q4 `'` | 규칙2 — 다음=`=` | 짝 없음 → 종료. 값 = `"1"` |
+| `=` | 규칙3 (밖) | 비교 연산자 = |
+| Q5 `'` | 규칙1 (밖) | 리터럴 시작 |
+| `1` | (안) | 값에 누적 |
+| Q6 `'` | 규칙2 — 다음=끝 | 짝 없음 → 종료. 값 = `"1"` |
+
+```
+파싱 결과:
+pw = ''  OR  '1' = '1'
+     빈값  연산자 ─참(1=1)─
+→ pw = '' OR true → 항상 참 → 전체 row
+```
+
+규칙3이 `OR`, `=`를 문법으로 살려준 것이 뚫린 원인이다.
 
 ## PreparedStatement(Interface)
 ---
@@ -155,6 +219,35 @@ buf.append('\'');                 // 값 뒤에 닫는 따옴표
 **NativeProtocol.sendQueryPacket의 queryPacket**
 
 ![NativeProtocol.sendQueryPacket의 queryPacket (ClientPreparedStatement)](/assets/img/prepared-statement-img2.png)
+
+escape를 거치면 위 입력은 다음 쿼리로 나간다.
+
+`SELECT id FROM users WHERE id = 'alice' AND pw = ''' OR ''1'' = ''1'`
+
+```
+pw =  '  '  '   OR   '  '  1  '  '  =  '  '  1  '
+      Q1 Q2 Q3       Q4 Q5    Q6 Q7    Q8 Q9    Q10
+```
+
+| 위치 | 적용 규칙 | 판정 | 값 누적 |
+| --- | --- | --- | --- |
+| Q1 `'` | 규칙1 (밖) | 리터럴 시작 | (빈) |
+| Q2 `'` | 규칙2 — 다음=Q3 `'` | escape 쌍 → 계속 | `'` |
+| `OR` | (안) | 값에 누적 | `' OR` |
+| Q4 `'` | 규칙2 — 다음=Q5 `'` | escape 쌍 → 계속 | `' OR '` |
+| `1` | (안) | 누적 | `' OR '1` |
+| Q6 `'` | 규칙2 — 다음=Q7 `'` | escape 쌍 → 계속 | `' OR '1'` |
+| `=` | (안) | 누적 | `' OR '1'=` |
+| Q8 `'` | 규칙2 — 다음=Q9 `'` | escape 쌍 → 계속 | `' OR '1'='` |
+| `1` | (안) | 누적 | `' OR '1'='1` |
+| Q10 `'` | 규칙2 — 다음=끝 | 짝 없음 → 종료 | `' OR '1'='1` |
+
+```
+파싱 결과:
+pw = [ 문자열 1개, 값 = ' OR '1'='1 ]
+                    ↑ 원래 입력 그대로 (전부 데이터)
+→ 규칙3(문법 영역)이 한 번도 안 열림 → OR/= 가 문법이 못 됨 → 0건
+```
 
 ### 왜 SQL Injection이 불가능할까 ? (ServerPreparedStatement)
 
@@ -285,9 +378,7 @@ ps.close()
 > 한 줄 정리: 여기서 "캐시"는 `ConnectionImpl.serverSideStatementCache` — 커넥션마다 가진 `(db, sql) → ServerPreparedStatement(statementId)` LRU 캐시다. `close()` 때 `statementId`를 이 캐시에 반납하고, 같은 SQL 재요청 시 꺼내 재사용해 PREPARE를 생략한다.
 
 ## ClientPreparedStatement vs ServerPreparedStatement
----
-
-> useServerPrepStmts의 기본값이 false(= ClientPreparedStatement)인 이유는, 대부분의 쿼리에서 server prepare가 오히려 손해
+> useServerPrepStmts의 기본값이 false(= ClientPreparedStatement)인 이유는, 대부분의 쿼리에서 server prepare가 오히려 손해이기 때문이다
 
 **1. 왕복 횟수**
 
@@ -324,7 +415,7 @@ ServerPreparedStatement:  COM_STMT_PREPARE + COM_STMT_EXECUTE  → 왕복 2회
 | 1회성 쿼리 | 유리 | 불리 |
 | 반복 + 커넥션 재사용 | 불리 | 유리 (파싱 1회 재사용) |
 | 서버 자원 | 안 씀 | `statementId` 점유 |
-| 인젝션 방어 |  (escape) |  (구조적) |
+| 인젝션 방어 | ✅ (escape) | ✅ (구조적) |
 
 > 한 줄: 기본값 client는 "대다수인 1회성/다양한 쿼리에서 추가 왕복 없이 안전을 보장"하는 무난한 선택. server prepare의 진가(파싱 재사용)는 반복 실행 + 커넥션 재사용이라는 특정 조건에서만 나오므로, 필요한 사람이 `useServerPrepStmts=true`로 명시적으로 켜도록 설계한 것이다.
 
@@ -342,7 +433,7 @@ ServerPreparedStatement:  COM_STMT_PREPARE + COM_STMT_EXECUTE  → 왕복 2회
 | 왕복 횟수 | 1회 | 1회 | 2회 (prepare 1 + execute N) |
 | 값 전송 형태 | SQL 텍스트에 직접 합침 | SQL 텍스트에 escape해서 합침 | 바이너리, 별도 필드 |
 | SQL 파싱 시점 | 매 실행마다 | 매 실행마다 | prepare 때 1회 (재실행 시 플랜 재사용) |
-| 인젝션 방어 | 없음  | escape 로직에 의존  | 구조적으로 불가 |
+| 인젝션 방어 | 없음 ❌ | escape 로직에 의존 ✅ | 구조적으로 불가 ✅✅ |
 | escape 필요? | (안 함) | 필요 (`StringUtils.escapeString`) | 불필요 |
 
 ## 부록 — 패킷
