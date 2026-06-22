@@ -541,16 +541,104 @@ Executor (JDK)                                ← 스프링은 여기서 출발(
 
 ### 무엇이 자동으로 만들어지나
 
-- **빈 이름**: `applicationTaskExecutor` (`taskExecutor`라는 이름도 함께 붙는다)
+- **빈 이름**: `applicationTaskExecutor` (이 이름 하나뿐 — `taskExecutor` 같은 별칭은 없다)
 - **타입**: 기본은 `ThreadPoolTaskExecutor`. 단, 가상 스레드를 켜면(`spring.threads.virtual.enabled=true`, Java 21+) `SimpleAsyncTaskExecutor`(가상 스레드, 풀 아님)로 바뀐다.
 
-> 빈에 `taskExecutor`라는 이름이 같이 붙는 게 핵심이다. 앞서 본 `@EnableAsync`의 executor 탐색 규칙(② 이름이 `"taskExecutor"`인 `Executor` 빈)에 그대로 걸려서, `@Async`가 자동 설정된 이 풀을 별도 설정 없이 찾아 쓴다.
+> 이 풀이 컨텍스트의 유일한 `TaskExecutor` 빈이 되므로, `@Async`는 앞서 본 탐색 규칙①(유일한 `TaskExecutor` 빈)에 따라 별도 설정 없이 이걸 찾아 쓴다.
 
 문서가 정리한, 이 빈을 쓰는 곳:
 
 - `@EnableAsync`로 띄우는 `@Async` 비동기 작업 (단, `AsyncConfigurer`를 직접 정의하면 그쪽이 우선)
 - 스프링 MVC 비동기 요청 처리(`Callable` 반환 등), WebFlux의 블로킹 실행 지원, WebSocket 메시지 채널
 - JPA 부트스트랩, 빈 백그라운드 초기화의 부트스트랩 실행기
+
+### 생성 조건 — `@EnableAsync`가 아니라 "Executor 빈이 없을 때"
+
+> 기본 풀은 `@EnableAsync`와 무관하게 만들어진다. `@EnableAsync`는 `@Async` 프록시를 켜는 스위치일 뿐 풀 생성과는 별개다. 풀을 만드는 건 오토컨피그의 조건이다.
+
+`applicationTaskExecutor`를 만드는 설정에는 `@Conditional(OnExecutorCondition.class)`이 걸려 있고, `OnExecutorCondition`은 둘 중 하나만 맞으면 통과하는 `AnyNestedCondition`이다. (Spring Boot 3.5.x 소스)
+
+```java
+// TaskExecutorConfigurations.OnExecutorCondition
+static class OnExecutorCondition extends AnyNestedCondition {
+
+    OnExecutorCondition() {
+        super(ConfigurationPhase.REGISTER_BEAN);
+    }
+
+    @ConditionalOnMissingBean(Executor.class)   // ① 컨텍스트에 Executor 빈이 없거나
+    private static final class ExecutorBeanCondition { }
+
+    @ConditionalOnProperty(value = "spring.task.execution.mode", havingValue = "force")  // ② mode=force 면
+    private static final class ModelCondition { }
+}
+```
+
+```java
+// TaskExecutorConfigurations.TaskExecutorConfiguration
+// → 빈 메서드 어디에도 @EnableAsync/@Async 관련 조건이 없다
+@Bean(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
+@Lazy
+@ConditionalOnThreading(Threading.PLATFORM)
+ThreadPoolTaskExecutor applicationTaskExecutor(ThreadPoolTaskExecutorBuilder builder) {
+    return builder.build();
+}
+```
+
+정리하면:
+
+- **Executor 빈이 하나도 없으면** → 기본 풀(`applicationTaskExecutor`)을 만든다 (`@EnableAsync` 유무와 무관).
+- **직접 만든 `Executor` 빈이 있으면** → 자동 설정이 물러나고(back off), 그 커스텀 `Executor`가 (`@EnableAsync`를 통한) 일반 작업 실행에 쓰인다.
+- 단, `spring.task.execution.mode=force`면 커스텀 `Executor`(`@Primary` 포함)가 있어도 자동 설정 풀을 강제로 쓴다.
+- 스프링 MVC·WebFlux·GraphQL은 어느 경우든 `applicationTaskExecutor` 이름의 `AsyncTaskExecutor` 빈을 요구한다.
+
+**직접 확인** — `@EnableAsync`도 커스텀 `Executor`도 없는 앱을 띄워 빈을 조회해 봤다.
+
+<details>
+<summary>검증 코드 + 실행 결과</summary>
+
+```java
+// @EnableAsync 없음. inaction.bootpool 패키지만 스캔 → 커스텀 Executor(mailExecutor) 미등록
+@SpringBootApplication
+public class BootDefaultPoolApplication {
+    public static void main(String[] args) {
+        SpringApplication app = new SpringApplication(BootDefaultPoolApplication.class);
+        app.setWebApplicationType(WebApplicationType.NONE); // 검증만 하고 종료
+        app.run(args);
+    }
+}
+
+@Component
+class PoolInspector implements CommandLineRunner {
+    private final ApplicationContext ctx;
+    PoolInspector(ApplicationContext ctx) { this.ctx = ctx; }
+
+    @Override public void run(String... args) {
+        System.out.println("applicationTaskExecutor 존재? = " + ctx.containsBean("applicationTaskExecutor"));
+        System.out.println("Executor 빈     = " + String.join(", ", ctx.getBeanNamesForType(Executor.class)));
+        System.out.println("TaskExecutor 빈 = " + String.join(", ", ctx.getBeanNamesForType(TaskExecutor.class)));
+        var tpte = (ThreadPoolTaskExecutor) ctx.getBean("applicationTaskExecutor");
+        System.out.println("타입 = " + tpte.getClass().getName());
+        System.out.println("core=" + tpte.getCorePoolSize() + ", max=" + tpte.getMaxPoolSize()
+                + ", keepAlive=" + tpte.getKeepAliveSeconds() + ", prefix=" + tpte.getThreadNamePrefix()
+                + ", queue잔여=" + tpte.getThreadPoolExecutor().getQueue().remainingCapacity());
+    }
+}
+```
+
+실행 결과:
+
+```text
+applicationTaskExecutor 존재? = true
+Executor 빈     = applicationTaskExecutor
+TaskExecutor 빈 = applicationTaskExecutor
+타입 = org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+core=8, max=2147483647, keepAlive=60, prefix=task-, queue잔여=2147483647
+```
+
+</details>
+
+> 결과로 두 가지가 확인된다. (1) `@EnableAsync`가 없어도 `applicationTaskExecutor`가 생성된다. (2) 등록된 `Executor`/`TaskExecutor` 빈이 이 하나뿐이라 `@Async`는 이걸 "유일한 `TaskExecutor` 빈"(탐색 규칙①)으로 찾는다 — `taskExecutor`라는 별칭 이름은 없다.
 
 ### 기본 설정값
 
@@ -576,13 +664,6 @@ spring.task.execution.pool.keep-alive=10s
 ```
 
 문서 설명대로, 이렇게 두면 큐가 꽉 찰 때(100개) 풀이 최대 16개까지 늘어나고, 스레드가 10초만 놀아도 회수돼(기본 60초보다 공격적으로) 풀이 줄어든다.
-
-### 커스텀 Executor를 두면 — 자동 설정이 물러난다(back off)
-
-> 컨텍스트에 직접 만든 `Executor` 빈이 있으면 자동 설정은 물러나고, 그 커스텀 `Executor`가 (`@EnableAsync`를 통한) 일반 작업 실행에 쓰인다.
-
-- 단, 스프링 MVC·WebFlux·GraphQL은 여전히 `applicationTaskExecutor`라는 이름의 `AsyncTaskExecutor` 빈을 요구한다.
-- `spring.task.execution.mode=force`로 두면, `@Primary`로 등록한 커스텀 `Executor`가 있더라도 자동 설정된 `AsyncTaskExecutor`를 모든 통합 지점에서 강제로 쓴다.
 
 ### 스케줄링은 별도 — TaskSchedulingAutoConfiguration
 
