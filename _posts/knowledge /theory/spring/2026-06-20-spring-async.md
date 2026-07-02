@@ -594,7 +594,7 @@ ThreadPoolTaskExecutor applicationTaskExecutor(ThreadPoolTaskExecutorBuilder bui
 
 **직접 확인** — `@EnableAsync`도 커스텀 `Executor`도 없는 앱을 띄워 빈을 조회해 봤다.
 
-<details>
+<details markdown="1">
 <summary>검증 코드 + 실행 결과</summary>
 
 ```java
@@ -775,7 +775,7 @@ public class AppConfig implements AsyncConfigurer {
 
 ### 실습
 
-<details>
+<details markdown="1">
 <summary>실습 코드 전체 보기</summary>
 
 ```java
