@@ -68,6 +68,35 @@ tags: [MySQL]
 
 > 즉, "이 쿼리가 무슨 락을 거는가"는 SQL 구문만 봐서는 알 수 없고, **옵티마이저가 어떤 인덱스를 어떻게 타는지**까지 봐야 한다. `EXPLAIN`으로 실행 계획을, `performance_schema.data_locks`로 실제 잡힌 락을 확인하는 습관이 필요하다.
 
+**※ 스캔 도중 락을 못 잡으면?**
+
+> 이미 다른 트랜잭션이 충돌하는 락을 쥐고 있으면, 스캔은 그 레코드에서 **멈춰서 기다린다.** 실패로 즉시 끝나는 게 아니라 블로킹된다.
+
+락을 바로 못 잡은 트랜잭션은 세 갈래로 갈린다.
+
+1. **대기 (blocking)** — 기본 동작. 앞 트랜잭션이 `COMMIT`/`ROLLBACK`으로 락을 풀면 그때 이어서 진행한다. 이 대기 관계는 `performance_schema.data_locks`(해당 락의 `LOCK_STATUS = WAITING`)와 `data_lock_waits`(누가 누구를 기다리는지)로 확인한다.
+
+2. **락 대기 타임아웃** — 대기가 `innodb_lock_wait_timeout`(기본 50초)을 넘기면 에러가 난다.
+
+```
+ERROR 1205 (HY000): Lock wait timeout exceeded; try restarting transaction
+```
+
+   - 기본값(`innodb_rollback_on_timeout = OFF`)에서는 **현재 문장만 롤백**되고 트랜잭션은 열린 채 남는다. 이미 잡아둔 락도 그대로다. 그래서 애플리케이션이 재시도하거나 직접 `ROLLBACK`으로 정리해야 한다.
+
+3. **데드락** — 서로가 서로의 락을 기다려 **순환**이 생기면, InnoDB의 데드락 감지(`innodb_deadlock_detect`, 기본 ON)가 타임아웃을 기다리지 않고 **즉시** 한쪽을 희생자로 골라 롤백시킨다.
+
+```
+ERROR 1213 (HY000): Deadlock found when trying to get lock; try restarting transaction
+```
+
+   - 희생자는 보통 **되돌릴 양이 가장 적은(수정한 행이 적은) 트랜잭션**이 선택되며, 이 경우엔 문장이 아니라 **트랜잭션 전체가 롤백**된다.
+
+대기 자체를 원치 않으면 잠금 읽기에 옵션을 붙일 수 있다 (MySQL 8.0+).
+
+- `SELECT ... FOR UPDATE NOWAIT` — 잠긴 행을 만나면 대기 없이 즉시 에러(3572)를 반환한다.
+- `SELECT ... FOR UPDATE SKIP LOCKED` — 잠긴 행은 건너뛰고 잠기지 않은 행만 반환한다. 여러 워커가 큐에서 서로 다른 행을 집어가게 할 때 쓰는 방식이다.
+
 **※ `LIMIT 1`이면 한 행만 잠길까?**
 
 > 아니다. `LIMIT`은 **결과로 돌려주는 행 수**를 제한할 뿐, 잠금은 **그 한 건을 찾기까지 스캔한 범위**에 걸린다.
