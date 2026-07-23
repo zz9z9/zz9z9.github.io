@@ -1,0 +1,879 @@
+<!DOCTYPE html><html lang="en-US" mode="light" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="generator" content="Jekyll v4.4.1" /><meta property="og:title" content="Spring - @Async 살펴보기 (JDK Executor를 곁들인..)" /><meta property="og:locale" content="en_US" /><meta name="description" content="JDK의 Executor / ExecutorService / ThreadPoolExecutor Spring의 TaskExecutor / AsyncTaskExecutor / ThreadPoolTaskExecutor 비슷한 이름의 클래스들 정리 및 @Async 동작까지 살펴보자." /><meta name="twitter:description" property="og:description" content="JDK의 Executor / ExecutorService / ThreadPoolExecutor Spring의 TaskExecutor / AsyncTaskExecutor / ThreadPoolTaskExecutor 비슷한 이름의 클래스들 정리 및 @Async 동작까지 살펴보자." /><link rel="canonical" href="https://zz9z9.github.io/posts/spring-async/" /><meta property="og:url" content="https://zz9z9.github.io/posts/spring-async/" /><meta property="og:site_name" content="zz9z9" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2026-06-20T15:25:00+09:00" /><meta property="article:modified_time" content="2026-07-02T23:08:07+09:00" /><meta name="twitter:card" content="summary" /><meta name="twitter:title" content="Spring - @Async 살펴보기 (JDK Executor를 곁들인..)" /><meta name="twitter:site" content="@twitter_username" /> <script type="application/ld+json"> {"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2026-07-02T23:08:07+09:00","datePublished":"2026-06-20T15:25:00+09:00","description":"JDK의 Executor / ExecutorService / ThreadPoolExecutor Spring의 TaskExecutor / AsyncTaskExecutor / ThreadPoolTaskExecutor 비슷한 이름의 클래스들 정리 및 @Async 동작까지 살펴보자.","headline":"Spring - @Async 살펴보기 (JDK Executor를 곁들인..)","mainEntityOfPage":{"@type":"WebPage","@id":"https://zz9z9.github.io/posts/spring-async/"},"url":"https://zz9z9.github.io/posts/spring-async/"}</script><title>Spring - @Async 살펴보기 (JDK Executor를 곁들인..) | zz9z9</title><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/site.webmanifest"><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico"><meta name="apple-mobile-web-app-title" content="zz9z9"><meta name="application-name" content="zz9z9"><meta name="msapplication-TileColor" content="#da532c"><meta name="msapplication-config" content="/assets/img/favicons/browserconfig.xml"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css"><link rel="stylesheet" href="/assets/css/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/magnific-popup@1.1.0/dist/magnific-popup.min.css"> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script src="https://cdn.jsdelivr.net/combine/npm/lozad/dist/lozad.min.js,npm/magnific-popup@1/dist/jquery.magnific-popup.min.js"></script> <script defer src="/assets/js/dist/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id=G-Q7PWLG5WYT"></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-Q7PWLG5WYT'); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Soccerball.svg/1000px-Soccerball.svg.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">zz9z9</a></div><div class="site-subtitle font-italic">거창한 계획보다는, 꾸준한 실행을</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/zz9z9" aria-label="github" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/twitter_username" aria-label="twitter" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['example','doamin.com'].join('@')" aria-label="email" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" > <i class="fas fa-rss"></i> </a></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Spring - @Async 살펴보기 (JDK Executor를 곁들인..)</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" autocomplete="off" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Spring - @Async 살펴보기 (JDK Executor를 곁들인..)</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="semi-bold"> Lee JaeYoon </span> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sat, Jun 20, 2026, 3:25 PM +0900" prep="on" > Jun 20 <i class="unloaded">2026-06-20T15:25:00+09:00</i> </span></div><div> <span> <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Thu, Jul 2, 2026, 11:08 PM +0900" prefix="Updated " > Jul 2 <i class="unloaded">2026-07-02T23:08:07+09:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="9524 words">52 min</span></div></div><div class="post-content"><p>JDK의 Executor / ExecutorService / ThreadPoolExecutor Spring의 TaskExecutor / AsyncTaskExecutor / ThreadPoolTaskExecutor 비슷한 이름의 클래스들 정리 및 @Async 동작까지 살펴보자.</p><h2 id="executor">Executor</h2><blockquote><p><a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/Executor.html">공식문서</a> <br /> 제출된 <code class="language-plaintext highlighter-rouge">Runnable</code> 작업을 실행하는 객체.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="c1">// java.util.concurrent.Executor</span>
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Executor</span> <span class="o">{</span>
+
+    <span class="cm">/**
+     * Executes the given command at some time in the future.  The command
+     * may execute in a new thread, in a pooled thread, or in the calling
+     * thread, at the discretion of the {@code Executor} implementation.
+     *
+     * @param command the runnable task
+     * @throws RejectedExecutionException if this task cannot be
+     * accepted for execution
+     * @throws NullPointerException if command is null
+     */</span>
+    <span class="kt">void</span> <span class="nf">execute</span><span class="o">(</span><span class="nc">Runnable</span> <span class="n">command</span><span class="o">);</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">Executor</code>의 핵심은 공식 문서의 이 한 문장이다.</p><blockquote><p>이 인터페이스는 작업 제출(task submission)을, 각 작업이 실제로 어떻게 실행될지(스레드 사용·스케줄링 등의 세부 사항)와 분리하는 방법을 제공한다.</p></blockquote><p>즉 <strong>작업을 제출하는 일(task submission)</strong> 과 <strong>그 작업을 어떻게 실행할지</strong>(스레드 생성·스케줄링 등)를 분리해주는 인터페이스다. 직접 스레드를 만들어 <code class="language-plaintext highlighter-rouge">Runnable</code>을 실행하는 대신, 실행 방식을 <code class="language-plaintext highlighter-rouge">Executor</code> 뒤로 숨긴다.</p><blockquote><p>Executor는 보통 스레드를 직접 생성하는 대신 사용한다.</p></blockquote><h3 id="분리-전--task와-실행-방식이-엉켜-있다">분리 전 — task와 실행 방식이 엉켜 있다</h3><blockquote><p>비동기로 돌리려면 작업을 호출하는 쪽이 스레드 생성·관리까지 직접 해야 했다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="c1">// 하고 싶은 task = 이메일 보내기</span>
+<span class="nc">Runnable</span> <span class="n">sendEmail</span> <span class="o">=</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="n">emailService</span><span class="o">.</span><span class="na">send</span><span class="o">(...);</span>
+
+<span class="c1">// 그런데 "어떻게 실행할지"가 호출부에 박혀버린다</span>
+<span class="k">new</span> <span class="nf">Thread</span><span class="o">(</span><span class="n">sendEmail</span><span class="o">).</span><span class="na">start</span><span class="o">();</span>   <span class="c1">// 매번 새 스레드 생성이라는 '방식'이 코드에 고정됨</span>
+</pre></table></code></div></div><p>“이메일 보내기”라는 task와 “새 스레드를 만들어 거기서 돌린다”는 실행 메커니즘이 한 줄에 붙어 있다. 그래서 나중에 실행 방식을 다음처럼 바꾸려고 하면,</p><ul><li>새 스레드 대신 스레드 풀에서 돌리기<li>(테스트용으로) 호출한 스레드에서 동기 실행<li>큐에 쌓아 순차 처리</ul><p><code class="language-plaintext highlighter-rouge">sendEmail</code>을 호출하는 모든 곳을 다 고쳐야 한다. task를 제출하는 코드가 실행 방식에 종속돼 있기 때문이다.</p><h3 id="분리-후--executor가-그-사이를-끊는다">분리 후 — Executor가 그 사이를 끊는다</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nc">Runnable</span> <span class="n">sendEmail</span> <span class="o">=</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="n">emailService</span><span class="o">.</span><span class="na">send</span><span class="o">(...);</span>
+
+<span class="c1">// "이거 실행해줘"라고 제출만 한다. 어떻게 돌릴지는 executor가 결정한다.</span>
+<span class="n">executor</span><span class="o">.</span><span class="na">execute</span><span class="o">(</span><span class="n">sendEmail</span><span class="o">);</span>
+</pre></table></code></div></div><p>호출부는 이제 “무엇을”만 신경 쓰고 “어떻게”는 모른다. 그 “어떻게”는 어떤 <code class="language-plaintext highlighter-rouge">Executor</code>를 주입하느냐에 따라 완전히 달라지지만, 호출부 코드는 한 글자도 바뀌지 않는다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="c1">// 1) 매번 새 스레드</span>
+<span class="nc">Executor</span> <span class="n">executor</span> <span class="o">=</span> <span class="n">command</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="nc">Thread</span><span class="o">(</span><span class="n">command</span><span class="o">).</span><span class="na">start</span><span class="o">();</span>
+
+<span class="c1">// 2) 호출한 스레드에서 동기 실행 (예: 테스트)</span>
+<span class="nc">Executor</span> <span class="n">executor</span> <span class="o">=</span> <span class="n">command</span> <span class="o">-&gt;</span> <span class="n">command</span><span class="o">.</span><span class="na">run</span><span class="o">();</span>
+
+<span class="c1">// 3) 고정 크기 스레드 풀</span>
+<span class="nc">Executor</span> <span class="n">executor</span> <span class="o">=</span> <span class="nc">Executors</span><span class="o">.</span><span class="na">newFixedThreadPool</span><span class="o">(</span><span class="mi">10</span><span class="o">);</span>
+
+<span class="c1">// 4) 단일 스레드로 순차 처리</span>
+<span class="nc">Executor</span> <span class="n">executor</span> <span class="o">=</span> <span class="nc">Executors</span><span class="o">.</span><span class="na">newSingleThreadExecutor</span><span class="o">();</span>
+</pre></table></code></div></div><p>위 넷 중 무엇을 주입하든 <code class="language-plaintext highlighter-rouge">executor.execute(sendEmail)</code> 호출부는 동일하다. 이것이 공식 문서가 말하는 디커플링이다.</p><ul><li><strong>task submission</strong> = <code class="language-plaintext highlighter-rouge">executor.execute(sendEmail)</code> — 작업을 던지는 행위<li><strong>the mechanics of how each task will be run</strong> — 새 스레드냐 / 풀이냐 / 동기냐 / 큐잉이냐</ul><h2 id="taskexecutor">TaskExecutor</h2><blockquote><p><a href="https://docs.spring.io/spring-framework/docs/6.2.x-SNAPSHOT/javadoc-api/org/springframework/core/task/TaskExecutor.html">공식문서</a></p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre><span class="c1">// org.springframework.core.task.TaskExecutor</span>
+<span class="nd">@FunctionalInterface</span>
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">TaskExecutor</span> <span class="kd">extends</span> <span class="nc">Executor</span> <span class="o">{</span>
+
+	<span class="cm">/**
+	 * Execute the given {@code task}.
+	 * &lt;p&gt;The call might return immediately if the implementation uses
+	 * an asynchronous execution strategy, or might block in the case
+	 * of synchronous execution.
+	 * @param task the {@code Runnable} to execute (never {@code null})
+	 * @throws TaskRejectedException if the given task was not accepted
+	 */</span>
+	<span class="nd">@Override</span>
+	<span class="kt">void</span> <span class="nf">execute</span><span class="o">(</span><span class="nc">Runnable</span> <span class="n">task</span><span class="o">);</span>
+
+<span class="o">}</span>
+</pre></table></code></div></div><h3 id="왜-executor와-똑같은-걸-하나-더-만들었나--jdk-14-호환성">왜 <code class="language-plaintext highlighter-rouge">Executor</code>와 똑같은 걸 하나 더 만들었나 — JDK 1.4 호환성</h3><blockquote><p><code class="language-plaintext highlighter-rouge">TaskExecutor</code>의 <code class="language-plaintext highlighter-rouge">execute(Runnable)</code>은 <code class="language-plaintext highlighter-rouge">java.util.concurrent.Executor</code>와 시그니처가 똑같다. 그런데 왜 같은 모양의 인터페이스를 굳이 하나 더 뒀을까? <strong>버전 호환성</strong> 때문이다.</p></blockquote><ul><li><code class="language-plaintext highlighter-rouge">java.util.concurrent.Executor</code>는 Java 5(2004)에 들어왔다.<li><code class="language-plaintext highlighter-rouge">TaskExecutor</code>가 나온 Spring 2.0(2006) 무렵, 스프링은 아직 JDK 1.4를 지원해야 했다. <code class="language-plaintext highlighter-rouge">java.util.concurrent</code>는 JDK 5부터라 의존할 수 없었다.<li>그래서 “JDK 버전과 무관하게 우리만의 추상화를 두자”는 의도로 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>를 따로 만들었다.<li>나중에 baseline을 JDK 5+로 올리면서 <code class="language-plaintext highlighter-rouge">TaskExecutor extends Executor</code>로 정리했다. 처음엔 독립적이었다가, 표준을 상속하도록 합쳐진 형태다.</ul><div class="table-wrapper"><table><thead><tr><th> <th><code class="language-plaintext highlighter-rouge">java.util.concurrent.Executor</code><th><code class="language-plaintext highlighter-rouge">org.springframework.core.task.TaskExecutor</code><tbody><tr><td>소속<td>JDK 표준<td>Spring Framework<tr><td>의미<td>“이 <code class="language-plaintext highlighter-rouge">Runnable</code>을 실행해라” (범용 저수준 추상화)<td>“이건 task 실행용이다” — 스프링 추상화의 진입점<tr><td>예외<td><code class="language-plaintext highlighter-rouge">RejectedExecutionException</code> (unchecked)<td><code class="language-plaintext highlighter-rouge">TaskRejectedException</code> (<code class="language-plaintext highlighter-rouge">RejectedExecutionException</code>의 하위 클래스)<tr><td>역할<td>단순 실행기<td><code class="language-plaintext highlighter-rouge">@Async</code>, <code class="language-plaintext highlighter-rouge">AsyncExecutionInterceptor</code>, <code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code> 등 스프링 비동기 인프라의 타입 마커이자 확장 지점</table></div><h3 id="스프링이-자체-taskexecutor를-둬서-얻는-것">스프링이 자체 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>를 둬서 얻는 것</h3><blockquote><p>JDK 호환성 이슈를 빼고 봐도, <code class="language-plaintext highlighter-rouge">Executor</code>를 그대로 쓰지 않고 한 겹 두면 이런 이점이 생긴다.</p></blockquote><ul><li><strong>타입을 통한 의미 부여</strong>: “그냥 실행기가 아니라 스프링이 관리하는 task 실행기”라는 마커가 된다. <code class="language-plaintext highlighter-rouge">@Async</code>가 컨텍스트에서 실행기 빈을 찾을 때 의미 있는 타입이 된다.<li><strong>예외 번역</strong>: JDK의 <code class="language-plaintext highlighter-rouge">RejectedExecutionException</code>을 스프링 예외 체계(<code class="language-plaintext highlighter-rouge">TaskRejectedException</code>)로 바꿔 일관성을 유지한다.<li><strong>자유로운 확장</strong>: <code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code>(submit/Future), <code class="language-plaintext highlighter-rouge">SchedulingTaskExecutor</code>처럼 필요할 때 계층을 덧붙일 수 있는 <strong>자기 소유의 루트</strong>를 갖는다. <code class="language-plaintext highlighter-rouge">java.util.concurrent.Executor</code>는 스프링이 손댈 수 없는 남의 인터페이스이기 때문이다.</ul><p>즉 짚어준 대로 “JDK에 의존하지 않고 스프링이 자체적으로 확장 가능”한 것이 핵심이다. 실제로 인터페이스인 <code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code>가 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>를 상속(<code class="language-plaintext highlighter-rouge">extends</code>)하며 <code class="language-plaintext highlighter-rouge">submit</code>/<code class="language-plaintext highlighter-rouge">Future</code>를 얹는 식으로 계층을 넓혀 간다.</p><h3 id="호환성-문제가-없었어도-안-만들었을까">호환성 문제가 없었어도 안 만들었을까?</h3><blockquote><p>호환성만이 유일한 이유였다면 “JDK 이슈가 없었으면 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>도 없었을 것”이라는 추론이 성립한다. 하지만 스프링의 설계 성향을 보면 <strong>그래도 한 겹 뒀을 가능성이 높다.</strong></p></blockquote><p>스프링은 표준/외부 API가 있어도 자기만의 얇은 추상화를 한 겹 더 두는 습관이 있다.</p><ul><li><code class="language-plaintext highlighter-rouge">Resource</code> — JDK에 <code class="language-plaintext highlighter-rouge">File</code>, <code class="language-plaintext highlighter-rouge">URL</code>이 있는데도 별도 추상화를 둠<li><code class="language-plaintext highlighter-rouge">Environment</code> / <code class="language-plaintext highlighter-rouge">PropertySource</code> — 시스템 프로퍼티를 직접 쓰지 않고 감쌈<li><code class="language-plaintext highlighter-rouge">ApplicationEventPublisher</code> — 이벤트도 자기 타입으로<li><code class="language-plaintext highlighter-rouge">TaskScheduler</code> — <code class="language-plaintext highlighter-rouge">ScheduledExecutorService</code>가 있는데도 별도로 둠</ul><p>이렇게 하는 이유는 <strong>확장 지점과 의미(semantic)를 스프링이 직접 통제하기 위해서</strong>다.</p><div class="table-wrapper"><table><thead><tr><th>가정<th>결과<tbody><tr><td>디커플링(호환성)만이 유일한 이유였다면<td>JDK 이슈가 없으면 → <code class="language-plaintext highlighter-rouge">TaskExecutor</code>는 안 만들어졌을 것<tr><td>실제 스프링 설계 철학을 보면<td>JDK 이슈가 없었어도 → 얇은 추상화 한 겹은 뒀을 가능성이 높음</table></div><blockquote><p>JDK 호환성은 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>를 “지금 당장, 상속도 안 하고” 만들게 한 결정적 방아쇠였다. 다만 스프링이 외부 표준 위에 자기 추상화를 얹는 습관(Resource, Environment 등)을 보면, 그 방아쇠가 없었어도 확장과 예외 번역을 위해 어떤 형태로든 자기 인터페이스를 뒀을 거라고 보는 게 더 현실적이다.</p></blockquote><h2 id="executorservice">ExecutorService</h2><blockquote><p><a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ExecutorService.html">공식문서</a> 종료(termination)를 관리하는 메서드와, 하나 이상의 비동기 작업의 진행 상황을 추적할 <code class="language-plaintext highlighter-rouge">Future</code>를 만들어내는 메서드를 제공하는 <code class="language-plaintext highlighter-rouge">Executor</code>.</p></blockquote><blockquote><p><code class="language-plaintext highlighter-rouge">Executor</code>가 “task 제출과 실행을 분리한다”는 <strong>순수한 개념</strong>만 담았다면, <code class="language-plaintext highlighter-rouge">ExecutorService</code>는 거기에 <strong>실무에서 굴리는 데 필요한 기능</strong>(결과 받기·종료·일괄 실행)을 얹은 인터페이스다.</p></blockquote><p><code class="language-plaintext highlighter-rouge">Executor</code> 공식 문서도 이 둘의 관계를 이렇게 설명한다.</p><blockquote><p>이 패키지가 제공하는 Executor 구현체들은 더 확장된 인터페이스(more extensive interface)인 <code class="language-plaintext highlighter-rouge">ExecutorService</code>를 구현한다.</p></blockquote><h3 id="executor는-개념--메서드가-하나뿐">Executor는 개념 — 메서드가 하나뿐</h3><p><code class="language-plaintext highlighter-rouge">Executor</code>는 메서드가 <code class="language-plaintext highlighter-rouge">execute(Runnable)</code> 하나뿐이라, 람다 한 줄로도 구현할 수 있다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="c1">// 메서드가 1개뿐이라 람다로 구현 가능</span>
+<span class="nc">Executor</span> <span class="n">inline</span>    <span class="o">=</span> <span class="n">r</span> <span class="o">-&gt;</span> <span class="n">r</span><span class="o">.</span><span class="na">run</span><span class="o">();</span>               <span class="c1">// 동기 실행기</span>
+<span class="nc">Executor</span> <span class="n">newThread</span> <span class="o">=</span> <span class="n">r</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="nc">Thread</span><span class="o">(</span><span class="n">r</span><span class="o">).</span><span class="na">start</span><span class="o">();</span> <span class="c1">// 매번 새 스레드</span>
+</pre></table></code></div></div><p>이렇게 단순하다는 점이 두 가지 실용적인 이점을 준다.</p><p><strong>1) 의존성을 최소로 받는다.</strong> 어떤 메서드가 “그냥 실행만” 필요하다면, 인자를 <code class="language-plaintext highlighter-rouge">ExecutorService</code>(메서드 여러 개)가 아니라 <code class="language-plaintext highlighter-rouge">Executor</code>(메서드 1개)로 받는 게 깔끔하다. 받는 쪽은 실행만 시킬 수 있고, 실수로 풀을 <code class="language-plaintext highlighter-rouge">shutdown</code> 해버릴 일도 없다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="c1">// "나는 실행만 시키면 된다. 풀 생명주기엔 관심 없다"</span>
+<span class="kt">void</span> <span class="nf">process</span><span class="o">(</span><span class="nc">Executor</span> <span class="n">executor</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">execute</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="n">doWork</span><span class="o">());</span>   <span class="c1">// shutdown 같은 건 호출 자체가 불가능 → 안전</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p><strong>2) 개념과 운영을 분리한다.</strong> <code class="language-plaintext highlighter-rouge">Executor</code>는 “task 제출과 실행을 분리한다”는 순수한 개념만 담고, <code class="language-plaintext highlighter-rouge">ExecutorService</code>는 거기에 실무용 기능(결과/종료/일괄)을 얹은 운영용 인터페이스다. 인터페이스 분리 원칙(ISP)에도 맞는 설계다.</p><h3 id="executorservice는-실무용--결과종료일괄">ExecutorService는 실무용 — 결과·종료·일괄</h3><blockquote><p><code class="language-plaintext highlighter-rouge">ExecutorService</code>가 <code class="language-plaintext highlighter-rouge">Executor</code>에 더하는 기능은 크게 세 묶음이다.</p></blockquote><ul><li><strong>결과 받기</strong>: <code class="language-plaintext highlighter-rouge">submit(Callable/Runnable)</code>로 작업을 던지고 <code class="language-plaintext highlighter-rouge">Future</code>로 결과·예외·완료 여부를 추적<li><strong>종료 관리</strong>: <code class="language-plaintext highlighter-rouge">shutdown()</code> / <code class="language-plaintext highlighter-rouge">shutdownNow()</code> / <code class="language-plaintext highlighter-rouge">awaitTermination()</code> / <code class="language-plaintext highlighter-rouge">isShutdown()</code> / <code class="language-plaintext highlighter-rouge">isTerminated()</code><li><strong>일괄 실행</strong>: <code class="language-plaintext highlighter-rouge">invokeAll()</code>(전부 실행) / <code class="language-plaintext highlighter-rouge">invokeAny()</code>(하나라도 먼저 끝나는 결과)</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+</pre><td class="rouge-code"><pre>
+  <span class="kd">public</span> <span class="kd">interface</span> <span class="nc">ExecutorService</span> <span class="kd">extends</span> <span class="nc">Executor</span><span class="o">,</span> <span class="nc">AutoCloseable</span> <span class="o">{</span>
+
+      <span class="kt">void</span> <span class="nf">shutdown</span><span class="o">();</span>
+
+      <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Runnable</span><span class="o">&gt;</span> <span class="nf">shutdownNow</span><span class="o">();</span>
+
+      <span class="kt">boolean</span> <span class="nf">isShutdown</span><span class="o">();</span>
+
+      <span class="kt">boolean</span> <span class="nf">isTerminated</span><span class="o">();</span>
+
+      <span class="kt">boolean</span> <span class="nf">awaitTermination</span><span class="o">(</span><span class="kt">long</span> <span class="n">timeout</span><span class="o">,</span> <span class="nc">TimeUnit</span> <span class="n">unit</span><span class="o">)</span>
+          <span class="kd">throws</span> <span class="nc">InterruptedException</span><span class="o">;</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nc">Future</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nf">submit</span><span class="o">(</span><span class="nc">Callable</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="n">task</span><span class="o">);</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nc">Future</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nf">submit</span><span class="o">(</span><span class="nc">Runnable</span> <span class="n">task</span><span class="o">,</span> <span class="no">T</span> <span class="n">result</span><span class="o">);</span>
+
+      <span class="nc">Future</span><span class="o">&lt;?&gt;</span> <span class="n">submit</span><span class="o">(</span><span class="nc">Runnable</span> <span class="n">task</span><span class="o">);</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Future</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="nf">invokeAll</span><span class="o">(</span><span class="nc">Collection</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="nc">Callable</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="n">tasks</span><span class="o">)</span>
+          <span class="kd">throws</span> <span class="nc">InterruptedException</span><span class="o">;</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">Future</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="nf">invokeAll</span><span class="o">(</span><span class="nc">Collection</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="nc">Callable</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="n">tasks</span><span class="o">,</span>
+                                    <span class="kt">long</span> <span class="n">timeout</span><span class="o">,</span> <span class="nc">TimeUnit</span> <span class="n">unit</span><span class="o">)</span>
+          <span class="kd">throws</span> <span class="nc">InterruptedException</span><span class="o">;</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="no">T</span> <span class="nf">invokeAny</span><span class="o">(</span><span class="nc">Collection</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="nc">Callable</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="n">tasks</span><span class="o">)</span>
+          <span class="kd">throws</span> <span class="nc">InterruptedException</span><span class="o">,</span> <span class="nc">ExecutionException</span><span class="o">;</span>
+
+      <span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="no">T</span> <span class="nf">invokeAny</span><span class="o">(</span><span class="nc">Collection</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="nc">Callable</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;&gt;</span> <span class="n">tasks</span><span class="o">,</span>
+                      <span class="kt">long</span> <span class="n">timeout</span><span class="o">,</span> <span class="nc">TimeUnit</span> <span class="n">unit</span><span class="o">)</span>
+          <span class="kd">throws</span> <span class="nc">InterruptedException</span><span class="o">,</span> <span class="nc">ExecutionException</span><span class="o">,</span> <span class="nc">TimeoutException</span><span class="o">;</span>
+
+      <span class="nd">@Override</span>
+      <span class="k">default</span> <span class="kt">void</span> <span class="nf">close</span><span class="o">()</span> <span class="o">{</span>
+          <span class="kt">boolean</span> <span class="n">terminated</span> <span class="o">=</span> <span class="n">isTerminated</span><span class="o">();</span>
+          <span class="k">if</span> <span class="o">(!</span><span class="n">terminated</span><span class="o">)</span> <span class="o">{</span>
+              <span class="n">shutdown</span><span class="o">();</span>
+              <span class="kt">boolean</span> <span class="n">interrupted</span> <span class="o">=</span> <span class="kc">false</span><span class="o">;</span>
+              <span class="k">while</span> <span class="o">(!</span><span class="n">terminated</span><span class="o">)</span> <span class="o">{</span>
+                  <span class="k">try</span> <span class="o">{</span>
+                      <span class="n">terminated</span> <span class="o">=</span> <span class="n">awaitTermination</span><span class="o">(</span><span class="mi">1L</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">DAYS</span><span class="o">);</span>
+                  <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                      <span class="k">if</span> <span class="o">(!</span><span class="n">interrupted</span><span class="o">)</span> <span class="o">{</span>
+                          <span class="n">shutdownNow</span><span class="o">();</span>
+                          <span class="n">interrupted</span> <span class="o">=</span> <span class="kc">true</span><span class="o">;</span>
+                      <span class="o">}</span>
+                  <span class="o">}</span>
+              <span class="o">}</span>
+              <span class="k">if</span> <span class="o">(</span><span class="n">interrupted</span><span class="o">)</span> <span class="o">{</span>
+                  <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">interrupt</span><span class="o">();</span>
+              <span class="o">}</span>
+          <span class="o">}</span>
+      <span class="o">}</span>
+  <span class="o">}</span>
+</pre></table></code></div></div><blockquote><p><code class="language-plaintext highlighter-rouge">ExecutorService</code>가 <code class="language-plaintext highlighter-rouge">AutoCloseable</code>을 구현하고 <code class="language-plaintext highlighter-rouge">close()</code> 디폴트 메서드를 갖게 된 것은 Java 19부터다. 그 전에는 <code class="language-plaintext highlighter-rouge">extends Executor</code>만 했다.</p></blockquote><p><code class="language-plaintext highlighter-rouge">submit</code>이 받는 <code class="language-plaintext highlighter-rouge">Callable</code>은 <code class="language-plaintext highlighter-rouge">Runnable</code>과 달리 <strong>결과를 반환</strong>하고 예외를 던질 수 있다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="kn">package</span> <span class="nn">java.util.concurrent</span><span class="o">;</span>
+
+<span class="nd">@FunctionalInterface</span>
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Callable</span><span class="o">&lt;</span><span class="no">V</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="no">V</span> <span class="nf">call</span><span class="o">()</span> <span class="kd">throws</span> <span class="nc">Exception</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><h2 id="threadpoolexecutor">ThreadPoolExecutor</h2><blockquote><p><a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ThreadPoolExecutor.html">공식문서</a> 제출된 각 작업을 풀에 있는 여러 스레드 중 하나로 실행하는 <code class="language-plaintext highlighter-rouge">ExecutorService</code>. 보통 <code class="language-plaintext highlighter-rouge">Executors</code> 팩토리 메서드로 구성한다.</p></blockquote><blockquote><p><code class="language-plaintext highlighter-rouge">ExecutorService</code>의 실제 구현체 중 하나다. 앞서 본 <code class="language-plaintext highlighter-rouge">submit</code>/<code class="language-plaintext highlighter-rouge">shutdown</code>/<code class="language-plaintext highlighter-rouge">invokeAll</code> 같은 기능을 <strong>스레드 풀</strong>로 실제 구현한 클래스다.</p></blockquote><p>스레드 풀은 두 가지 문제를 해결한다. ① 작업마다 드는 호출 오버헤드를 줄여 대량의 비동기 작업에서 성능을 높이고, ② 작업을 실행할 때 쓰는 자원(스레드 포함)을 제한·관리하는 수단을 준다. (완료된 작업 수 같은 기본 통계도 유지한다.)</p><p>조절 가능한 파라미터와 확장 훅이 많지만, 공식 문서는 흔한 경우라면 더 편한 <code class="language-plaintext highlighter-rouge">Executors</code> 팩토리 메서드를 쓰라고 권한다 — <code class="language-plaintext highlighter-rouge">newCachedThreadPool()</code>, <code class="language-plaintext highlighter-rouge">newFixedThreadPool(int)</code>, <code class="language-plaintext highlighter-rouge">newSingleThreadExecutor()</code>. 직접 튜닝할 때만 아래 동작을 이해하면 된다.</p><h3 id="동작-방식--core--큐--max-순으로-채운다">동작 방식 — core → 큐 → max 순으로 채운다</h3><blockquote><p>작업이 들어오면 다음 순서로 처리할 곳을 정한다.</p></blockquote><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>새 task 도착
+  │
+  ├─ 현재 스레드 수 &lt; corePoolSize ?
+  │     예 → 새 스레드 생성 (놀고 있는 스레드가 있어도 무조건 생성)
+  │
+  ├─ core가 다 찼으면 → 큐에 넣기 시도
+  │     큐에 자리 있음 → 큐에 적재 (스레드 추가 안 함)
+  │
+  └─ 큐도 꽉 참 → 현재 스레드 수 &lt; maxPoolSize ?
+        예    → 새 스레드 생성 (core 초과분, 임시 스레드)
+        아니오 → 거부(Rejected) → RejectedExecutionHandler 발동
+</pre></table></code></div></div><p>여기서 반드시 짚어야 할 반직관적인 포인트가 있다.</p><blockquote><p><code class="language-plaintext highlighter-rouge">maxPoolSize</code>는 “큐가 꽉 찬 다음”에야 작동한다.</p></blockquote><p>흔히 “부하가 높으면 core → max까지 스레드가 늘겠지”라고 오해하지만, 실제로는 core가 차면 max보다 <strong>큐를 먼저</strong> 채운다. 그래서 큐가 무한대(<code class="language-plaintext highlighter-rouge">LinkedBlockingQueue</code> 무제한)면 큐가 절대 안 차고, <code class="language-plaintext highlighter-rouge">maxPoolSize</code>는 영원히 쓰이지 않는다. 스레드는 <code class="language-plaintext highlighter-rouge">corePoolSize</code>에서 멈춘다. (공식 문서가 말하는 “maximumPoolSize therefore doesn’t have any effect”가 이 뜻이다.)</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>core=5, max=50, queue=무제한  →  실제 최대 스레드 = 5  (max 50은 장식)
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">maxPoolSize</code>를 실제로 쓰려면 큐를 유한하게 둬야 한다. 그래야 큐가 차고, 그제서야 core 초과 스레드가 생긴다.</p><h3 id="주요-설정들">주요 설정들</h3><div class="table-wrapper"><table><thead><tr><th>설정<th>의미<th>튜닝 감각<tbody><tr><td><code class="language-plaintext highlighter-rouge">corePoolSize</code><td>평상시 유지하는 기본 스레드 수. 유휴 상태여도(기본) 죽지 않음<td>정상 부하를 감당할 만큼 (CPU 작업이면 ≈ 코어 수)<tr><td><code class="language-plaintext highlighter-rouge">maxPoolSize</code><td>큐가 꽉 찼을 때만 늘어나는 상한<td>큐가 유한해야 의미 있음<tr><td><code class="language-plaintext highlighter-rouge">queueCapacity</code><td>core가 다 찼을 때 대기시킬 작업 수<td>크면 스레드 ↓·지연 ↑ / 작으면 스레드 ↑·throughput ↑<tr><td><code class="language-plaintext highlighter-rouge">keepAliveSeconds</code><td>core 초과 스레드가 이 시간 놀면 회수<td>버스트가 끝난 뒤 임시 스레드 정리<tr><td><code class="language-plaintext highlighter-rouge">allowCoreThreadTimeOut</code><td>core 스레드도 keepAlive로 죽게 허용<td>true면 한가할 때 스레드 0까지 감소<tr><td><code class="language-plaintext highlighter-rouge">rejectedExecutionHandler</code><td>큐+max가 다 차서 못 받을 때의 정책<td>아래 4종</table></div><p>거부 정책(<code class="language-plaintext highlighter-rouge">RejectedExecutionHandler</code>)은 4종이다.</p><div class="table-wrapper"><table><thead><tr><th>정책<th>동작<tbody><tr><td><code class="language-plaintext highlighter-rouge">AbortPolicy</code> (기본)<td><code class="language-plaintext highlighter-rouge">RejectedExecutionException</code>을 던진다<tr><td><code class="language-plaintext highlighter-rouge">CallerRunsPolicy</code><td>제출한 스레드가 직접 실행 → 제출 속도를 자연히 늦춤(백프레셔)<tr><td><code class="language-plaintext highlighter-rouge">DiscardPolicy</code><td>조용히 버린다<tr><td><code class="language-plaintext highlighter-rouge">DiscardOldestPolicy</code><td>큐 맨 앞(가장 오래된) 것을 버리고 재시도</table></div><blockquote><p>실무에서 백프레셔가 필요하면 <code class="language-plaintext highlighter-rouge">CallerRunsPolicy</code>를 많이 쓴다 — 풀이 포화되면 제출자(예: 요청 처리 스레드)가 직접 일을 처리하게 해서 유입 속도를 자연스럽게 늦춘다.</p></blockquote><h2 id="threadpooltaskexecutor">ThreadPoolTaskExecutor</h2><blockquote><p><a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/scheduling/concurrent/ThreadPoolTaskExecutor.html">공식문서</a></p></blockquote><p>공식 문서는 이렇게 설명한다.</p><blockquote><p><code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>를 빈 스타일(<code class="language-plaintext highlighter-rouge">corePoolSize</code>, <code class="language-plaintext highlighter-rouge">maxPoolSize</code>, <code class="language-plaintext highlighter-rouge">keepAliveSeconds</code>, <code class="language-plaintext highlighter-rouge">queueCapacity</code> 프로퍼티)로 설정하고, 그것을 스프링 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>로 노출하는 JavaBean이다. JMX 같은 관리·모니터링에도 잘 맞으며, <code class="language-plaintext highlighter-rouge">corePoolSize</code>·<code class="language-plaintext highlighter-rouge">maxPoolSize</code>·<code class="language-plaintext highlighter-rouge">keepAliveSeconds</code>(런타임 갱신 가능), <code class="language-plaintext highlighter-rouge">poolSize</code>·<code class="language-plaintext highlighter-rouge">activeCount</code>(조회 전용) 같은 속성을 제공한다. 기본 설정은 corePoolSize 1, maxPoolSize 무제한, 큐 용량 무제한이다. 이는 <code class="language-plaintext highlighter-rouge">Executors.newSingleThreadExecutor()</code>와 거의 같아서 모든 작업이 스레드 하나를 공유한다. <code class="language-plaintext highlighter-rouge">queueCapacity</code>를 0으로 두면 <code class="language-plaintext highlighter-rouge">Executors.newCachedThreadPool()</code>처럼 동작해 스레드가 즉시 (매우 큰 수까지) 늘어난다. 이때는 <code class="language-plaintext highlighter-rouge">maxPoolSize</code>도 함께 설정하는 것이 좋다.</p></blockquote><blockquote><p>이 클래스는 스프링의 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>와 <code class="language-plaintext highlighter-rouge">Executor</code>를 모두 구현하지만, <code class="language-plaintext highlighter-rouge">TaskExecutor</code>가 주(primary) 인터페이스이고 <code class="language-plaintext highlighter-rouge">Executor</code>는 부차적 편의일 뿐이다. 그래서 예외 처리도 <code class="language-plaintext highlighter-rouge">Executor</code>가 아니라 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 계약을 따르며, 거부 시 <code class="language-plaintext highlighter-rouge">TaskRejectedException</code>을 던진다.</p></blockquote><h3 id="내부적으로는-threadpoolexecutor를-쓴다">내부적으로는 ThreadPoolExecutor를 쓴다</h3><blockquote><p>스레드 풀링 같은 핵심 동작은 직접 구현하지 않고, 내부에 들고 있는 <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>에 위임한다.</p></blockquote><p><code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>는 <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>를 감싼 래퍼다. 스레드를 몇 개 띄우고, 큐에 쌓고, 거부 정책을 적용하는 실제 풀 동작은 전부 내부 <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>가 한다. 스프링은 그 위에 “빈으로 쓰기 편한 껍데기”를 씌우고 편의 기능을 얹은 것뿐이다.</p><p>날것의 <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>를 그대로 쓰고 싶다면 생성자 주입이나 <code class="language-plaintext highlighter-rouge">Executors</code> 팩토리로 만든 뒤, <code class="language-plaintext highlighter-rouge">ConcurrentTaskExecutor</code> 어댑터로 감싸 스프링 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>로 노출할 수도 있다.</p><h3 id="스프링이-더해준-것">스프링이 더해준 것</h3><blockquote><p>JDK <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>를 그대로 쓰지 않고 한 겹 감싸면서, 스프링은 설정 방식·생명주기·예외 처리·큐 추상화를 자기 식으로 바꿨다.</p></blockquote><p><strong>1) 빈(Bean) 스타일 설정 — setter/프로퍼티로 구성</strong></p><p>JDK <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>는 생성자에 인자를 7개나 넣어야 만들어진다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="c1">// JDK 직접 — 생성자 한 방에 다 넣어야 함 (스프링 설정과 안 어울림)</span>
+<span class="k">new</span> <span class="nf">ThreadPoolExecutor</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="mi">10</span><span class="o">,</span> <span class="mi">60L</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">,</span>
+    <span class="k">new</span> <span class="nc">LinkedBlockingQueue</span><span class="o">&lt;&gt;(</span><span class="mi">100</span><span class="o">),</span>
+    <span class="n">threadFactory</span><span class="o">,</span> <span class="n">rejectedHandler</span><span class="o">);</span>
+</pre></table></code></div></div><p>반면 <code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>는 JavaBean이라 setter(프로퍼티)로 설정한다. 그래서 스프링 <code class="language-plaintext highlighter-rouge">@Bean</code>이나 XML, <code class="language-plaintext highlighter-rouge">@ConfigurationProperties</code>와 자연스럽게 붙는다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nd">@Bean</span>
+<span class="kd">public</span> <span class="nc">ThreadPoolTaskExecutor</span> <span class="nf">taskExecutor</span><span class="o">()</span> <span class="o">{</span>
+    <span class="nc">ThreadPoolTaskExecutor</span> <span class="n">executor</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ThreadPoolTaskExecutor</span><span class="o">();</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">setCorePoolSize</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span>          <span class="c1">// setter로 하나씩</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">setMaxPoolSize</span><span class="o">(</span><span class="mi">10</span><span class="o">);</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">setQueueCapacity</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">setKeepAliveSeconds</span><span class="o">(</span><span class="mi">60</span><span class="o">);</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">setThreadNamePrefix</span><span class="o">(</span><span class="s">"async-"</span><span class="o">);</span>  <span class="c1">// 스레드 이름까지 (디버깅에 유용)</span>
+    <span class="n">executor</span><span class="o">.</span><span class="na">initialize</span><span class="o">();</span>
+    <span class="k">return</span> <span class="n">executor</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>위 공식 문서 인용의 “빈 스타일로 설정한다”가 바로 이 얘기다.</p><p><strong>2) 스프링 생명주기와 연동 — shutdown 자동 호출</strong></p><p>실무에서 제일 큰 이점이다. 앞에서 본 “풀을 안 끄면 스레드가 누수되고 JVM이 안 죽는다”는 문제를, <code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>는 스프링 컨테이너 생명주기에 묶여 자동으로 처리한다.</p><ul><li>스프링이 빈을 만들 때 → <code class="language-plaintext highlighter-rouge">initialize()</code>로 내부 풀 생성 (<code class="language-plaintext highlighter-rouge">InitializingBean</code>)<li>스프링 컨텍스트가 닫힐 때 → 자동으로 <code class="language-plaintext highlighter-rouge">shutdown()</code> 호출 (<code class="language-plaintext highlighter-rouge">DisposableBean</code>)</ul><p><code class="language-plaintext highlighter-rouge">shutdown()</code>을 직접 부르지 않아도 앱 종료 시 스프링이 알아서 풀을 정리한다. JDK <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>를 날것으로 빈 등록하면 이 자동 종료가 안 돼서 graceful shutdown이 깔끔하지 않을 수 있다.</p><p><strong>3) 스프링 TaskExecutor 타입으로 노출 + 예외 번역</strong></p><p>여기서 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>가 왜 필요했는지가 연결된다. <code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>는 스프링의 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 타입이다.</p><ul><li><code class="language-plaintext highlighter-rouge">@Async</code>가 이걸 찾아 쓸 수 있다. (<code class="language-plaintext highlighter-rouge">@Async</code>는 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>/<code class="language-plaintext highlighter-rouge">Executor</code> 타입 빈을 찾는다)<li>작업 거부 시 JDK의 <code class="language-plaintext highlighter-rouge">RejectedExecutionException</code> 대신 스프링 예외 <code class="language-plaintext highlighter-rouge">TaskRejectedException</code>을 던진다. 예외 타입의 일관성을 위해서다.</ul><p><strong>4) 추가적인 설정</strong></p><p>설정 프로퍼티는 크게 셋으로 나뉜다.</p><p><strong>JDK 설정을 이름만 바꿔 그대로 노출한 것</strong></p><div class="table-wrapper"><table><thead><tr><th>ThreadPoolTaskExecutor 프로퍼티<th>JDK ThreadPoolExecutor<th>비고<tbody><tr><td><code class="language-plaintext highlighter-rouge">corePoolSize</code><td><code class="language-plaintext highlighter-rouge">corePoolSize</code><td>그대로<tr><td><code class="language-plaintext highlighter-rouge">maxPoolSize</code><td><code class="language-plaintext highlighter-rouge">maximumPoolSize</code><td>이름만 줄임<tr><td><code class="language-plaintext highlighter-rouge">keepAliveSeconds</code><td><code class="language-plaintext highlighter-rouge">keepAliveTime</code><td>단위 고정(초)<tr><td><code class="language-plaintext highlighter-rouge">allowCoreThreadTimeOut</code><td><code class="language-plaintext highlighter-rouge">allowCoreThreadTimeOut</code><td>그대로<tr><td><code class="language-plaintext highlighter-rouge">threadFactory</code><td><code class="language-plaintext highlighter-rouge">ThreadFactory</code><td>그대로<tr><td><code class="language-plaintext highlighter-rouge">rejectedExecutionHandler</code><td><code class="language-plaintext highlighter-rouge">RejectedExecutionHandler</code><td>그대로<tr><td><code class="language-plaintext highlighter-rouge">prestartAllCoreThreads</code><td><code class="language-plaintext highlighter-rouge">prestartAllCoreThreads()</code><td>그대로</table></div><p><strong>스프링이 자기 식으로 바꾼 것 — queueCapacity</strong></p><p>JDK는 <code class="language-plaintext highlighter-rouge">BlockingQueue</code> 객체를 직접 넣어야 한다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="c1">// JDK: 큐 객체를 내가 골라서 직접 줌</span>
+<span class="k">new</span> <span class="nf">ThreadPoolExecutor</span><span class="o">(...,</span> <span class="k">new</span> <span class="nc">LinkedBlockingQueue</span><span class="o">&lt;&gt;(</span><span class="mi">100</span><span class="o">));</span>
+</pre></table></code></div></div><p>반면 스프링은 큐 객체 대신 <code class="language-plaintext highlighter-rouge">queueCapacity</code>라는 <code class="language-plaintext highlighter-rouge">int</code> 하나만 받고, 그 값으로 큐 종류를 내부에서 자동 결정한다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="c1">// ThreadPoolTaskExecutor 내부 로직 (단순화)</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">queueCapacity</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="k">new</span> <span class="nc">LinkedBlockingQueue</span><span class="o">&lt;&gt;(</span><span class="n">queueCapacity</span><span class="o">);</span>  <span class="c1">// 용량 있는 큐</span>
+<span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="k">new</span> <span class="nc">SynchronousQueue</span><span class="o">&lt;&gt;();</span>                  <span class="c1">// 0이면 직접 핸드오프 큐</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>앞 공식 문서 인용의 “<code class="language-plaintext highlighter-rouge">queueCapacity</code>를 0으로 두면 <code class="language-plaintext highlighter-rouge">newCachedThreadPool</code>처럼 동작한다”가 바로 이 분기 때문이다. JDK엔 없는, 스프링만의 편의 추상화다.</p><p><strong>스프링이 새로 추가한 것 — JDK엔 아예 없음</strong></p><div class="table-wrapper"><table><thead><tr><th>스프링 추가 설정<th>역할<tbody><tr><td><code class="language-plaintext highlighter-rouge">threadNamePrefix</code><td>스레드 이름 접두사(<code class="language-plaintext highlighter-rouge">async-1</code>…). JDK에선 <code class="language-plaintext highlighter-rouge">ThreadFactory</code>를 직접 짜야 했던 걸 한 줄로<tr><td><code class="language-plaintext highlighter-rouge">waitForTasksToCompleteOnShutdown</code><td>종료 시 남은 작업을 마칠지(<code class="language-plaintext highlighter-rouge">shutdown</code>) 즉시 끊을지(<code class="language-plaintext highlighter-rouge">shutdownNow</code>) 선택<tr><td><code class="language-plaintext highlighter-rouge">awaitTerminationSeconds</code><td>종료 시 최대 몇 초 기다릴지 (graceful shutdown 타임아웃)<tr><td><code class="language-plaintext highlighter-rouge">taskDecorator</code><td>작업을 실행 직전에 감싸는 훅 (예: <code class="language-plaintext highlighter-rouge">ThreadLocal</code>/MDC/보안 컨텍스트 전파)<tr><td><code class="language-plaintext highlighter-rouge">initialize()</code> 생명주기<td>스프링 빈 초기화/소멸에 풀 생성·종료를 연결</table></div><p>특히 <code class="language-plaintext highlighter-rouge">waitForTasksToCompleteOnShutdown</code> + <code class="language-plaintext highlighter-rouge">awaitTerminationSeconds</code>는 앞에서 본 “표준 <code class="language-plaintext highlighter-rouge">shutdown</code> + <code class="language-plaintext highlighter-rouge">shutdownNow</code> 조합 패턴”을 프로퍼티로 노출한 것이다. <code class="language-plaintext highlighter-rouge">taskDecorator</code>도 JDK엔 없는 스프링 고유 훅이다.</p><h2 id="중간-정리--executor-계열-한눈에-보기">중간 정리 — Executor 계열 한눈에 보기</h2><blockquote><p>지금까지 본 Executor 계열을 JDK 세계와 스프링 세계로 나눠 정리한다. 두 세계는 거의 1:1로 대응하고, 스프링 쪽 끝(<code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>)이 JDK 풀(<code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>)을 감싸 들고 있는 구조다.</p></blockquote><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre>        JDK 세계                          Spring 세계
+   ─────────────────                 ─────────────────────
+   Executor              ──(대응)──▶  TaskExecutor
+      │ extends                          │ extends
+   ExecutorService                    AsyncTaskExecutor
+      │ (구현체)                          │ (구현체)
+   ThreadPoolExecutor  ◀──(has-a)──   ThreadPoolTaskExecutor
+   (진짜 스레드 풀)                      (빈 설정 + 생명주기 + @Async 연동)
+</pre></table></code></div></div><h3 id="jdk-세계-javautilconcurrent">JDK 세계 (java.util.concurrent)</h3><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre><td class="rouge-code"><pre>Executor  (interface)                         ← 최소 추상화: execute(Runnable)
+   │  "task 제출 ↔ 실행 메커니즘" 분리, 그게 전부
+   │
+   └── ExecutorService  (interface)           ← + submit/Future, shutdown, invokeAll, AutoCloseable
+          │   "실무용 실행기" (결과·생명주기·일괄)
+          │
+          ├── ScheduledExecutorService (interface)   ← + 지연/주기 실행 (schedule…)
+          │
+          └── AbstractExecutorService (abstract class)  ← submit/invokeAll 공통 구현 제공
+                 │
+                 ├── ThreadPoolExecutor (class) ★      ← 진짜 스레드 풀 (core/max/queue/거부정책)
+                 │      │
+                 │      └── ScheduledThreadPoolExecutor ← ThreadPoolExecutor + 스케줄링
+                 │
+                 └── ForkJoinPool (class)               ← work-stealing 풀 (병렬 스트림 등)
+
+Executors  (유틸 클래스)  ← new 안 하고 풀 만들어주는 팩토리
+   newFixedThreadPool() / newCachedThreadPool() / newSingleThreadExecutor() …
+   → 내부적으로 ThreadPoolExecutor 를 설정해서 반환
+</pre></table></code></div></div><blockquote><p>JDK 한 줄 요약: <code class="language-plaintext highlighter-rouge">Executor</code>(개념) → <code class="language-plaintext highlighter-rouge">ExecutorService</code>(실무 인터페이스) → <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>(실제 구현). <code class="language-plaintext highlighter-rouge">Executors</code>는 그 구현을 쉽게 찍어주는 공장이다.</p></blockquote><h3 id="스프링-세계-orgspringframework">스프링 세계 (org.springframework.*)</h3><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre>Executor (JDK)                                ← 스프링은 여기서 출발(상속)
+   │
+   └── TaskExecutor (interface) ★             ← 스프링 진입점. execute(Runnable)만 (JDK와 동일 시그니처)
+          │   "이건 스프링이 관리하는 task 실행기다" + 예외 번역(TaskRejectedException)
+          │
+          └── AsyncTaskExecutor (interface)    ← + submit(Callable)/Future, submitCompletable
+                 │   "결과를 받는 비동기 실행기" (@Async가 요구하는 타입)
+                 │
+                 ├── SchedulingTaskExecutor (interface)
+                 │
+                 └── [구현체들]
+                       ├── ThreadPoolTaskExecutor (class) ★  ← 내부에 JDK ThreadPoolExecutor를 들고 감
+                       ├── ConcurrentTaskExecutor (class)    ← 남의 JDK Executor를 감싸는 어댑터
+                       ├── VirtualThreadTaskExecutor         ← 작업마다 새 '가상 스레드' (풀 아님)
+                       ├── SimpleAsyncTaskExecutor (class)   ← 풀 아님! 매번 새 스레드(또는 가상스레드)
+                       └── TaskExecutorAdapter (class)       ← raw Executor → AsyncTaskExecutor 변환(내부용)
+</pre></table></code></div></div><h3 id="전체-한눈에-보기">전체 한눈에 보기</h3><div class="table-wrapper"><table><thead><tr><th>이름<th>세계<th>종류<th>역할<tbody><tr><td><code class="language-plaintext highlighter-rouge">Executor</code><td>JDK<td>인터페이스<td>최소 추상화. <code class="language-plaintext highlighter-rouge">execute(Runnable)</code><tr><td><code class="language-plaintext highlighter-rouge">ExecutorService</code><td>JDK<td>인터페이스<td>+ 결과/종료/일괄. 실무 인터페이스<tr><td><code class="language-plaintext highlighter-rouge">ScheduledExecutorService</code><td>JDK<td>인터페이스<td>+ 지연/주기 실행<tr><td><code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code><td>JDK<td>클래스<td>실제 스레드 풀 (core/max/queue)<tr><td><code class="language-plaintext highlighter-rouge">Executors</code><td>JDK<td>유틸 클래스<td>풀 팩토리 (<code class="language-plaintext highlighter-rouge">newFixedThreadPool</code>…, <code class="language-plaintext highlighter-rouge">newVirtualThreadPerTaskExecutor</code>)<tr><td><code class="language-plaintext highlighter-rouge">TaskExecutor</code><td>Spring<td>인터페이스<td>스프링 진입점 (<code class="language-plaintext highlighter-rouge">extends Executor</code>)<tr><td><code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code><td>Spring<td>인터페이스<td>+ submit/Future. <code class="language-plaintext highlighter-rouge">@Async</code>가 요구<tr><td><code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code><td>Spring<td>클래스<td>JDK 풀을 감싼 스프링 빈 (플랫폼 스레드, 재사용)<tr><td><code class="language-plaintext highlighter-rouge">VirtualThreadTaskExecutor</code><td>Spring<td>클래스<td>작업마다 새 가상 스레드(JDK 21+). 풀 아님, I/O 바운드에 강함<tr><td><code class="language-plaintext highlighter-rouge">SimpleAsyncTaskExecutor</code><td>Spring<td>클래스<td>작업마다 새 스레드(플랫폼, <code class="language-plaintext highlighter-rouge">setVirtualThreads(true)</code>로 가상도)<tr><td><code class="language-plaintext highlighter-rouge">ConcurrentTaskExecutor</code><td>Spring<td>클래스<td>기존 JDK Executor를 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>로 노출</table></div><h2 id="스프링-부트의-스레드풀-기본-동작">스프링 부트의 스레드풀 기본 동작</h2><blockquote><p><a href="https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html">공식문서</a></p></blockquote><blockquote><p>스프링 부트는 <code class="language-plaintext highlighter-rouge">TaskExecutionAutoConfiguration</code>으로 <code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code>라는 <code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code> 빈을 자동 등록한다. <code class="language-plaintext highlighter-rouge">@Async</code>나 MVC 비동기 요청 처리 등이 이 빈을 기본 실행기로 쓴다.</p></blockquote><h3 id="무엇이-자동으로-만들어지나">무엇이 자동으로 만들어지나</h3><ul><li><strong>빈 이름</strong>: <code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code> (이 이름 하나뿐 — <code class="language-plaintext highlighter-rouge">taskExecutor</code> 같은 별칭은 없다)<li><strong>타입</strong>: 기본은 <code class="language-plaintext highlighter-rouge">ThreadPoolTaskExecutor</code>. 단, 가상 스레드를 켜면(<code class="language-plaintext highlighter-rouge">spring.threads.virtual.enabled=true</code>, Java 21+) <code class="language-plaintext highlighter-rouge">SimpleAsyncTaskExecutor</code>(가상 스레드, 풀 아님)로 바뀐다.</ul><blockquote><p>이 풀이 컨텍스트의 유일한 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 빈이 되므로, <code class="language-plaintext highlighter-rouge">@Async</code>는 앞서 본 탐색 규칙①(유일한 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 빈)에 따라 별도 설정 없이 이걸 찾아 쓴다.</p></blockquote><p>문서가 정리한, 이 빈을 쓰는 곳:</p><ul><li><code class="language-plaintext highlighter-rouge">@EnableAsync</code>로 띄우는 <code class="language-plaintext highlighter-rouge">@Async</code> 비동기 작업 (단, <code class="language-plaintext highlighter-rouge">AsyncConfigurer</code>를 직접 정의하면 그쪽이 우선)<li>스프링 MVC 비동기 요청 처리(<code class="language-plaintext highlighter-rouge">Callable</code> 반환 등), WebFlux의 블로킹 실행 지원, WebSocket 메시지 채널<li>JPA 부트스트랩, 빈 백그라운드 초기화의 부트스트랩 실행기</ul><h3 id="생성-조건--enableasync가-아니라-executor-빈이-없을-때">생성 조건 — <code class="language-plaintext highlighter-rouge">@EnableAsync</code>가 아니라 “Executor 빈이 없을 때”</h3><blockquote><p>기본 풀은 <code class="language-plaintext highlighter-rouge">@EnableAsync</code>와 무관하게 만들어진다. <code class="language-plaintext highlighter-rouge">@EnableAsync</code>는 <code class="language-plaintext highlighter-rouge">@Async</code> 프록시를 켜는 스위치일 뿐 풀 생성과는 별개다. 풀을 만드는 건 오토컨피그의 조건이다.</p></blockquote><p><code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code>를 만드는 설정에는 <code class="language-plaintext highlighter-rouge">@Conditional(OnExecutorCondition.class)</code>이 걸려 있고, <code class="language-plaintext highlighter-rouge">OnExecutorCondition</code>은 둘 중 하나만 맞으면 통과하는 <code class="language-plaintext highlighter-rouge">AnyNestedCondition</code>이다. (Spring Boot 3.5.x 소스)</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre><span class="c1">// TaskExecutorConfigurations.OnExecutorCondition</span>
+<span class="kd">static</span> <span class="kd">class</span> <span class="nc">OnExecutorCondition</span> <span class="kd">extends</span> <span class="nc">AnyNestedCondition</span> <span class="o">{</span>
+
+    <span class="nc">OnExecutorCondition</span><span class="o">()</span> <span class="o">{</span>
+        <span class="kd">super</span><span class="o">(</span><span class="nc">ConfigurationPhase</span><span class="o">.</span><span class="na">REGISTER_BEAN</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="nd">@ConditionalOnMissingBean</span><span class="o">(</span><span class="nc">Executor</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>   <span class="c1">// ① 컨텍스트에 Executor 빈이 없거나</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">ExecutorBeanCondition</span> <span class="o">{</span> <span class="o">}</span>
+
+    <span class="nd">@ConditionalOnProperty</span><span class="o">(</span><span class="n">value</span> <span class="o">=</span> <span class="s">"spring.task.execution.mode"</span><span class="o">,</span> <span class="n">havingValue</span> <span class="o">=</span> <span class="s">"force"</span><span class="o">)</span>  <span class="c1">// ② mode=force 면</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">ModelCondition</span> <span class="o">{</span> <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="c1">// TaskExecutorConfigurations.TaskExecutorConfiguration</span>
+<span class="c1">// → 빈 메서드 어디에도 @EnableAsync/@Async 관련 조건이 없다</span>
+<span class="nd">@Bean</span><span class="o">(</span><span class="nc">TaskExecutionAutoConfiguration</span><span class="o">.</span><span class="na">APPLICATION_TASK_EXECUTOR_BEAN_NAME</span><span class="o">)</span>
+<span class="nd">@Lazy</span>
+<span class="nd">@ConditionalOnThreading</span><span class="o">(</span><span class="nc">Threading</span><span class="o">.</span><span class="na">PLATFORM</span><span class="o">)</span>
+<span class="nc">ThreadPoolTaskExecutor</span> <span class="nf">applicationTaskExecutor</span><span class="o">(</span><span class="nc">ThreadPoolTaskExecutorBuilder</span> <span class="n">builder</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>정리하면:</p><ul><li><strong>Executor 빈이 하나도 없으면</strong> → 기본 풀(<code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code>)을 만든다 (<code class="language-plaintext highlighter-rouge">@EnableAsync</code> 유무와 무관).<li><strong>직접 만든 <code class="language-plaintext highlighter-rouge">Executor</code> 빈이 있으면</strong> → 자동 설정이 물러나고(back off), 그 커스텀 <code class="language-plaintext highlighter-rouge">Executor</code>가 (<code class="language-plaintext highlighter-rouge">@EnableAsync</code>를 통한) 일반 작업 실행에 쓰인다.<li>단, <code class="language-plaintext highlighter-rouge">spring.task.execution.mode=force</code>면 커스텀 <code class="language-plaintext highlighter-rouge">Executor</code>(<code class="language-plaintext highlighter-rouge">@Primary</code> 포함)가 있어도 자동 설정 풀을 강제로 쓴다.<li>스프링 MVC·WebFlux·GraphQL은 어느 경우든 <code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code> 이름의 <code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code> 빈을 요구한다.</ul><p><strong>직접 확인</strong> — <code class="language-plaintext highlighter-rouge">@EnableAsync</code>도 커스텀 <code class="language-plaintext highlighter-rouge">Executor</code>도 없는 앱을 띄워 빈을 조회해 봤다.</p><details> <summary>검증 코드 + 실행 결과</summary><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+</pre><td class="rouge-code"><pre><span class="c1">// @EnableAsync 없음. inaction.bootpool 패키지만 스캔 → 커스텀 Executor(mailExecutor) 미등록</span>
+<span class="nd">@SpringBootApplication</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BootDefaultPoolApplication</span> <span class="o">{</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">SpringApplication</span> <span class="n">app</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">SpringApplication</span><span class="o">(</span><span class="nc">BootDefaultPoolApplication</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+        <span class="n">app</span><span class="o">.</span><span class="na">setWebApplicationType</span><span class="o">(</span><span class="nc">WebApplicationType</span><span class="o">.</span><span class="na">NONE</span><span class="o">);</span> <span class="c1">// 검증만 하고 종료</span>
+        <span class="n">app</span><span class="o">.</span><span class="na">run</span><span class="o">(</span><span class="n">args</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="nd">@Component</span>
+<span class="kd">class</span> <span class="nc">PoolInspector</span> <span class="kd">implements</span> <span class="nc">CommandLineRunner</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="kd">final</span> <span class="nc">ApplicationContext</span> <span class="n">ctx</span><span class="o">;</span>
+    <span class="nc">PoolInspector</span><span class="o">(</span><span class="nc">ApplicationContext</span> <span class="n">ctx</span><span class="o">)</span> <span class="o">{</span> <span class="k">this</span><span class="o">.</span><span class="na">ctx</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">;</span> <span class="o">}</span>
+
+    <span class="nd">@Override</span> <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">(</span><span class="nc">String</span><span class="o">...</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"applicationTaskExecutor 존재? = "</span> <span class="o">+</span> <span class="n">ctx</span><span class="o">.</span><span class="na">containsBean</span><span class="o">(</span><span class="s">"applicationTaskExecutor"</span><span class="o">));</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Executor 빈     = "</span> <span class="o">+</span> <span class="nc">String</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="s">", "</span><span class="o">,</span> <span class="n">ctx</span><span class="o">.</span><span class="na">getBeanNamesForType</span><span class="o">(</span><span class="nc">Executor</span><span class="o">.</span><span class="na">class</span><span class="o">)));</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"TaskExecutor 빈 = "</span> <span class="o">+</span> <span class="nc">String</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="s">", "</span><span class="o">,</span> <span class="n">ctx</span><span class="o">.</span><span class="na">getBeanNamesForType</span><span class="o">(</span><span class="nc">TaskExecutor</span><span class="o">.</span><span class="na">class</span><span class="o">)));</span>
+        <span class="kt">var</span> <span class="n">tpte</span> <span class="o">=</span> <span class="o">(</span><span class="nc">ThreadPoolTaskExecutor</span><span class="o">)</span> <span class="n">ctx</span><span class="o">.</span><span class="na">getBean</span><span class="o">(</span><span class="s">"applicationTaskExecutor"</span><span class="o">);</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"타입 = "</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"core="</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getCorePoolSize</span><span class="o">()</span> <span class="o">+</span> <span class="s">", max="</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getMaxPoolSize</span><span class="o">()</span>
+                <span class="o">+</span> <span class="s">", keepAlive="</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getKeepAliveSeconds</span><span class="o">()</span> <span class="o">+</span> <span class="s">", prefix="</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getThreadNamePrefix</span><span class="o">()</span>
+                <span class="o">+</span> <span class="s">", queue잔여="</span> <span class="o">+</span> <span class="n">tpte</span><span class="o">.</span><span class="na">getThreadPoolExecutor</span><span class="o">().</span><span class="na">getQueue</span><span class="o">().</span><span class="na">remainingCapacity</span><span class="o">());</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>실행 결과:</p><div class="language-text highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre>applicationTaskExecutor 존재? = true
+Executor 빈     = applicationTaskExecutor
+TaskExecutor 빈 = applicationTaskExecutor
+타입 = org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+core=8, max=2147483647, keepAlive=60, prefix=task-, queue잔여=2147483647
+</pre></table></code></div></div></details><blockquote><p>결과로 두 가지가 확인된다. (1) <code class="language-plaintext highlighter-rouge">@EnableAsync</code>가 없어도 <code class="language-plaintext highlighter-rouge">applicationTaskExecutor</code>가 생성된다. (2) 등록된 <code class="language-plaintext highlighter-rouge">Executor</code>/<code class="language-plaintext highlighter-rouge">TaskExecutor</code> 빈이 이 하나뿐이라 <code class="language-plaintext highlighter-rouge">@Async</code>는 이걸 “유일한 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 빈”(탐색 규칙①)으로 찾는다 — <code class="language-plaintext highlighter-rouge">taskExecutor</code>라는 별칭 이름은 없다.</p></blockquote><h3 id="기본-설정값">기본 설정값</h3><blockquote><p>별도 설정이 없으면 core 8개, 큐·max 무제한으로 만들어진다.</p></blockquote><div class="table-wrapper"><table><thead><tr><th>프로퍼티 (<code class="language-plaintext highlighter-rouge">spring.task.execution.*</code>)<th>기본값<th>의미<tbody><tr><td><code class="language-plaintext highlighter-rouge">pool.core-size</code><td>8<td>코어 스레드 수<tr><td><code class="language-plaintext highlighter-rouge">pool.max-size</code><td><code class="language-plaintext highlighter-rouge">Integer.MAX_VALUE</code><td>최대 스레드 수(사실상 무제한)<tr><td><code class="language-plaintext highlighter-rouge">pool.queue-capacity</code><td><code class="language-plaintext highlighter-rouge">Integer.MAX_VALUE</code><td>큐 용량(사실상 무제한)<tr><td><code class="language-plaintext highlighter-rouge">pool.keep-alive</code><td>60s<td>유휴 스레드를 회수하기까지의 대기 시간<tr><td><code class="language-plaintext highlighter-rouge">pool.allow-core-thread-timeout</code><td><code class="language-plaintext highlighter-rouge">true</code><td>코어 스레드도 유휴 시 회수 허용<tr><td><code class="language-plaintext highlighter-rouge">thread-name-prefix</code><td><code class="language-plaintext highlighter-rouge">task-</code><td>스레드 이름 접두사</table></div><blockquote><p>큐가 무제한(<code class="language-plaintext highlighter-rouge">queue-capacity</code> 기본값)이라, 앞서 본 <code class="language-plaintext highlighter-rouge">ThreadPoolExecutor</code>의 “큐가 꽉 찬 다음에야 max가 작동한다”가 그대로 적용된다. 즉 기본 상태에서는 작업이 큐에 쌓이기만 하고 <code class="language-plaintext highlighter-rouge">max-size</code>까지 스레드가 늘지 않아, <strong>사실상 스레드 8개</strong>로 동작한다. 부하에 따라 스레드를 늘리려면 <code class="language-plaintext highlighter-rouge">queue-capacity</code>를 유한한 값으로 두고 <code class="language-plaintext highlighter-rouge">max-size</code>를 함께 설정해야 한다.</p></blockquote><p>설정 예:</p><div class="language-properties highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="py">spring.task.execution.pool.max-size</span><span class="p">=</span><span class="s">16</span>
+<span class="py">spring.task.execution.pool.queue-capacity</span><span class="p">=</span><span class="s">100</span>
+<span class="py">spring.task.execution.pool.keep-alive</span><span class="p">=</span><span class="s">10s</span>
+</pre></table></code></div></div><p>문서 설명대로, 이렇게 두면 큐가 꽉 찰 때(100개) 풀이 최대 16개까지 늘어나고, 스레드가 10초만 놀아도 회수돼(기본 60초보다 공격적으로) 풀이 줄어든다.</p><h3 id="스케줄링은-별도--taskschedulingautoconfiguration">스케줄링은 별도 — TaskSchedulingAutoConfiguration</h3><blockquote><p><code class="language-plaintext highlighter-rouge">@Scheduled</code>용 풀은 <code class="language-plaintext highlighter-rouge">spring.task.scheduling.*</code>로 따로 자동 설정된다. 기본은 스레드 1개짜리 <code class="language-plaintext highlighter-rouge">ThreadPoolTaskScheduler</code>(가상 스레드를 켜면 <code class="language-plaintext highlighter-rouge">SimpleAsyncTaskScheduler</code>).</p></blockquote><div class="table-wrapper"><table><thead><tr><th>프로퍼티 (<code class="language-plaintext highlighter-rouge">spring.task.scheduling.*</code>)<th>기본값<th>의미<tbody><tr><td><code class="language-plaintext highlighter-rouge">pool.size</code><td>1<td>스케줄러 스레드 수<tr><td><code class="language-plaintext highlighter-rouge">thread-name-prefix</code><td><code class="language-plaintext highlighter-rouge">scheduling-</code><td>스레드 이름 접두사</table></div><h2 id="async와-enableasync">@Async와 @EnableAsync</h2><blockquote><p><code class="language-plaintext highlighter-rouge">@Async</code>로 메서드를 비동기 후보로 표시하고, <code class="language-plaintext highlighter-rouge">@EnableAsync</code>로 그 기능을 켠다. 실제 비동기 동작은 스프링이 해당 빈을 프록시로 감싸 처리한다.</p></blockquote><h3 id="async--메서드를-비동기-후보로-표시--value로-실행기-지정">@Async — 메서드를 비동기 후보로 표시 + value로 실행기 지정</h3><blockquote><p><a href="https://docs.spring.io/spring-framework/docs/6.2.x-SNAPSHOT/javadoc-api/org/springframework/scheduling/annotation/Async.html">공식문서</a></p></blockquote><blockquote><p>메서드를 비동기 실행 후보로 표시하는 애너테이션이다.</p></blockquote><ul><li>타입(클래스) 레벨에도 붙일 수 있고, 그러면 그 타입의 모든 메서드가 비동기로 간주된다.<li>단, <code class="language-plaintext highlighter-rouge">@Configuration</code> 클래스 안에 선언된 메서드에는 <code class="language-plaintext highlighter-rouge">@Async</code>를 쓸 수 없다.<li>메서드 시그니처상 파라미터 타입은 무엇이든 된다.<li>반환 타입은 <code class="language-plaintext highlighter-rouge">void</code> 또는 <code class="language-plaintext highlighter-rouge">Future</code>로 제한된다.<li><code class="language-plaintext highlighter-rouge">Future</code>를 쓸 때는 더 구체적인 <code class="language-plaintext highlighter-rouge">CompletableFuture</code>로 선언하면, 비동기 작업과 더 풍부하게 상호작용하고 후속 처리 단계를 바로 조합할 수 있다.</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="c1">// org.springframework.scheduling.annotation.Async</span>
+<span class="nd">@Target</span><span class="o">({</span><span class="nc">ElementType</span><span class="o">.</span><span class="na">TYPE</span><span class="o">,</span> <span class="nc">ElementType</span><span class="o">.</span><span class="na">METHOD</span><span class="o">})</span>
+<span class="nd">@Retention</span><span class="o">(</span><span class="nc">RetentionPolicy</span><span class="o">.</span><span class="na">RUNTIME</span><span class="o">)</span>
+<span class="nd">@Documented</span>
+<span class="nd">@Reflective</span>
+<span class="kd">public</span> <span class="nd">@interface</span> <span class="nc">Async</span> <span class="o">{</span>
+
+	<span class="nc">String</span> <span class="nf">value</span><span class="o">()</span> <span class="k">default</span> <span class="s">""</span><span class="o">;</span>
+
+<span class="o">}</span>
+</pre></table></code></div></div><p><strong><code class="language-plaintext highlighter-rouge">value</code> — 어떤 실행기(executor)를 쓸지 지정</strong></p><blockquote><p>해당 비동기 작업에 대한 qualifier 값이다.</p></blockquote><ul><li>이 값으로 작업을 실행할 executor를 결정한다. qualifier 값(또는 빈 이름)이 특정 <code class="language-plaintext highlighter-rouge">Executor</code> 또는 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 빈 정의와 매칭된다.<li>클래스 레벨 <code class="language-plaintext highlighter-rouge">@Async</code>에 지정하면 그 클래스의 모든 메서드에 해당 executor가 쓰인다.<li>메서드 레벨 <code class="language-plaintext highlighter-rouge">value</code>는 클래스 레벨에 설정된 qualifier 값을 항상 덮어쓴다.<li>qualifier 값은 SpEL 표현식(예: <code class="language-plaintext highlighter-rouge">#{environment['myExecutor']}</code>)이나 프로퍼티 플레이스홀더(예: <code class="language-plaintext highlighter-rouge">${my.app.myExecutor}</code>)로 주면 동적으로 해석된다.</ul><blockquote><p><strong>Executor를 써야 하나, TaskExecutor를 써야 하나?</strong> — 둘 다 된다. <code class="language-plaintext highlighter-rouge">value</code>로 준 이름/qualifier에 맞는 빈을 찾을 때 타입이 <code class="language-plaintext highlighter-rouge">Executor</code>든 <code class="language-plaintext highlighter-rouge">TaskExecutor</code>든 상관없다. 순수 <code class="language-plaintext highlighter-rouge">Executor</code>로 찾히면 스프링이 내부에서 <code class="language-plaintext highlighter-rouge">TaskExecutorAdapter</code>로 감싸 <code class="language-plaintext highlighter-rouge">AsyncTaskExecutor</code>로 맞춰 쓴다. (그래서 아래 실습처럼 <code class="language-plaintext highlighter-rouge">@Bean Executor mailExecutor</code>로 등록해도 동작한다)</p></blockquote><h3 id="enableasync--비동기-기능-켜기--executor-탐색-규칙">@EnableAsync — 비동기 기능 켜기 + executor 탐색 규칙</h3><blockquote><p><a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/scheduling/annotation/EnableAsync.html">공식문서</a></p></blockquote><blockquote><p>스프링의 비동기 메서드 실행 기능을 활성화한다.</p></blockquote><p><code class="language-plaintext highlighter-rouge">MyAsyncBean</code>은 스프링의 <code class="language-plaintext highlighter-rouge">@Async</code>, EJB 3.1의 <code class="language-plaintext highlighter-rouge">@jakarta.ejb.Asynchronous</code>, 또는 <code class="language-plaintext highlighter-rouge">annotation()</code> 속성으로 지정한 커스텀 애너테이션이 붙은 메서드를 하나 이상 가진 사용자 정의 타입이다. 이 비동기 처리(aspect)는 등록된 빈에 투명하게 더해진다. 예를 들어 다음 설정으로:</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="nd">@Configuration</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">AnotherAppConfig</span> <span class="o">{</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="nc">MyAsyncBean</span> <span class="nf">asyncBean</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="nf">MyAsyncBean</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p><strong>executor 탐색 규칙</strong> — <code class="language-plaintext highlighter-rouge">@EnableAsync</code>는 <code class="language-plaintext highlighter-rouge">@Async</code>가 쓸 스레드 풀을 다음 순서로 찾는다.</p><ol><li>컨텍스트에 <code class="language-plaintext highlighter-rouge">TaskExecutor</code> 타입 빈이 <strong>딱 하나</strong> 있으면 그것을 쓴다.<li>없으면, 이름이 <code class="language-plaintext highlighter-rouge">"taskExecutor"</code>인 <code class="language-plaintext highlighter-rouge">Executor</code> 빈을 찾는다.<li>둘 다 못 찾으면 <code class="language-plaintext highlighter-rouge">SimpleAsyncTaskExecutor</code>(풀이 아니라 매번 새 스레드)로 비동기 호출을 처리한다.</ol><blockquote><p>반환 타입이 <code class="language-plaintext highlighter-rouge">void</code>인 메서드는 예외를 호출자에게 전달할 수 없다. 기본 동작에서는 이런 잡히지 않은 예외를 로그로만 남긴다.</p></blockquote><p>이 동작들을 커스터마이징하려면 <code class="language-plaintext highlighter-rouge">AsyncConfigurer</code>를 구현해서 다음을 제공한다.</p><ul><li><code class="language-plaintext highlighter-rouge">getAsyncExecutor()</code>로 직접 만든 <code class="language-plaintext highlighter-rouge">Executor</code><li><code class="language-plaintext highlighter-rouge">getAsyncUncaughtExceptionHandler()</code>로 직접 만든 <code class="language-plaintext highlighter-rouge">AsyncUncaughtExceptionHandler</code></ul><blockquote><p>NOTE: <code class="language-plaintext highlighter-rouge">AsyncConfigurer</code> 설정 클래스는 애플리케이션 컨텍스트 부트스트랩 초기에 초기화된다. 여기서 다른 빈에 의존해야 한다면, 그 빈들이 다른 후처리기(post-processor)도 거치도록 가능한 한 <code class="language-plaintext highlighter-rouge">lazy</code>로 선언하는 것이 좋다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre><td class="rouge-code"><pre><span class="nd">@Configuration</span>
+<span class="nd">@EnableAsync</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">AppConfig</span> <span class="kd">implements</span> <span class="nc">AsyncConfigurer</span> <span class="o">{</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="nc">Executor</span> <span class="nf">getAsyncExecutor</span><span class="o">()</span> <span class="o">{</span>
+        <span class="nc">ThreadPoolTaskExecutor</span> <span class="n">executor</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ThreadPoolTaskExecutor</span><span class="o">();</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setCorePoolSize</span><span class="o">(</span><span class="mi">7</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setMaxPoolSize</span><span class="o">(</span><span class="mi">42</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setQueueCapacity</span><span class="o">(</span><span class="mi">11</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setThreadNamePrefix</span><span class="o">(</span><span class="s">"MyExecutor-"</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">initialize</span><span class="o">();</span>
+        <span class="k">return</span> <span class="n">executor</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="nc">AsyncUncaughtExceptionHandler</span> <span class="nf">getAsyncUncaughtExceptionHandler</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="nf">MyAsyncUncaughtExceptionHandler</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+</pre></table></code></div></div><h3 id="실습">실습</h3><details> <summary>실습 코드 전체 보기</summary><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre><span class="nd">@Configuration</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">AsyncConfig</span> <span class="o">{</span>
+
+    <span class="c1">// @Async가 작업을 던질 실제 실행기. 빈 이름이 "mailExecutor".</span>
+    <span class="nd">@Bean</span><span class="o">(</span><span class="s">"mailExecutor"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="nc">Executor</span> <span class="nf">mailExecutor</span><span class="o">()</span> <span class="o">{</span>
+        <span class="nc">ThreadPoolTaskExecutor</span> <span class="n">executor</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ThreadPoolTaskExecutor</span><span class="o">();</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setCorePoolSize</span><span class="o">(</span><span class="mi">2</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setMaxPoolSize</span><span class="o">(</span><span class="mi">4</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setQueueCapacity</span><span class="o">(</span><span class="mi">100</span><span class="o">);</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setThreadNamePrefix</span><span class="o">(</span><span class="s">"mail-"</span><span class="o">);</span>   <span class="c1">// 비동기 스레드 이름 → 로그로 확인용</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">setRejectedExecutionHandler</span><span class="o">(</span><span class="k">new</span> <span class="nc">ThreadPoolExecutor</span><span class="o">.</span><span class="na">CallerRunsPolicy</span><span class="o">());</span>
+        <span class="n">executor</span><span class="o">.</span><span class="na">initialize</span><span class="o">();</span>
+        <span class="k">return</span> <span class="n">executor</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre><td class="rouge-code"><pre><span class="nd">@Service</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">EmailService</span> <span class="o">{</span>
+
+    <span class="c1">// ★ 핵심: 이 메서드는 "mailExecutor" 풀의 스레드에서 비동기로 실행된다.</span>
+    <span class="nd">@Async</span><span class="o">(</span><span class="s">"mailExecutor"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">send</span><span class="o">(</span><span class="nc">String</span> <span class="n">to</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[send] 실행 스레드 = "</span> <span class="o">+</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+        <span class="n">sleep</span><span class="o">(</span><span class="mi">500</span><span class="o">);</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[send] "</span> <span class="o">+</span> <span class="n">to</span> <span class="o">+</span> <span class="s">" 에게 메일 전송 완료"</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="c1">// 결과를 받고 싶으면 CompletableFuture&lt;T&gt; 반환</span>
+    <span class="nd">@Async</span><span class="o">(</span><span class="s">"mailExecutor"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="nc">CompletableFuture</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="nf">sendWithResult</span><span class="o">(</span><span class="nc">String</span> <span class="n">to</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[sendWithResult] 실행 스레드 = "</span> <span class="o">+</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+        <span class="n">sleep</span><span class="o">(</span><span class="mi">500</span><span class="o">);</span>
+        <span class="k">return</span> <span class="nc">CompletableFuture</span><span class="o">.</span><span class="na">completedFuture</span><span class="o">(</span><span class="s">"sent:"</span> <span class="o">+</span> <span class="n">to</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="c1">// ⚠️ 함정 시연용: 같은 빈 안에서 send()를 직접 호출하면 비동기가 안 된다 (self-invocation)</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">sendViaSelfCall</span><span class="o">(</span><span class="nc">String</span> <span class="n">to</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[sendViaSelfCall] 실행 스레드 = "</span> <span class="o">+</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">to</span><span class="o">);</span>   <span class="c1">// ← this. 호출이라 프록시를 안 거침 → 동기 실행됨</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">sleep</span><span class="o">(</span><span class="kt">long</span> <span class="n">ms</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">try</span> <span class="o">{</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">sleep</span><span class="o">(</span><span class="n">ms</span><span class="o">);</span> <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">InterruptedException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">interrupt</span><span class="o">();</span> <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+</pre><td class="rouge-code"><pre><span class="nd">@Component</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">DemoRunner</span> <span class="kd">implements</span> <span class="nc">CommandLineRunner</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="nc">EmailService</span> <span class="n">emailService</span><span class="o">;</span>
+
+    <span class="c1">// 주입받는 emailService는 "진짜 EmailService"가 아니라 스프링이 만든 프록시다.</span>
+    <span class="kd">public</span> <span class="nf">DemoRunner</span><span class="o">(</span><span class="nc">EmailService</span> <span class="n">emailService</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">emailService</span> <span class="o">=</span> <span class="n">emailService</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">(</span><span class="nc">String</span><span class="o">...</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Exception</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"주입된 타입 = "</span> <span class="o">+</span> <span class="n">emailService</span><span class="o">.</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span> <span class="c1">// ...$$SpringCGLIB$$...</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[caller] 호출 스레드 = "</span> <span class="o">+</span> <span class="nc">Thread</span><span class="o">.</span><span class="na">currentThread</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+
+        <span class="c1">// 1) 일반 비동기 호출: caller 스레드와 다른 mail- 스레드에서 실행됨</span>
+        <span class="n">emailService</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="s">"a@test.com"</span><span class="o">);</span>
+
+        <span class="c1">// 2) 결과 받는 비동기 호출</span>
+        <span class="nc">CompletableFuture</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">emailService</span><span class="o">.</span><span class="na">sendWithResult</span><span class="o">(</span><span class="s">"b@test.com"</span><span class="o">);</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"[caller] future 결과 = "</span> <span class="o">+</span> <span class="n">f</span><span class="o">.</span><span class="na">get</span><span class="o">());</span>  <span class="c1">// 끝날 때까지 대기</span>
+
+        <span class="c1">// 3) self-invocation 함정: 내부 this.send() 라 동기로 돌아감 (스레드가 안 바뀜)</span>
+        <span class="n">emailService</span><span class="o">.</span><span class="na">sendViaSelfCall</span><span class="o">(</span><span class="s">"c@test.com"</span><span class="o">);</span>
+
+        <span class="nc">Thread</span><span class="o">.</span><span class="na">sleep</span><span class="o">(</span><span class="mi">1000</span><span class="o">);</span> <span class="c1">// 비동기 작업 출력 보려고 잠깐 대기</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nd">@SpringBootApplication</span>
+<span class="nd">@EnableAsync</span>   <span class="c1">// ★ 이게 있어야 @Async 프록시가 만들어진다 (없으면 그냥 동기 실행)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">AsyncApplication</span> <span class="o">{</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">SpringApplication</span><span class="o">.</span><span class="na">run</span><span class="o">(</span><span class="nc">AsyncApplication</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">args</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div></details><h3 id="프록시로-동작한다">프록시로 동작한다</h3><blockquote><p><code class="language-plaintext highlighter-rouge">@Async</code>가 붙은 빈은 원본이 아니라, 스프링이 AOP로 감싼 CGLIB 프록시로 컨테이너에 등록된다. 메서드 호출을 이 프록시가 가로채 executor로 넘기기 때문에 비동기가 성립한다.</p></blockquote><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre>@EnableAsync
+   │  → AsyncConfigurationSelector 가 동작
+   ▼
+AsyncAnnotationBeanPostProcessor 등록  (빈 후처리기)
+   │  → 컨테이너 기동 시 모든 빈을 훑어서
+   │    "@Async 메서드를 가진 빈"을 발견하면
+   ▼
+그 빈을 'AOP 프록시'로 감싸서 교체
+   (Advisor = AsyncAnnotationAdvisor,
+    Advice  = AnnotationAsyncExecutionInterceptor)
+
+그래서 컨테이너 안에 들어가는 EmailService 빈은 원본이 아니라, 원본을 감싼 CGLIB 프록시 객체
+</pre></table></code></div></div><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre><td class="rouge-code"><pre>DemoRunner (main 스레드)
+   │  emailService.send("a@test.com")
+   ▼
+[프록시.send()]                         ← 진짜 메서드가 아니라 프록시가 먼저 가로챔
+   │
+   ▼
+AsyncExecutionInterceptor.invoke()      ← @Async를 처리하는 AOP advice
+   │  1) 이 메서드에 맞는 Executor 결정
+   │     → @Async("mailExecutor") 의 값으로
+   │       "mailExecutor" 빈을 찾음  (AsyncConfig.java:14)
+   │
+   │  2) "원본 메서드 호출"을 Callable로 감쌈
+   │       Callable task = () -&gt; 원본EmailService.send("a@test.com");
+   │
+   │  3) executor.submit(task)  ← 풀에 제출하고
+   │
+   ▼  4) 즉시 리턴 (void라 그냥 반환)   ← 여기서 main 스레드는 바로 다음 줄로!
+[main 스레드는 계속 진행]
+                                         (한편)
+   mail-1 스레드가 task를 꺼내 실행
+   → 원본 EmailService.send() 가 mail-1에서 돈다  ← 출력의 "[send] 실행 스레드 = mail-1"
+</pre></table></code></div></div><p>프록시가 가로챈 뒤의 핵심 동작은 “원본 메서드 호출을 <code class="language-plaintext highlighter-rouge">Callable</code>로 감싸 executor에 <code class="language-plaintext highlighter-rouge">submit</code>하는 것”이다. 실제 advice인 <code class="language-plaintext highlighter-rouge">AsyncExecutionInterceptor#invoke</code>를 보면 그대로 드러난다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+</pre><td class="rouge-code"><pre><span class="c1">// org.springframework.aop.interceptor.AsyncExecutionInterceptor#invoke</span>
+
+<span class="nd">@Override</span>
+<span class="nd">@Nullable</span>
+<span class="nd">@SuppressWarnings</span><span class="o">(</span><span class="s">"NullAway"</span><span class="o">)</span>
+<span class="kd">public</span> <span class="nc">Object</span> <span class="nf">invoke</span><span class="o">(</span><span class="kd">final</span> <span class="nc">MethodInvocation</span> <span class="n">invocation</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Throwable</span> <span class="o">{</span>
+  <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">targetClass</span> <span class="o">=</span> <span class="o">(</span><span class="n">invocation</span><span class="o">.</span><span class="na">getThis</span><span class="o">()</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="nc">AopUtils</span><span class="o">.</span><span class="na">getTargetClass</span><span class="o">(</span><span class="n">invocation</span><span class="o">.</span><span class="na">getThis</span><span class="o">())</span> <span class="o">:</span> <span class="kc">null</span><span class="o">);</span>
+  <span class="kd">final</span> <span class="nc">Method</span> <span class="n">userMethod</span> <span class="o">=</span> <span class="nc">BridgeMethodResolver</span><span class="o">.</span><span class="na">getMostSpecificMethod</span><span class="o">(</span><span class="n">invocation</span><span class="o">.</span><span class="na">getMethod</span><span class="o">(),</span> <span class="n">targetClass</span><span class="o">);</span>
+
+  <span class="nc">AsyncTaskExecutor</span> <span class="n">executor</span> <span class="o">=</span> <span class="n">determineAsyncExecutor</span><span class="o">(</span><span class="n">userMethod</span><span class="o">);</span>
+  <span class="k">if</span> <span class="o">(</span><span class="n">executor</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nf">IllegalStateException</span><span class="o">(</span>
+      <span class="s">"No executor specified and no default executor set on AsyncExecutionInterceptor either"</span><span class="o">);</span>
+  <span class="o">}</span>
+
+  <span class="nc">Callable</span><span class="o">&lt;</span><span class="nc">Object</span><span class="o">&gt;</span> <span class="n">task</span> <span class="o">=</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="k">try</span> <span class="o">{</span>
+      <span class="nc">Object</span> <span class="n">result</span> <span class="o">=</span> <span class="n">invocation</span><span class="o">.</span><span class="na">proceed</span><span class="o">();</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">result</span> <span class="k">instanceof</span> <span class="nc">Future</span><span class="o">&lt;?&gt;</span> <span class="n">future</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">future</span><span class="o">.</span><span class="na">get</span><span class="o">();</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+    <span class="k">catch</span> <span class="o">(</span><span class="nc">ExecutionException</span> <span class="n">ex</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">handleError</span><span class="o">(</span><span class="n">ex</span><span class="o">.</span><span class="na">getCause</span><span class="o">(),</span> <span class="n">userMethod</span><span class="o">,</span> <span class="n">invocation</span><span class="o">.</span><span class="na">getArguments</span><span class="o">());</span>
+    <span class="o">}</span>
+    <span class="k">catch</span> <span class="o">(</span><span class="nc">Throwable</span> <span class="n">ex</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">handleError</span><span class="o">(</span><span class="n">ex</span><span class="o">,</span> <span class="n">userMethod</span><span class="o">,</span> <span class="n">invocation</span><span class="o">.</span><span class="na">getArguments</span><span class="o">());</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+  <span class="o">};</span>
+
+  <span class="k">return</span> <span class="nf">doSubmit</span><span class="o">(</span><span class="n">task</span><span class="o">,</span> <span class="n">executor</span><span class="o">,</span> <span class="n">userMethod</span><span class="o">.</span><span class="na">getReturnType</span><span class="o">());</span>
+<span class="o">}</span>
+</pre></table></code></div></div></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/%EC%A7%80%EC%8B%9D-%EB%8D%94%ED%95%98%EA%B8%B0/'>지식 더하기</a>, <a href='/categories/%EC%9D%B4%EB%A1%A0/'>이론</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/spring/" class="post-tag no-text-decoration" >Spring</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Spring - @Async 살펴보기 (JDK Executor를 곁들인..) - zz9z9&url=https://zz9z9.github.io/posts/spring-async/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Spring - @Async 살펴보기 (JDK Executor를 곁들인..) - zz9z9&u=https://zz9z9.github.io/posts/spring-async/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Spring - @Async 살펴보기 (JDK Executor를 곁들인..) - zz9z9&url=https://zz9z9.github.io/posts/spring-async/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/mysql-lock/">MySQL - LOCK 살펴보기</a><li><a href="/posts/network-tools/">WEB - TCP vs UDP, 그리고 네트워크 진단 도구들</a><li><a href="/posts/spring-async/">Spring - @Async 살펴보기 (JDK Executor를 곁들인..)</a><li><a href="/posts/snat-dnat-waf/">WEB - WAF, SNAT, DNAT 등 (서버 이전하면서 헷갈렸던 개념들 정리)</a><li><a href="/posts/prepared-statement/">Java - PreparedStatement는 어떻게 SQL Injection을 방어할까 (feat. MySQL)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/aws/">AWS</a> <a class="post-tag" href="/tags/spring/">Spring</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/infra/">Infra</a> <a class="post-tag" href="/tags/jpa/">JPA</a> <a class="post-tag" href="/tags/hibernate/">Hibernate</a> <a class="post-tag" href="/tags/spring-batch/">Spring Batch</a></div></div></div><script src="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.js"></script><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/spring-restdocs/"><div class="card-body"> <span class="timeago small" > Apr 24, 2025 <i class="unloaded">2025-04-24T20:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Spring - Spring Rest Docs란 ?</h3><div class="text-muted small"><p> Spring REST Docs RESTful 서비스를 문서화하는 데 도움을 주는 도구 Asciidoctor로 작성한 수동 문서와 Spring MVC Test를 통해 자동 생성된 스니펫을 결합하여 사용 Spring WebFlux의 WebTestClient나 REST Assured 5 사용도 가능 이 프...</p></div></div></a></div><div class="card"> <a href="/posts/spring-transactional-part1/"><div class="card-body"> <span class="timeago small" > May 25, 2025 <i class="unloaded">2025-05-25T00:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Spring - @Transactional 살펴보기 (1) - AOP Proxy</h3><div class="text-muted small"><p> AOP Proxy 스프링 : https://docs.spring.io/spring-framework/reference/core/aop/introduction-proxies.html 스프링 부트 : https://docs.spring.vmware.com/spring-boot/docs/3.0.14/reference/htmlsingle/#featur...</p></div></div></a></div><div class="card"> <a href="/posts/spring-versions/"><div class="card-body"> <span class="timeago small" > Jul 26, 2025 <i class="unloaded">2025-07-26T00:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Spring - Spring Boot 버전 현황 (25.07.26)</h3><div class="text-muted small"><p> Spring Boot / Spring 릴리즈 및 지원 종료 일정 Spring Boot Spring Boot는 6개월마다 새로운 메이저 또는 마이너 버전을 릴리스 (5월 / 11월) (보통) 세 번째주 목요일에 릴리스를 목표로 함 Branch Initial Release End of OSS ...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/prepared-statement/" class="btn btn-outline-primary" prompt="Older"><p>Java - PreparedStatement는 어떻게 SQL Injection을 방어할까 (feat. MySQL)</p></a> <a href="/posts/snat-dnat-waf/" class="btn btn-outline-primary" prompt="Newer"><p>WEB - WAF, SNAT, DNAT 등 (서버 이전하면서 헷갈렸던 개념들 정리)</p></a></div></div></div></div><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2026 <a href="https://twitter.com/username">Lee JaeYoon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-sm-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/aws/">AWS</a> <a class="post-tag" href="/tags/spring/">Spring</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/infra/">Infra</a> <a class="post-tag" href="/tags/jpa/">JPA</a> <a class="post-tag" href="/tags/hibernate/">Hibernate</a> <a class="post-tag" href="/tags/spring-batch/">Spring Batch</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://zz9z9.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"> {categories} {tags}</div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>', templateMiddleware: function(prop, value, template) { if (prop === 'categories') { if (value === '') { return `${value}`; } else { return `<div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>${value}</div>`; } } if (prop === 'tags') { if (value === '') { return `${value}`; } else { return `<div><i class="fa fa-tag fa-fw"></i>${value}</div>`; } } } }); </script>
