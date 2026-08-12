@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://zz9z9.github.io/sitemap.xml

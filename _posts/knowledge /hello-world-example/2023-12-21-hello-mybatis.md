@@ -2,7 +2,7 @@
 title: JDBC / MyBatis / MyBatis-Spring 훑어보기
 date: 2023-12-21 22:25:00 +0900
 categories: [지식 더하기, Hello-World 구현]
-tags: [Mybatis]
+tags: [MyBatis]
 ---
 
 > JDBC부터 mybatis-spring까지 간단하게 사용해보면서 드는 개인적인 생각을 적어보자.
