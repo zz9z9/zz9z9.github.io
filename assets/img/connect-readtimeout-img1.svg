@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2572" viewBox="0 0 1500 2572" font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+<defs>
+<marker id="aN" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#9a9184"/></marker>
+<marker id="aB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2f6fae"/></marker>
+<marker id="aR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#b0446a"/></marker>
+<marker id="aG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3f7d54"/></marker>
+</defs>
+<style>
+ .title{font-size:27px;font-weight:700;fill:#2b2b2b}
+ .sub{font-size:14.5px;fill:#8a8378}
+ .laneT{font-size:17px;font-weight:700}
+ .phase{font-size:17px;font-weight:700;fill:#4a463f}
+ .phaseSub{font-size:13px;fill:#8a8378}
+ .code{font-size:13.5px;font-family:'SFMono-Regular','D2Coding',Consolas,'Courier New',monospace}
+ .note{font-size:12.5px;fill:#6f675c}
+ .edge{font-size:12.5px;font-weight:600}
+ .tag{font-size:12px;font-weight:700;fill:#b0446a}
+ .sumT{font-size:14px;font-weight:700;fill:#7a5c1e}
+ .sum{font-size:14.5px;fill:#3f3a33}
+</style>
+<rect width="1500" height="2572" fill="#faf5ec"/>
+<text x="750.0" y="48" text-anchor="middle" class="title">connectTimeout / readTimeout — 세팅 지점과 적용 지점</text>
+<text x="750.0" y="76" text-anchor="middle" class="sub">RestTemplate 호출 한 번을 애플리케이션 → JDK 유저 공간 → 커널까지 따라간 흐름 (SimpleClientHttpRequestFactory / HttpURLConnection 경로)</text>
+<rect x="30" y="100" width="430" height="2342" rx="12" fill="#eef1f8" stroke="#dbe3f2" stroke-width="1.4"/>
+<rect x="30" y="100" width="430" height="46" rx="12" fill="#dbe3f2"/>
+<rect x="30" y="130" width="430" height="16" fill="#dbe3f2"/>
+<text x="245.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">애플리케이션 (Spring)</text>
+<rect x="480" y="100" width="590" height="2342" rx="12" fill="#edf5ef" stroke="#d6e6da" stroke-width="1.4"/>
+<rect x="480" y="100" width="590" height="46" rx="12" fill="#d6e6da"/>
+<rect x="480" y="130" width="590" height="16" fill="#d6e6da"/>
+<text x="775.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">JDK 유저 공간 (java.net · sun.nio.ch)</text>
+<rect x="1090" y="100" width="380" height="2342" rx="12" fill="#f7efe0" stroke="#ead9bd" stroke-width="1.4"/>
+<rect x="1090" y="100" width="380" height="46" rx="12" fill="#ead9bd"/>
+<rect x="1090" y="130" width="380" height="16" fill="#ead9bd"/>
+<text x="1280.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">커널</text>
+<rect x="30" y="178" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
+<text x="50" y="204" class="phase">①  세팅 — 전부 필드 대입, I/O 도 패킷도 0</text>
+<text x="1450" y="204" text-anchor="end" class="phaseSub">2장</text>
+<rect x="44" y="238" width="402" height="106" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="59" y="268" class="code" fill="#3f3a33">factory.setConnectTimeout(1_000)</text>
+<text x="59" y="289" class="code" fill="#3f3a33">factory.setReadTimeout(1_000)</text>
+<text x="59" y="311" class="note">SimpleClientHttpRequestFactory 의</text>
+<text x="59" y="329" class="note">int 필드에 대입 (앱 시작 시 1회)</text>
+<rect x="1104" y="238" width="352" height="67" rx="9" fill="none" stroke="#c6bdad" stroke-width="1.4" stroke-dasharray="6 5"/>
+<text x="1119" y="268" class="code" fill="#3f3a33">—</text>
+<text x="1119" y="290" class="note">소켓 FD 없음 · 패킷 0</text>
+<line x1="245.0" y1="344" x2="245.0" y2="370" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="44" y="370" width="402" height="85" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="59" y="400" class="code" fill="#3f3a33">prepareConnection(conn, "GET")</text>
+<text x="59" y="422" class="note">요청마다 실행. connectTimeout 이 -1 이면</text>
+<text x="59" y="440" class="note">setter 를 호출조차 안 한다 → 기본 0 = 무한</text>
+<line x1="446" y1="409" x2="494" y2="409" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="377" width="562" height="106" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="407" class="code" fill="#3f3a33">URLConnection.setConnectTimeout(ms)</text>
+<text x="509" y="428" class="code" fill="#3f3a33">URLConnection.setReadTimeout(ms)</text>
+<text x="509" y="450" class="note">음수 검증 후 int 필드에 대입. 그게 전부다.</text>
+<text x="509" y="468" class="note">여기까지 소켓은 존재하지도 않는다.</text>
+<rect x="30" y="513" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
+<text x="50" y="539" class="phase">②  커넥션 확보 — 재사용인가, 새로 만드는가</text>
+<text x="1450" y="539" text-anchor="end" class="phaseSub">3-1</text>
+<rect x="44" y="573" width="402" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="59" y="603" class="code" fill="#3f3a33">restTemplate.getForObject(...)</text>
+<text x="59" y="625" class="note">→ connection.connect()</text>
+<rect x="44" y="662" width="402" height="124" rx="9" fill="none" stroke="#c6bdad" stroke-width="1.4" stroke-dasharray="6 5"/>
+<text x="59" y="689" class="tag">★ HttpClient5 라면 (6-2)</text>
+<text x="59" y="713" class="code" fill="#3f3a33">connectionRequestTimeout</text>
+<text x="59" y="735" class="note">소켓 이전에 축이 하나 더 붙는다 — 풀 lease 대기.</text>
+<text x="59" y="753" class="note">InternalExecRuntime#acquireEndpoint :111</text>
+<text x="59" y="771" class="note">여기서 터지면 스택에 소켓 프레임이 0개다.</text>
+<line x1="446" y1="607" x2="494" y2="607" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="573" width="562" height="88" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="603" class="code" fill="#3f3a33">HttpClient.New(url, p, connectTimeout)</text>
+<text x="509" y="624" class="code" fill="#3f3a33">  └ kac.get(url, null)   // HttpClient.java:341</text>
+<text x="509" y="646" class="note">keep-alive 캐시 조회</text>
+<rect x="548" y="691" width="508" height="67" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
+<text x="563" y="721" class="code" fill="#3f7d54">캐시 HIT → 기존 ESTABLISHED 소켓 재사용</text>
+<text x="563" y="743" class="note">③ 전체 스킵. connectTimeout 은 쓰이지도 않는다.</text>
+<line x1="775.0" y1="661" x2="775.0" y2="691" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
+<path d="M510,661 V787" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
+<text x="519" y="683" class="edge" fill="#b0446a">캐시 MISS</text>
+<rect x="494" y="787" width="562" height="85" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="509" y="817" class="code" fill="#b0446a">new InetSocketAddress(server, port)</text>
+<text x="509" y="839" class="note">⚠ 인자 평가 시점에 DNS 부터 조회한다.</text>
+<text x="509" y="857" class="note">connectTimeout 은 이 구간을 덮지 못한다.</text>
+<line x1="1056" y1="823" x2="1104" y2="823" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="787" width="352" height="67" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="817" class="code" fill="#3f3a33">DNS 질의 (UDP 53)</text>
+<text x="1119" y="839" class="note">어떤 타임아웃도 안 걸림</text>
+<rect x="30" y="902" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
+<text x="50" y="928" class="phase">③  connect() — connectTimeout 이 소비되는 유일한 구간</text>
+<text x="1450" y="928" text-anchor="end" class="phaseSub">3-2</text>
+<rect x="44" y="962" width="402" height="85" rx="9" fill="none" stroke="#c6bdad" stroke-width="1.4" stroke-dasharray="6 5"/>
+<text x="59" y="992" class="code" fill="#3f3a33">(호출 스레드는 블로킹)</text>
+<text x="59" y="1014" class="note">connect() 가 리턴할 때까지</text>
+<text x="59" y="1032" class="note">HTTP 바이트는 단 1개도 안 나갔다.</text>
+<rect x="494" y="962" width="562" height="88" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="992" class="code" fill="#3f3a33">NetworkClient#doConnect          :178</text>
+<text x="509" y="1013" class="code" fill="#3f3a33">  s.connect(addr, connectTimeout)</text>
+<text x="509" y="1035" class="note">값이 소켓 API 에 꽂히는 단 한 줄</text>
+<line x1="775.0" y1="1050" x2="775.0" y2="1076" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1076" width="562" height="88" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1106" class="code" fill="#3f3a33">NioSocketImpl#connect            :582</text>
+<text x="509" y="1127" class="code" fill="#3f3a33">  configureNonBlockingIfNeeded(fd, millis&gt;0)</text>
+<text x="509" y="1149" class="note">timeout 이 있을 때만 FD 를 논블로킹으로 바꾼다</text>
+<line x1="1056" y1="1134" x2="1104" y2="1134" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="1102" width="352" height="88" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="1132" class="code" fill="#3f3a33">fcntl(fd, F_SETFL,</text>
+<text x="1119" y="1153" class="code" fill="#3f3a33">          O_NONBLOCK)</text>
+<text x="1119" y="1175" class="note">★ 여기서 플래그 ON</text>
+<line x1="775.0" y1="1164" x2="775.0" y2="1190" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1190" width="562" height="49" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1220" class="code" fill="#3f3a33">Net.connect(fd, address, port)   :583</text>
+<line x1="1056" y1="1219" x2="1104" y2="1219" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="1195" width="352" height="85" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="1225" class="code" fill="#3f3a33">connect(2)</text>
+<text x="1119" y="1247" class="note">SYN 전송 → TCP SYN_SENT</text>
+<text x="1119" y="1265" class="note">스레드는 재우지 않는다</text>
+<line x1="1104" y1="1302" x2="1056" y2="1302" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)" stroke-dasharray="6 5"/>
+<text x="1080.0" y="1293" text-anchor="middle" class="edge" fill="#b0446a">EINPROGRESS 즉시 리턴</text>
+<line x1="775.0" y1="1239" x2="775.0" y2="1326" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1326" width="562" height="190" rx="9" fill="#fdeef2" stroke="#b0446a" stroke-width="2.6"/>
+<text x="509" y="1353" class="tag">★ 시간이 실제로 소비되는 곳</text>
+<text x="509" y="1377" class="code" fill="#3f3a33">timedFinishConnect(fd, nanos)    :540</text>
+<text x="509" y="1398" class="code" fill="#3f3a33">  remainingNanos = nanos - (now - startNanos)</text>
+<text x="509" y="1419" class="code" fill="#3f3a33">  if (remainingNanos &lt;= 0) throw ...   // :546</text>
+<text x="509" y="1440" class="code" fill="#3f3a33">  park(fd, POLLOUT, remainingNanos)</text>
+<text x="509" y="1461" class="code" fill="#3f3a33">  polled = Net.pollConnectNow(fd)   // 재확인 후 루프</text>
+<text x="509" y="1483" class="note">깨어난 이유가 성공/실패/시간만료/spurious 중 무엇이든</text>
+<text x="509" y="1501" class="note">다시 확인하므로, 총 대기는 상한을 넘지 못한다.</text>
+<line x1="1056" y1="1426" x2="1104" y2="1426" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="1388" width="352" height="142" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="1418" class="code" fill="#3f3a33">poll(2, POLLOUT,</text>
+<text x="1119" y="1439" class="code" fill="#3f3a33">     남은시간 ms)</text>
+<text x="1119" y="1461" class="note">실제로 시간이 흐르는 곳.</text>
+<text x="1119" y="1479" class="note">커널엔 '타임아웃 있는</text>
+<text x="1119" y="1497" class="note">connect' syscall 이 없어</text>
+<text x="1119" y="1515" class="note">논블로킹+poll 로 흉내 낸다.</text>
+<rect x="548" y="1546" width="508" height="49" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
+<text x="563" y="1576" class="code" fill="#3f7d54">SYN+ACK 도착 → POLLOUT → TCP ESTABLISHED</text>
+<line x1="775.0" y1="1516" x2="775.0" y2="1546" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
+<path d="M510,1516 V1625" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
+<text x="519" y="1538" class="edge" fill="#b0446a">시간 초과</text>
+<rect x="494" y="1625" width="520" height="67" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="509" y="1655" class="code" fill="#b0446a">SocketTimeoutException("Connect timed out")</text>
+<text x="509" y="1677" class="note">NioSocketImpl:546 · 대문자 C · 소켓은 close() 로 폐기</text>
+<rect x="494" y="1718" width="562" height="85" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1748" class="code" fill="#3f3a33">s.setSoTimeout(readTimeout)      :187</text>
+<text x="509" y="1770" class="note">★ 커널로 안 내려간다. NioSocketImpl 의 자바 필드</text>
+<text x="509" y="1788" class="note">timeout 에 대입할 뿐 — readTimeout '장전'</text>
+<path d="M1040,1595 V1718" fill="none" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
+<text x="1049" y="1617" class="edge" fill="#3f7d54">연결 성립</text>
+<rect x="30" y="1833" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
+<text x="50" y="1859" class="phase">④  응답 read — readTimeout(SO_TIMEOUT)이 소비되는 구간</text>
+<text x="1450" y="1859" text-anchor="end" class="phaseSub">4-2</text>
+<rect x="44" y="1893" width="402" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="59" y="1923" class="code" fill="#3f3a33">getResponseCode()</text>
+<text x="59" y="1945" class="note">→ getInputStream0()</text>
+<line x1="446" y1="1923" x2="494" y2="1923" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1893" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1923" class="code" fill="#3f3a33">writeRequests()</text>
+<text x="509" y="1945" class="note">요청 라인 + 헤더 송신</text>
+<line x1="1056" y1="1923" x2="1104" y2="1923" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="1893" width="352" height="49" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="1923" class="code" fill="#3f3a33">write(2) → PSH/ACK</text>
+<line x1="775.0" y1="1960" x2="775.0" y2="1984" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1984" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="2014" class="code" fill="#3f3a33">HttpClient#parseHTTP  →  응답 첫 줄 read</text>
+<text x="509" y="2036" class="note">readTimeout 이 가장 흔히 터지는 지점</text>
+<line x1="775.0" y1="2051" x2="775.0" y2="2077" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="2077" width="562" height="169" rx="9" fill="#fdeef2" stroke="#b0446a" stroke-width="2.6"/>
+<text x="509" y="2104" class="tag">★ 시간이 실제로 소비되는 곳</text>
+<text x="509" y="2128" class="code" fill="#3f3a33">timedRead(fd, b, off, len, nanos) :270</text>
+<text x="509" y="2149" class="code" fill="#3f3a33">  startNanos = System.nanoTime()   // 호출마다 새로</text>
+<text x="509" y="2170" class="code" fill="#3f3a33">  if (remainingNanos &lt;= 0) throw ...   // :278</text>
+<text x="509" y="2191" class="code" fill="#3f3a33">  park(fd, POLLIN, remainingNanos)</text>
+<text x="509" y="2213" class="note">startNanos 가 read 호출마다 새로 찍힌다 —</text>
+<text x="509" y="2231" class="note">'read 호출당 상한'이라는 성질의 근원.</text>
+<line x1="1056" y1="2143" x2="1104" y2="2143" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="2105" width="352" height="145" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="2135" class="code" fill="#3f3a33">read(2) → EAGAIN</text>
+<text x="1119" y="2156" class="code" fill="#3f3a33">poll(2, POLLIN,</text>
+<text x="1119" y="2177" class="code" fill="#3f3a33">     남은시간 ms)</text>
+<text x="1119" y="2199" class="note">수신 버퍼가 비어 있으면</text>
+<text x="1119" y="2217" class="note">즉시 EAGAIN, 그 다음</text>
+<text x="1119" y="2235" class="note">poll 에서 잠든다.</text>
+<rect x="548" y="2276" width="508" height="49" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
+<text x="563" y="2306" class="code" fill="#3f7d54">데이터 도착 → POLLIN → 계속 읽음</text>
+<line x1="775.0" y1="2246" x2="775.0" y2="2276" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
+<path d="M510,2246 V2355" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
+<text x="519" y="2268" class="edge" fill="#b0446a">시간 초과</text>
+<rect x="494" y="2355" width="562" height="67" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="509" y="2385" class="code" fill="#b0446a">SocketTimeoutException("Read timed out")</text>
+<text x="509" y="2407" class="note">NioSocketImpl:278</text>
+<rect x="44" y="2085" width="402" height="121" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="59" y="2115" class="code" fill="#b0446a">메시지 컨버터가 body InputStream read</text>
+<text x="59" y="2137" class="note">read 할 때마다 startNanos 가 다시 찍힌다.</text>
+<text x="59" y="2155" class="note">→ readTimeout 은 총 응답 시간 상한이 아니다.</text>
+<text x="59" y="2173" class="note">서버가 (readTimeout-1ms) 간격으로 1바이트씩</text>
+<text x="59" y="2191" class="note">흘려주면 영원히 안 끊긴다 (slow-drip).</text>
+<line x1="446" y1="2147" x2="494" y2="2147" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)" stroke-dasharray="6 5"/>
+<rect x="30" y="2456" width="1440" height="86" rx="10" fill="#f3ece0" stroke="#ddd0b6" stroke-width="1.4"/>
+<text x="52" y="2488" class="sumT">한 줄 요약</text>
+<text x="150" y="2488" class="sum">세팅(①②)은 전부 <tspan font-weight="700">메모리 대입</tspan>이고, 시간이 실제로 소비되는 곳은 <tspan font-weight="700" fill="#b0446a">timedFinishConnect</tspan> 와 <tspan font-weight="700" fill="#b0446a">timedRead</tspan> 두 곳뿐이다.</text>
+<text x="150" y="2518" class="sum">커널에는 "타임아웃 있는 connect/read" 라는 syscall 이 없다 — JVM 이 <tspan font-weight="700">논블로킹 + 타임아웃 있는 poll(2)</tspan> 조합으로 흉내 낸다.</text>
+</svg>
