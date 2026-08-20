@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2572" viewBox="0 0 1500 2572" font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2647" viewBox="0 0 1500 2647" font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
 <defs>
 <marker id="aN" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#9a9184"/></marker>
 <marker id="aB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2f6fae"/></marker>
@@ -18,18 +18,18 @@
  .sumT{font-size:14px;font-weight:700;fill:#7a5c1e}
  .sum{font-size:14.5px;fill:#3f3a33}
 </style>
-<rect width="1500" height="2572" fill="#faf5ec"/>
+<rect width="1500" height="2647" fill="#faf5ec"/>
 <text x="750.0" y="48" text-anchor="middle" class="title">connectTimeout / readTimeout — 세팅 지점과 적용 지점</text>
 <text x="750.0" y="76" text-anchor="middle" class="sub">RestTemplate 호출 한 번을 애플리케이션 → JDK 유저 공간 → 커널까지 따라간 흐름 (SimpleClientHttpRequestFactory / HttpURLConnection 경로)</text>
-<rect x="30" y="100" width="430" height="2342" rx="12" fill="#eef1f8" stroke="#dbe3f2" stroke-width="1.4"/>
+<rect x="30" y="100" width="430" height="2417" rx="12" fill="#eef1f8" stroke="#dbe3f2" stroke-width="1.4"/>
 <rect x="30" y="100" width="430" height="46" rx="12" fill="#dbe3f2"/>
 <rect x="30" y="130" width="430" height="16" fill="#dbe3f2"/>
 <text x="245.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">애플리케이션 (Spring)</text>
-<rect x="480" y="100" width="590" height="2342" rx="12" fill="#edf5ef" stroke="#d6e6da" stroke-width="1.4"/>
+<rect x="480" y="100" width="590" height="2417" rx="12" fill="#edf5ef" stroke="#d6e6da" stroke-width="1.4"/>
 <rect x="480" y="100" width="590" height="46" rx="12" fill="#d6e6da"/>
 <rect x="480" y="130" width="590" height="16" fill="#d6e6da"/>
 <text x="775.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">JDK 유저 공간 (java.net · sun.nio.ch)</text>
-<rect x="1090" y="100" width="380" height="2342" rx="12" fill="#f7efe0" stroke="#ead9bd" stroke-width="1.4"/>
+<rect x="1090" y="100" width="380" height="2417" rx="12" fill="#f7efe0" stroke="#ead9bd" stroke-width="1.4"/>
 <rect x="1090" y="100" width="380" height="46" rx="12" fill="#ead9bd"/>
 <rect x="1090" y="130" width="380" height="16" fill="#ead9bd"/>
 <text x="1280.0" y="130" text-anchor="middle" class="laneT" fill="#4a463f">커널</text>
@@ -72,9 +72,10 @@
 <text x="509" y="603" class="code" fill="#3f3a33">HttpClient.New(url, p, connectTimeout)</text>
 <text x="509" y="624" class="code" fill="#3f3a33">  └ kac.get(url, null)   // HttpClient.java:341</text>
 <text x="509" y="646" class="note">keep-alive 캐시 조회</text>
-<rect x="548" y="691" width="508" height="67" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
+<rect x="548" y="691" width="508" height="85" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
 <text x="563" y="721" class="code" fill="#3f7d54">캐시 HIT → 기존 ESTABLISHED 소켓 재사용</text>
 <text x="563" y="743" class="note">③ 전체 스킵. connectTimeout 은 쓰이지도 않는다.</text>
+<text x="563" y="761" class="note">readTimeout 은 아래 plainConnect0 에서 그대로 다시 적힌다.</text>
 <line x1="775.0" y1="661" x2="775.0" y2="691" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
 <path d="M510,661 V787" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
 <text x="519" y="683" class="edge" fill="#b0446a">캐시 MISS</text>
@@ -126,11 +127,11 @@
 <text x="509" y="1440" class="code" fill="#3f3a33">  park(fd, POLLOUT, remainingNanos)</text>
 <text x="509" y="1461" class="code" fill="#3f3a33">  polled = Net.pollConnectNow(fd)   // 재확인 후 루프</text>
 <text x="509" y="1483" class="note">깨어난 이유가 성공/실패/시간만료/spurious 중 무엇이든</text>
-<text x="509" y="1501" class="note">다시 확인하므로, 총 대기는 상한을 넘지 못한다.</text>
+<text x="509" y="1501" class="note">다시 확인하므로, 총 대기는 예산을 넘지 못한다.</text>
 <line x1="1056" y1="1426" x2="1104" y2="1426" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
 <rect x="1104" y="1388" width="352" height="142" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
 <text x="1119" y="1418" class="code" fill="#3f3a33">poll(2, POLLOUT,</text>
-<text x="1119" y="1439" class="code" fill="#3f3a33">     남은시간 ms)</text>
+<text x="1119" y="1439" class="code" fill="#3f3a33">     남은예산 ms)</text>
 <text x="1119" y="1461" class="note">실제로 시간이 흐르는 곳.</text>
 <text x="1119" y="1479" class="note">커널엔 '타임아웃 있는</text>
 <text x="1119" y="1497" class="note">connect' syscall 이 없어</text>
@@ -139,67 +140,71 @@
 <text x="563" y="1576" class="code" fill="#3f7d54">SYN+ACK 도착 → POLLOUT → TCP ESTABLISHED</text>
 <line x1="775.0" y1="1516" x2="775.0" y2="1546" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
 <path d="M510,1516 V1625" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
-<text x="519" y="1538" class="edge" fill="#b0446a">시간 초과</text>
+<text x="519" y="1538" class="edge" fill="#b0446a">예산 소진</text>
 <rect x="494" y="1625" width="520" height="67" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
 <text x="509" y="1655" class="code" fill="#b0446a">SocketTimeoutException("Connect timed out")</text>
 <text x="509" y="1677" class="note">NioSocketImpl:546 · 대문자 C · 소켓은 close() 로 폐기</text>
-<rect x="494" y="1718" width="562" height="85" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
-<text x="509" y="1748" class="code" fill="#3f3a33">s.setSoTimeout(readTimeout)      :187</text>
-<text x="509" y="1770" class="note">★ 커널로 안 내려간다. NioSocketImpl 의 자바 필드</text>
-<text x="509" y="1788" class="note">timeout 에 대입할 뿐 — readTimeout '장전'</text>
+<rect x="494" y="1718" width="562" height="160" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1748" class="code" fill="#3f3a33">HttpURLConnection#plainConnect0  :1253</text>
+<text x="509" y="1769" class="code" fill="#3f3a33">  http.setReadTimeout(readTimeout)</text>
+<text x="509" y="1791" class="note">★ 이번 요청의 readTimeout 이 SO_TIMEOUT 에 적히는 곳.</text>
+<text x="509" y="1809" class="note">캐시 HIT / MISS 어느 경로든 여기를 지난다 (4-1).</text>
+<text x="509" y="1827" class="note">doConnect:187 도 setSoTimeout 을 부르지만 이 경로에선</text>
+<text x="509" y="1845" class="note">필드가 -1 이라 시스템 프로퍼티만 반영된다.</text>
+<text x="509" y="1863" class="note">적을 때는 syscall 이 없다 — 집행은 ④ 의 poll 인자로.</text>
 <path d="M1040,1595 V1718" fill="none" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
 <text x="1049" y="1617" class="edge" fill="#3f7d54">연결 성립</text>
-<rect x="30" y="1833" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
-<text x="50" y="1859" class="phase">④  응답 read — readTimeout(SO_TIMEOUT)이 소비되는 구간</text>
-<text x="1450" y="1859" text-anchor="end" class="phaseSub">4-2</text>
-<rect x="44" y="1893" width="402" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
-<text x="59" y="1923" class="code" fill="#3f3a33">getResponseCode()</text>
-<text x="59" y="1945" class="note">→ getInputStream0()</text>
-<line x1="446" y1="1923" x2="494" y2="1923" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
-<rect x="494" y="1893" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
-<text x="509" y="1923" class="code" fill="#3f3a33">writeRequests()</text>
-<text x="509" y="1945" class="note">요청 라인 + 헤더 송신</text>
-<line x1="1056" y1="1923" x2="1104" y2="1923" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
-<rect x="1104" y="1893" width="352" height="49" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
-<text x="1119" y="1923" class="code" fill="#3f3a33">write(2) → PSH/ACK</text>
-<line x1="775.0" y1="1960" x2="775.0" y2="1984" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
-<rect x="494" y="1984" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
-<text x="509" y="2014" class="code" fill="#3f3a33">HttpClient#parseHTTP  →  응답 첫 줄 read</text>
-<text x="509" y="2036" class="note">readTimeout 이 가장 흔히 터지는 지점</text>
-<line x1="775.0" y1="2051" x2="775.0" y2="2077" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
-<rect x="494" y="2077" width="562" height="169" rx="9" fill="#fdeef2" stroke="#b0446a" stroke-width="2.6"/>
-<text x="509" y="2104" class="tag">★ 시간이 실제로 소비되는 곳</text>
-<text x="509" y="2128" class="code" fill="#3f3a33">timedRead(fd, b, off, len, nanos) :270</text>
-<text x="509" y="2149" class="code" fill="#3f3a33">  startNanos = System.nanoTime()   // 호출마다 새로</text>
-<text x="509" y="2170" class="code" fill="#3f3a33">  if (remainingNanos &lt;= 0) throw ...   // :278</text>
-<text x="509" y="2191" class="code" fill="#3f3a33">  park(fd, POLLIN, remainingNanos)</text>
-<text x="509" y="2213" class="note">startNanos 가 read 호출마다 새로 찍힌다 —</text>
-<text x="509" y="2231" class="note">'read 호출당 상한'이라는 성질의 근원.</text>
-<line x1="1056" y1="2143" x2="1104" y2="2143" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
-<rect x="1104" y="2105" width="352" height="145" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
-<text x="1119" y="2135" class="code" fill="#3f3a33">read(2) → EAGAIN</text>
-<text x="1119" y="2156" class="code" fill="#3f3a33">poll(2, POLLIN,</text>
-<text x="1119" y="2177" class="code" fill="#3f3a33">     남은시간 ms)</text>
-<text x="1119" y="2199" class="note">수신 버퍼가 비어 있으면</text>
-<text x="1119" y="2217" class="note">즉시 EAGAIN, 그 다음</text>
-<text x="1119" y="2235" class="note">poll 에서 잠든다.</text>
-<rect x="548" y="2276" width="508" height="49" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
-<text x="563" y="2306" class="code" fill="#3f7d54">데이터 도착 → POLLIN → 계속 읽음</text>
-<line x1="775.0" y1="2246" x2="775.0" y2="2276" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
-<path d="M510,2246 V2355" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
-<text x="519" y="2268" class="edge" fill="#b0446a">시간 초과</text>
-<rect x="494" y="2355" width="562" height="67" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
-<text x="509" y="2385" class="code" fill="#b0446a">SocketTimeoutException("Read timed out")</text>
-<text x="509" y="2407" class="note">NioSocketImpl:278</text>
-<rect x="44" y="2085" width="402" height="121" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
-<text x="59" y="2115" class="code" fill="#b0446a">메시지 컨버터가 body InputStream read</text>
-<text x="59" y="2137" class="note">read 할 때마다 startNanos 가 다시 찍힌다.</text>
-<text x="59" y="2155" class="note">→ readTimeout 은 총 응답 시간 상한이 아니다.</text>
-<text x="59" y="2173" class="note">서버가 (readTimeout-1ms) 간격으로 1바이트씩</text>
-<text x="59" y="2191" class="note">흘려주면 영원히 안 끊긴다 (slow-drip).</text>
-<line x1="446" y1="2147" x2="494" y2="2147" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)" stroke-dasharray="6 5"/>
-<rect x="30" y="2456" width="1440" height="86" rx="10" fill="#f3ece0" stroke="#ddd0b6" stroke-width="1.4"/>
-<text x="52" y="2488" class="sumT">한 줄 요약</text>
-<text x="150" y="2488" class="sum">세팅(①②)은 전부 <tspan font-weight="700">메모리 대입</tspan>이고, 시간이 실제로 소비되는 곳은 <tspan font-weight="700" fill="#b0446a">timedFinishConnect</tspan> 와 <tspan font-weight="700" fill="#b0446a">timedRead</tspan> 두 곳뿐이다.</text>
-<text x="150" y="2518" class="sum">커널에는 "타임아웃 있는 connect/read" 라는 syscall 이 없다 — JVM 이 <tspan font-weight="700">논블로킹 + 타임아웃 있는 poll(2)</tspan> 조합으로 흉내 낸다.</text>
+<rect x="30" y="1908" width="1440" height="40" rx="8" fill="#efe6d5" stroke="#ddd0b6" stroke-width="1.2"/>
+<text x="50" y="1934" class="phase">④  응답 read — readTimeout(SO_TIMEOUT)이 소비되는 구간</text>
+<text x="1450" y="1934" text-anchor="end" class="phaseSub">4-2</text>
+<rect x="44" y="1968" width="402" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="59" y="1998" class="code" fill="#3f3a33">getResponseCode()</text>
+<text x="59" y="2020" class="note">→ getInputStream0()</text>
+<line x1="446" y1="1998" x2="494" y2="1998" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="1968" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="1998" class="code" fill="#3f3a33">writeRequests()</text>
+<text x="509" y="2020" class="note">요청 라인 + 헤더 송신</text>
+<line x1="1056" y1="1998" x2="1104" y2="1998" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="1968" width="352" height="49" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="1998" class="code" fill="#3f3a33">write(2) → PSH/ACK</text>
+<line x1="775.0" y1="2035" x2="775.0" y2="2059" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="2059" width="562" height="67" rx="9" fill="#ffffff" stroke="#d9d0c0" stroke-width="1.4"/>
+<text x="509" y="2089" class="code" fill="#3f3a33">HttpClient#parseHTTP  →  응답 첫 줄 read</text>
+<text x="509" y="2111" class="note">readTimeout 이 가장 흔히 터지는 지점</text>
+<line x1="775.0" y1="2126" x2="775.0" y2="2152" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="494" y="2152" width="562" height="169" rx="9" fill="#fdeef2" stroke="#b0446a" stroke-width="2.6"/>
+<text x="509" y="2179" class="tag">★ 시간이 실제로 소비되는 곳</text>
+<text x="509" y="2203" class="code" fill="#3f3a33">timedRead(fd, b, off, len, nanos) :270</text>
+<text x="509" y="2224" class="code" fill="#3f3a33">  startNanos = System.nanoTime()   // 호출마다 새로</text>
+<text x="509" y="2245" class="code" fill="#3f3a33">  if (remainingNanos &lt;= 0) throw ...   // :278</text>
+<text x="509" y="2266" class="code" fill="#3f3a33">  park(fd, POLLIN, remainingNanos)</text>
+<text x="509" y="2288" class="note">startNanos 가 read 호출마다 새로 찍힌다 —</text>
+<text x="509" y="2306" class="note">'read 호출당 상한'이라는 성질의 근원.</text>
+<line x1="1056" y1="2218" x2="1104" y2="2218" stroke="#9a9184" stroke-width="2.2" marker-end="url(#aN)"/>
+<rect x="1104" y="2180" width="352" height="145" rx="9" fill="#fffdf7" stroke="#c9b892" stroke-width="1.4"/>
+<text x="1119" y="2210" class="code" fill="#3f3a33">read(2) → EAGAIN</text>
+<text x="1119" y="2231" class="code" fill="#3f3a33">poll(2, POLLIN,</text>
+<text x="1119" y="2252" class="code" fill="#3f3a33">     남은예산 ms)</text>
+<text x="1119" y="2274" class="note">수신 버퍼가 비어 있으면</text>
+<text x="1119" y="2292" class="note">즉시 EAGAIN, 그 다음</text>
+<text x="1119" y="2310" class="note">poll 에서 잠든다.</text>
+<rect x="548" y="2351" width="508" height="49" rx="9" fill="#e9f2ea" stroke="#3f7d54" stroke-width="1.8"/>
+<text x="563" y="2381" class="code" fill="#3f7d54">데이터 도착 → POLLIN → 계속 읽음</text>
+<line x1="775.0" y1="2321" x2="775.0" y2="2351" stroke="#3f7d54" stroke-width="2.2" marker-end="url(#aG)"/>
+<path d="M510,2321 V2430" fill="none" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)"/>
+<text x="519" y="2343" class="edge" fill="#b0446a">예산 소진</text>
+<rect x="494" y="2430" width="562" height="67" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="509" y="2460" class="code" fill="#b0446a">SocketTimeoutException("Read timed out")</text>
+<text x="509" y="2482" class="note">NioSocketImpl:278</text>
+<rect x="44" y="2160" width="402" height="121" rx="9" fill="#fbe9ee" stroke="#b0446a" stroke-width="1.8"/>
+<text x="59" y="2190" class="code" fill="#b0446a">메시지 컨버터가 body InputStream read</text>
+<text x="59" y="2212" class="note">read 할 때마다 startNanos 가 다시 찍힌다.</text>
+<text x="59" y="2230" class="note">→ readTimeout 은 총 응답 시간 상한이 아니다.</text>
+<text x="59" y="2248" class="note">서버가 (readTimeout-1ms) 간격으로 1바이트씩</text>
+<text x="59" y="2266" class="note">흘려주면 영원히 안 끊긴다 (slow-drip).</text>
+<line x1="446" y1="2222" x2="494" y2="2222" stroke="#b0446a" stroke-width="2.2" marker-end="url(#aR)" stroke-dasharray="6 5"/>
+<rect x="30" y="2531" width="1440" height="86" rx="10" fill="#f3ece0" stroke="#ddd0b6" stroke-width="1.4"/>
+<text x="52" y="2563" class="sumT">한 줄 요약</text>
+<text x="150" y="2563" class="sum">세팅(①②)은 전부 <tspan font-weight="700">메모리 대입</tspan>이고, 시간이 실제로 소비되는 곳은 <tspan font-weight="700" fill="#b0446a">timedFinishConnect</tspan> 와 <tspan font-weight="700" fill="#b0446a">timedRead</tspan> 두 곳뿐이다.</text>
+<text x="150" y="2593" class="sum">커널에는 "타임아웃 있는 connect/read" 라는 syscall 이 없다 — JVM 이 <tspan font-weight="700">논블로킹 + 타임아웃 있는 poll(2)</tspan> 조합으로 흉내 낸다.</text>
 </svg>
