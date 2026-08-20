@@ -47,7 +47,7 @@ public class ExternalLimitClient {
 
 ---
 
-타임아웃 값은 여러 번 옮겨 적히지만 **전부 메모리 대입**이고, 시간이 실제로 소비되는 곳은 맨 끝 두 군데뿐이다.
+타임아웃 값은 여러 번 옮겨 적히지만 **전부 메모리 대입**이고, 시간이 실제로 소비되는 지점은 맨 끝 두 군데뿐이다. 다만 그중 read 쪽은 응답 하나를 받는 동안 여러 번 지나간다.
 
 ```text
 [세팅 — 필드 대입만, I/O 없음]
@@ -56,17 +56,20 @@ public class ExternalLimitClient {
     → SimpleClientHttpRequestFactory 의 int 필드              (앱 시작 시 1회)
     → prepareConnection() 에서 URLConnection 의 int 필드로     (요청마다)
 
-[전달 — connect() 시점에 소켓까지 운반]
+[전달 — 요청 실행 시점에 소켓까지 운반]
 
   connectTimeout → HttpClient.New(url, proxy, connectTimeout) 생성자 인자
+                     새 커넥션을 만들 때만 쓰인다 (캐시 HIT 이면 미사용)
   readTimeout    → http.setReadTimeout() → serverSocket.setSoTimeout()
+                     커넥션 출처와 무관하게 요청마다 덮어쓴다
 
 [적용 — 시간이 실제로 소비되는 곳]
 
-  connectTimeout → Socket.connect(addr, timeout)
+  connectTimeout → Socket.connect(addr, timeout)                  연결당 1번
                      → NioSocketImpl#timedFinishConnect   "Connect timed out"
-  readTimeout    → 소켓 read() 호출마다
+  readTimeout    → 소켓 read() 호출마다                            응답 하나에 N번
                      → NioSocketImpl#timedRead            "Read timed out"
+                       호출마다 시계가 0 으로 = 응답 전체 상한이 아니다
 ```
 
 > 핵심: **세팅 시점(요청 준비)과 적용 시점(소켓 connect / read)이 다르다.** 그래서 keep-alive 재사용이면 connectTimeout 은 아예 안 쓰이고, readTimeout 은 read 호출마다 다시 카운트된다.
@@ -74,7 +77,7 @@ public class ExternalLimitClient {
 
 전체 흐름을 애플리케이션 / JDK(유저 공간) / 커널 레벨로 나누면 다음과 같다. 각 단계의 코드 근거는 2~4장에서 확인한다.
 
-![connectTimeout / readTimeout 흐름 — 애플리케이션(Spring) · JDK 유저 공간(java.net · sun.nio.ch) · 커널 3개 레인 스윔레인 다이어그램. ① 세팅은 factory → URLConnection 필드 대입뿐이라 소켓도 패킷도 없고, ② 커넥션 확보에서 keep-alive 캐시 HIT 면 connectTimeout 을 아예 안 쓰며 MISS 경로의 DNS 조회는 어떤 타임아웃도 덮지 못하고, ③ connect() 는 fcntl(O_NONBLOCK) → connect(2) EINPROGRESS → timedFinishConnect 의 park(POLLOUT, 남은 시간) 루프에서 connectTimeout 을 소비해 시간 초과 시 "Connect timed out", ④ 응답 read 는 read(2) EAGAIN → timedRead 의 park(POLLIN, 남은 시간) 루프에서 readTimeout 을 소비하되 read 호출마다 startNanos 가 리셋된다](/assets/img/connect-readtimeout-img1.svg)
+![connectTimeout / readTimeout 흐름 — 애플리케이션(Spring) · JDK 유저 공간(java.net · sun.nio.ch) · 커널 3개 레인 스윔레인 다이어그램. ① 세팅은 factory → URLConnection 필드 대입뿐이라 소켓도 패킷도 없고, ② 커넥션 확보에서 keep-alive 캐시 HIT 면 connectTimeout 을 아예 안 쓰며 MISS 경로의 DNS 조회는 어떤 타임아웃도 덮지 못하고, ③ connect() 는 fcntl(O_NONBLOCK) → connect(2) EINPROGRESS → timedFinishConnect 의 park(POLLOUT, 남은 시간) 루프에서 connectTimeout 을 소비해 시간 초과 시 "Connect timed out", 연결이 성립하면 plainConnect0 이 이번 요청의 readTimeout 을 SO_TIMEOUT 에 적고(캐시 HIT 경로도 같은 지점을 지난다), ④ 응답 read 는 read(2) EAGAIN → timedRead 의 park(POLLIN, 남은 시간) 루프에서 readTimeout 을 소비하되 read 호출마다 startNanos 가 리셋된다](/assets/img/connect-readtimeout-img1.svg)
 
 ## 2. 세팅 지점 — 전부 필드 대입
 
