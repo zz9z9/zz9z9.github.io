@@ -12,7 +12,8 @@ tags: [WEB, JAVA]
 
 **검증 환경**
 - 실행: `spring-web 6.2.5` (Spring Boot 3.4.4), `httpclient5 5.4.2`, Temurin JDK `21.0.10`
-- 인용한 소스 라인은 JDK `21.0.10` 의 `src.zip`, `spring-web 6.2.5-sources`, `httpclient5 5.4.2-sources`, `httpcore5 5.3.3-sources` 기준
+- 인용한 소스 라인은 JDK `21.0.7` 의 `src.zip`, `spring-web 6.2.5-sources`, `httpclient5 5.4.2-sources`, `httpcore5 5.3.3-sources` 기준
+- 스택트레이스만 `21.0.10` 실행 결과다. 두 버전 사이에 `HttpURLConnection.java` 의 줄 번호가 몇 줄 어긋나므로 스택의 숫자와 본문 인용이 다를 수 있다 (다른 파일은 동일)
 - 발동 스택트레이스는 아래 [검증 코드](#검증-코드)를 실제로 돌려 얻은 출력
 
 **출발점 — 실제 클라이언트 코드**
@@ -124,10 +125,10 @@ public void setConnectTimeout(int timeout) {
 `HttpURLConnection#connect()` → `plainConnect0()` 에서 필드에 들어 있던 값이 드디어 움직인다.
 
 ```java
-// sun.net.www.protocol.http.HttpURLConnection#plainConnect0  (21.0.10 :1257~)
+// sun.net.www.protocol.http.HttpURLConnection#plainConnect0  (21.0.7 :1252~1253)
 // (프록시 유무에 따라 분기가 여럿이지만 모든 분기가 이 두 줄 패턴이다)
 http = getNewHttpClient(url, p, connectTimeout);   // ① connectTimeout 은 생성자 인자로
-http.setReadTimeout(readTimeout);                  // ② readTimeout 은 소켓에 장전 (→ 4장)
+http.setReadTimeout(readTimeout);                  // ② readTimeout 은 소켓 SO_TIMEOUT 에 기록 (→ 4장)
 ```
 
 ①은 `HttpClient.New(...)` 인데, **먼저 keep-alive 캐시를 조회한다** (`HttpClient.java:341` `kac.get(url, null)`). HIT 이면 기존 ESTABLISHED 소켓을 재사용하므로 아래 경로 전체가 스킵된다 — **connectTimeout 은 새 TCP 연결을 만들 때만 의미가 있다.**
@@ -135,7 +136,7 @@ http.setReadTimeout(readTimeout);                  // ② readTimeout 은 소켓
 MISS 면 `HttpClient` 생성자 → `openServer()` → `NetworkClient#doConnect` 로 내려간다. 여기가 값이 소켓 API 에 꽂히는 지점이다.
 
 ```java
-// sun.net.NetworkClient#doConnect  (21.0.10 :152)
+// sun.net.NetworkClient#doConnect  (21.0.7 :152)
 protected Socket doConnect (String server, int port)
         throws IOException, UnknownHostException {
     Socket s;
@@ -152,7 +153,7 @@ protected Socket doConnect (String server, int port)
         }
     }
     if (readTimeout >= 0)
-        s.setSoTimeout(readTimeout);       // :187  readTimeout 을 소켓에 장전
+        s.setSoTimeout(readTimeout);       // :187  SO_TIMEOUT 에 기록. 단 이 경로에선 readTimeout 이 -1 이다 (4-1)
     else if (defaultSoTimeout > 0) {
         s.setSoTimeout(defaultSoTimeout);
     }
@@ -268,7 +269,9 @@ sun.nio.ch.NioSocketImpl#configureNonBlockingIfNeeded          :209
 - connect: 커널의 SYN 재전송 정책 (Linux `tcp_syn_retries` 기준 2분대) → `ETIMEDOUT`. "무한"이라기보다 "커널 마음대로"
 - read: **진짜 무한.** 데이터가 안 오면 read(2) 안에서 영원히 잔다
 
-위 코드의 `else` 무한 park 루프는 "FD 가 논블로킹인데 timeout 은 0"인 경우용이다: (1) **가상 스레드** — `configureNonBlockingIfNeeded` 의 `timed || isVirtual()` 조건 때문에 항상 논블로킹 (캐리어 스레드를 블로킹 syscall 에 묶을 수 없으므로), (2) **한 번이라도 timed I/O 를 한 소켓** — `nonBlocking` 필드는 켜기만 하고 되돌리는 코드가 없어서, 이후 timeout 없는 호출도 논블로킹 + 무한 poll(`park` 에서 `nanos == 0 → millis = -1`, `Net.poll` javadoc: "-1 to wait indefinitely") 경로를 탄다.
+위 코드의 `else` 무한 park 루프는 "FD 가 논블로킹인데 timeout 은 0"인 경우용이다:
+  - (1) **가상 스레드** — `configureNonBlockingIfNeeded` 의 `timed || isVirtual()` 조건 때문에 항상 논블로킹 (캐리어 스레드를 블로킹 syscall 에 묶을 수 없으므로),
+  - (2) **한 번이라도 timed I/O 를 한 소켓** — `nonBlocking` 필드는 켜기만 하고 되돌리는 코드가 없어서, 이후 timeout 없는 호출도 논블로킹 + 무한 poll(`park` 에서 `nanos == 0 → millis = -1`, `Net.poll` javadoc: "-1 to wait indefinitely") 경로를 탄다.
 
 timeout 이 있으면 `timedFinishConnect` 로 온다.
 
@@ -312,19 +315,62 @@ root cause: java.net.SocketTimeoutException: Connect timed out
   at java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1143)
 ```
 
-## 4. readTimeout 적용 지점 — 소켓에 "장전"됐다가 read 마다 소비
+## 4. readTimeout 적용 지점 — 소켓에 적어 두고 read 마다 소비
 
 ---
 
-### 4-1. 장전: `setSoTimeout`
+> read 에는 시간 인자가 없다. `s.connect(addr, timeout)` 과 달리 `in.read(buf)` 는 "얼마나 기다릴지" 를 받을 자리가 없어서, 그 값을 소켓 객체에 미리 적어 두고 read 가 꺼내 쓴다. 그 적어 두는 자리가 `SO_TIMEOUT` 이다. 값이 적히는 곳(4-1)과 소비되는 곳(4-2)이 갈리는 이유가 이것이다.
 
-- readTimeout 은 connectTimeout 과 달리 **소켓의 SO_TIMEOUT 값으로 옮겨 적히는 단계**가 하나 더 있다.
-- `connectTimeout` 이 `s.connect(addr, timeout)` 처럼 호출 인자로 그때그때 전달되는 것과 달리, readTimeout 은 **소켓에 미리 붙여 두고 이후 모든 read 가 그 값을 참조**하는 구조다.
-- 장전 경로는 둘인데 둘 다 종점은 `Socket#setSoTimeout` 이다.
+### 4-1. 값을 적는 곳: `setSoTimeout`
 
-**(1) 새 연결** — `NetworkClient#doConnect` 마지막의 `s.setSoTimeout(readTimeout)` (:187, 3-1 코드)
+|  | connectTimeout | readTimeout |
+|---|---|---|
+| 전달 방식 | `s.connect(addr, timeout)` 호출 인자 | `s.setSoTimeout(t)` 로 소켓에 기록 |
+| 유효 범위 | 그 `connect` 호출 하나 | 덮어쓸 때까지 그 소켓의 모든 read |
+| 호출이 끝나면 | 남는 게 없다 | 값이 소켓에 그대로 남는다 |
 
-**(2) 매 요청** — `plainConnect0` 의 `http.setReadTimeout(readTimeout)` → `NetworkClient#setReadTimeout`
+"소켓에 남는다" 는 바뀌지 않는다는 뜻이 아니라 **아무도 안 바꾸면 그대로**라는 뜻이다. keep-alive 로 소켓을 재사용하면 지난 요청이 적어 둔 값이 그대로 붙어 있고, 그건 이번 요청의 readTimeout 이 아니다. 그래서 JDK 는 요청마다 다시 적는다 — 소켓이 하나여도 요청마다 다른 값이 걸리는 이유다.
+
+#### 적히는 지점 세 곳
+
+`getInputStream()` 한 번이 도는 동안 SO_TIMEOUT 을 건드리는 곳은 세 군데다.
+
+```text
+HttpURLConnection#getInputStream0                          :1622
+ ├ checkReuseConnection()                                  :1689
+ │   └ http.setReadTimeout(getReadTimeout())               :1076   ③ 같은 커넥션 재시도 시 되돌리기
+ └ connect() → plainConnect() → plainConnect0()            :1184
+     ├ http = getNewHttpClient(url, p, connectTimeout)     :1252
+     │   └ HttpClient.New → kac.get(url, null)             :341    캐시 HIT 이면 여기서 끝
+     │       └ (MISS) new HttpClient(url, p, to)           :386    ← connectTimeout 만 넘어간다
+     │           └ openServer → NetworkClient#doConnect    :152
+     │               ├ s.connect(addr, connectTimeout)     :178
+     │               └ s.setSoTimeout(readTimeout)         :187    ① 소켓 생성 직후
+     └ http.setReadTimeout(readTimeout)                    :1253   ② ★ 사용자 값은 여기서 적힌다
+```
+
+**① `NetworkClient#doConnect:187` — 이 경로에선 사용자 값이 아니다.**
+
+`readTimeout` 은 `NetworkClient` 의 필드인데, 위 트리에서 보이듯 `HttpClient` 생성자에는 `to`(connectTimeout)만 넘어간다. `doConnect` 가 도는 시점의 필드는 아직 초기값 `-1` 이라 `if (readTimeout >= 0)` 가 거짓이고, `else` 분기의 `defaultSoTimeout` — 시스템 프로퍼티 `sun.net.client.defaultReadTimeout` — 만 반영된다 (3-1 코드의 마지막 블록).
+
+```java
+// sun.net.NetworkClient  (21.0.7 :63)
+protected int readTimeout = DEFAULT_READ_TIMEOUT;   // = -1. HttpURLConnection 경로에선 여기 그대로다
+```
+
+FTP 처럼 이 필드를 connect 전에 채우는 다른 `NetworkClient` 하위 클래스에서는 :187 이 의미를 갖는다.
+
+**② `plainConnect0:1253` — 사용자 값은 여기서 적힌다.**
+
+3-1 에서 본 두 줄 패턴의 두 번째 줄이다. `getNewHttpClient` 바로 다음 줄이라 **커넥션이 새 것이든 캐시에서 꺼낸 것이든 무조건 이 줄을 지난다.**
+
+```java
+// sun.net.www.protocol.http.HttpURLConnection#plainConnect0  (21.0.7 :1252~1253)
+http = getNewHttpClient(url, p, connectTimeout);   // 캐시 조회 또는 새 연결
+http.setReadTimeout(readTimeout);                  // ★ 이번 요청 값으로 SO_TIMEOUT 덮어쓰기
+```
+
+종점은 `Socket#setSoTimeout` 이다.
 
 ```java
 // sun.net.NetworkClient#setReadTimeout  :259
@@ -343,17 +389,19 @@ public void setReadTimeout(int timeout) {
 }
 ```
 
-(2)가 따로 있는 이유는 **keep-alive** 다. 캐시에서 꺼내 온 소켓은 이전 요청이 걸어 둔 SO_TIMEOUT 을 그대로 달고 있는데, 그 값은 지금 요청의 readTimeout 이 아닐 수 있다. 그래서 재사용 경로에도 매번 다시 걸어 준다.
+**③ `checkReuseConnection:1070` — JDK 가 임시로 바꿔 둔 값 되돌리기.**
+
+리다이렉트·인증 재시도처럼 같은 커넥션으로 다음 트랜잭션을 이어갈 때 탄다. JDK 내부가 SO_TIMEOUT 을 잠깐 자기 값으로 바꿔 쓰는 구간이 있어서 — `expect100Continue` 는 5초로 낮추고(`:1342`), 에러 스트림 버퍼링은 `timeout4ESBuffer/5` 를 쓴다(`:3908`) — 다음 트랜잭션 전에 사용자 값으로 되돌린다.
 
 ```java
-// sun.net.www.protocol.http.HttpURLConnection#checkReuseConnection
+// sun.net.www.protocol.http.HttpURLConnection#checkReuseConnection  :1070
 private boolean checkReuseConnection () {
     if (connected) {
         return true;
     }
     if (reuseClient != null) {
         http = reuseClient;
-        http.setReadTimeout(getReadTimeout());   // ★ 재사용 소켓에도 이번 요청 값으로 덮어쓰기
+        http.setReadTimeout(getReadTimeout());   // :1076  사용자 값으로 원복
         http.reuse = false;
         reuseClient = null;
         connected = true;
@@ -362,6 +410,92 @@ private boolean checkReuseConnection () {
     return false;
 }
 ```
+
+#### 요청마다 갈리는지 실제로 확인
+
+keep-alive 로 소켓 하나를 재사용하면서 요청마다 readTimeout 을 다르게 줘 봤다. 서버는 `/fast` 는 즉시, `/slow` 는 3초 뒤에 응답한다.
+
+```text
+[server] accepted from port 53991
+[server] req#1 on port 53991 : GET /fast HTTP/1.1
+[client] .../fast readTimeout=5000ms -> ok1 (18ms)
+[server] req#2 on port 53991 : GET /slow HTTP/1.1
+[client] .../slow readTimeout=300ms -> SocketTimeoutException: Read timed out (301ms)
+```
+
+서버가 본 클라이언트 포트가 두 요청 모두 `53991` — 소켓은 하나다. 그런데 2번 요청은 1번이 적어 둔 5초가 아니라 자기 값 300ms 에서 끊겼다.
+
+2번 요청에서 `setReadTimeout` 을 아예 호출하지 않으면, 1번의 5초가 남아 있는 게 아니라 `URLConnection` 기본값 `0`(무한)이 적힌다.
+
+```text
+[server] req#2 on port 53994 : GET /slow HTTP/1.1
+[client] .../slow readTimeout=-1ms -> ok2 (3002ms)
+```
+
+3초를 다 기다리고 정상 수신했다. 이전 값이 남는 게 아니라 **매 요청 덮어쓴다**는 쪽이 맞다.
+
+<details markdown="1">
+<summary>검증 코드 (Temurin 21.0.7, 단일 파일 실행)</summary>
+
+```java
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+
+public class KeepAliveTimeoutTest {
+    public static void main(String[] args) throws Exception {
+        ServerSocket ss = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        int port = ss.getLocalPort();
+
+        Thread server = new Thread(() -> {
+            try (Socket s = ss.accept()) {
+                System.out.println("[server] accepted from port " + s.getPort());
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.ISO_8859_1));
+                OutputStream out = s.getOutputStream();
+                for (int i = 1; i <= 2; i++) {
+                    String line = in.readLine();
+                    if (line == null) return;
+                    System.out.println("[server] req#" + i + " on port " + s.getPort() + " : " + line);
+                    while (true) { String h = in.readLine(); if (h == null || h.isEmpty()) break; }
+                    if (line.contains("/slow")) {
+                        Thread.sleep(3000);                 // 응답을 3초 미룬다
+                    }
+                    byte[] body = ("ok" + i).getBytes(StandardCharsets.ISO_8859_1);
+                    out.write(("HTTP/1.1 200 OK\r\nContent-Length: " + body.length + "\r\n\r\n")
+                            .getBytes(StandardCharsets.ISO_8859_1));
+                    out.write(body);
+                    out.flush();
+                }
+            } catch (Exception e) {
+                System.out.println("[server] " + e);
+            }
+        });
+        server.setDaemon(true);
+        server.start();
+
+        get("http://127.0.0.1:" + port + "/fast", 5000);   // 새 커넥션
+        get("http://127.0.0.1:" + port + "/slow", 300);    // keep-alive 재사용. -1 로 주면 미설정 케이스
+    }
+
+    static void get(String url, int readTimeout) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        c.setConnectTimeout(1000);
+        if (readTimeout >= 0) c.setReadTimeout(readTimeout);
+        long t0 = System.nanoTime();
+        try (InputStream in = c.getInputStream()) {
+            System.out.printf("[client] %s readTimeout=%dms -> %s (%dms)%n", url, readTimeout,
+                    new String(in.readAllBytes(), StandardCharsets.ISO_8859_1),
+                    (System.nanoTime() - t0) / 1_000_000);
+        } catch (SocketTimeoutException e) {
+            System.out.printf("[client] %s readTimeout=%dms -> %s: %s (%dms)%n", url, readTimeout,
+                    e.getClass().getSimpleName(), e.getMessage(), (System.nanoTime() - t0) / 1_000_000);
+        }
+    }
+}
+```
+
+</details>
 
 `Socket#setSoTimeout` 자체는 검증 후 `SocketImpl` 로 넘기는 게 전부다.
 
@@ -614,7 +748,7 @@ if (cl > 0) {
 
 #### 실제로 기다리는 한 곳
 
-4-1 에서 장전한 그 필드 값이, read 가 일어날 때마다 `poll(2)` 대기 상한으로 쓰인다.
+4-1 에서 소켓에 적어 둔 그 값이, read 가 일어날 때마다 `poll(2)` 대기 상한으로 쓰인다.
 
 ```java
 // sun.nio.ch.NioSocketImpl#timedRead  :270
@@ -633,14 +767,162 @@ private int timedRead(FileDescriptor fd, byte[] b, int off, int len, long nanos)
 }
 ```
 
-`startNanos` 가 **호출마다** 새로 찍힌다 — "SO_TIMEOUT 은 read 호출당 상한"이라는 성질의 근원이다. 한 번의 HTTP 응답에서 read 는 최소 두 번 이상 일어난다.
+`startNanos` 가 **호출마다** 새로 찍힌다. 이 한 줄이 "SO_TIMEOUT 은 read 호출당 상한" 이라는 성질의 근원이다.
 
-1. **응답 첫 바이트 대기** — `HttpClient#parseHTTP` 가 status line 을 읽는 read. readTimeout 이 가장 흔히 터지는 곳.
-2. **바디 읽기** — 메시지 컨버터가 body `InputStream` 을 읽는 read 마다 **타이머가 리셋**된다. 서버가 `readTimeout - 1ms` 간격으로 1바이트씩 흘려주면 영원히 안 끊긴다(slow-drip).
+#### 한 응답에 read 가 여러 번인 이유
+
+`connect` 와 `read` 는 커널에 요청하는 내용이 다르다.
+
+|  | connect | read |
+|---|---|---|
+| 요청하는 것 | "연결을 맺어라" | "**지금 도착해 있는** 바이트를 달라" |
+| 완료 조건 | ESTABLISHED 되면 끝 | 도착한 만큼 채우고 즉시 리턴 |
+| 횟수 | 연결당 1번 | 필요한 만큼 모을 때까지 반복 |
+
+TCP 는 응답을 한 덩어리로 배달하지 않는다. 세그먼트로 쪼개져 도착하고 `read(2)` 는 커널 수신 버퍼에 들어와 있는 만큼만 돌려주므로, HTTP 응답 하나를 완성하려면 호출자가 반복해야 한다. 그 반복문이 헤더 쪽과 바디 쪽에 하나씩 있다.
+
+**헤더** — 위에서 인용한 `parseHTTPHeader:825` 의 `while (nread < 8)` 이다. 8바이트조차 한 번에 안 올 수 있다는 전제로 짜여 있다.
+
+**바디** — `RestTemplate` 이면 메시지 컨버터 안에 있다. `getForObject(url, Report.class)` 가 응답 바이트를 `Report` 로 바꾸려면 응답 `InputStream` 을 직접 읽어야 하고, 그 스트림이 바로 위에서 `KeepAliveStream` 으로 감싼 그것이다.
+
+```text
+restTemplate.getForObject(url, Report.class)
+ └ HttpMessageConverterExtractor#extractData          :90    Content-Type 으로 컨버터 선택
+     └ converter.read(type, response)                 :105
+         └ StringHttpMessageConverter#readInternal    :98    getBody().readNBytes(length)
+             └ InputStream#readNBytes                 :412   while ((n = read(buf, ...)) > 0)  ← 바디 루프
+                 └ KeepAliveStream(MeteredStream)#read :125  루프 없음. 다 읽었으면 -1
+                     └ BufferedInputStream#fill              버퍼가 비었을 때만 소켓까지 내려간다
+                         └ … → NioSocketImpl#timedRead :270
+```
+
+Content-Type 에 따라 컨버터가 갈린다 — `text/plain` 은 `StringHttpMessageConverter`, `application/json` 은 `MappingJackson2HttpMessageConverter` 가 `objectMapper` 로 스트림을 청크 단위로 읽는다(`readJavaType:368`). 어느 쪽이든 밑바닥은 같은 소켓 read 다.
+
+```java
+// org.springframework.http.converter.StringHttpMessageConverter#readInternal  (6.2.5 :94~99)
+protected String readInternal(Class<? extends String> clazz, HttpInputMessage inputMessage) throws IOException {
+    Charset charset = getContentTypeCharset(inputMessage.getHeaders().getContentType());
+    long length = inputMessage.getHeaders().getContentLength();
+    byte[] bytes = (length >= 0 && length <= Integer.MAX_VALUE ?
+            inputMessage.getBody().readNBytes((int) length) : inputMessage.getBody().readAllBytes());
+    return new String(bytes, charset);
+}
+```
+
+`Content-Length` 만큼 채우는 루프는 `readNBytes` 안에 있고, 스트림 자신은 반복하지 않는다. `MeteredStream` 은 한 번만 위임하고 읽은 바이트를 세다가 `Content-Length` 를 채우면 스스로 닫혀 `-1` 을 돌려주고, 그걸로 위쪽 `while` 이 끝난다.
+
+```java
+// sun.net.www.MeteredStream#read  :125
+public int read(byte b[], int off, int len) throws java.io.IOException {
+    if (closed) return -1;
+    int n = in.read(b, off, len);   // 루프 없음. 한 번만 위임한다
+    justRead(n);                    // :68 count += n → :84 count >= expected 면 close()
+    return n;
+}
+```
+
+컨버터는 Spring 어휘일 뿐이다. `HttpURLConnection` 을 직접 쓰면 그 자리에 직접 짠 `while ((n = in.read(buf)) != -1)` 이 들어가고, 소켓 입장에서는 누가 반복하든 같다.
+
+#### 루프가 두 층인데 성격이 반대다
+
+```text
+readNBytes:412 / parseHTTPHeader:825
+  while (…)                                        ① 새 read 를 다시 호출
+   └ … → NioSocketImpl#timedRead :270
+            long startNanos = System.nanoTime();   ★ 여기서 시계가 0 으로
+            while (n == UNAVAILABLE && isOpen())   ② 같은 read 안에서 재대기
+             └ park(fd, POLLIN, remainingNanos)
+```
+
+|  | 반복하는 것 | 반복할 때 `startNanos` |
+|---|---|---|
+| ① 호출자 쪽 루프 | read 호출 자체 | **새로 찍힌다 → 예산 부활** |
+| ② `timedRead` 내부 루프 | `poll` 재대기 | 그대로 → `remainingNanos` 감소 |
+
+같은 `while` 인데 하나는 시계를 되감고 하나는 안 되감는다. readTimeout 이 "응답 전체 상한" 이 아니라 "한 번의 read 가 다음 바이트를 받기까지의 상한" 인 이유가 이것이다.
+
+#### 실측 — slow-drip 은 안 끊긴다
+
+서버가 바디를 **400ms 간격으로 1바이트씩** 흘리게 하고 readTimeout 만 바꿔 돌렸다.
+
+```text
+### readTimeout=500ms, 서버는 400ms 간격으로 1바이트씩 총 10바이트
+  read#1  -> 1바이트 (누적 424ms)
+  read#2  -> 1바이트 (누적 827ms)
+  …
+  read#10 -> 1바이트 (누적 4043ms)
+완료: read 호출 10회, 10바이트, 총 4044ms
+
+### readTimeout=300ms, 조건 동일
+  SocketTimeoutException: Read timed out (321ms)
+```
+
+readTimeout 이 500ms 인데 **총 4초를 기다리고 정상 수신**했다. 매 read 가 400ms 만에 1바이트를 받아 500ms 예산 안에 들어왔기 때문이다. 300ms 쪽은 첫 400ms 공백에서 바로 터졌다.
+
+> `readTimeout=300ms` 를 걸어도 상대가 299ms 마다 1바이트씩 보내면 응답은 끝나지 않는다. 총 응답 시간 상한은 이 축으로 못 걸고 별도 레이어가 필요하다 (8장).
+
+<details markdown="1">
+<summary>검증 코드 (Temurin 21.0.7, 단일 파일 실행)</summary>
+
+```java
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+
+public class DripTest {
+    static final int GAP_MS = 400, BYTES = 10;
+
+    public static void main(String[] args) throws Exception {
+        int readTimeout = Integer.parseInt(args[0]);
+        ServerSocket ss = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        Thread t = new Thread(() -> {
+            try (Socket s = ss.accept()) {
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.ISO_8859_1));
+                in.readLine();
+                while (true) { String h = in.readLine(); if (h == null || h.isEmpty()) break; }
+                OutputStream out = s.getOutputStream();
+                out.write(("HTTP/1.1 200 OK\r\nContent-Length: " + BYTES + "\r\n\r\n")
+                        .getBytes(StandardCharsets.ISO_8859_1));
+                out.flush();
+                for (int i = 0; i < BYTES; i++) {       // 바디를 400ms 간격으로 1바이트씩
+                    Thread.sleep(GAP_MS);
+                    out.write('x');
+                    out.flush();
+                }
+            } catch (Exception e) { System.out.println("[server] " + e); }
+        });
+        t.setDaemon(true);
+        t.start();
+
+        HttpURLConnection c = (HttpURLConnection)
+                URI.create("http://127.0.0.1:" + ss.getLocalPort() + "/drip").toURL().openConnection();
+        c.setReadTimeout(readTimeout);
+        long t0 = System.nanoTime();
+        try (InputStream in = c.getInputStream()) {
+            byte[] buf = new byte[64];
+            int n, calls = 0, total = 0;
+            while ((n = in.read(buf)) != -1) {          // ★ 이 read 하나하나가 SO_TIMEOUT 의 단위
+                calls++;
+                total += n;
+                System.out.printf("  read#%d -> %d바이트 (누적 %dms)%n",
+                        calls, n, (System.nanoTime() - t0) / 1_000_000);
+            }
+            System.out.printf("완료: read 호출 %d회, %d바이트, 총 %dms%n",
+                    calls, total, (System.nanoTime() - t0) / 1_000_000);
+        } catch (SocketTimeoutException e) {
+            System.out.printf("  %s: %s (%dms)%n", e.getClass().getSimpleName(), e.getMessage(),
+                    (System.nanoTime() - t0) / 1_000_000);
+        }
+    }
+}
+```
+
+</details>
 
 ### 4-3. 실제 발동 — 스택트레이스로 확인
 
-accept 만 하고 응답을 안 주는 로컬 서버에 `readTimeout=1000` 으로 호출한 결과다. 1번 케이스(응답 첫 줄 대기 read)에서 터진 것이 `parseHTTPHeader` 프레임으로 보인다.
+accept 만 하고 응답을 안 주는 로컬 서버에 `readTimeout=1000` 으로 호출한 결과다. 응답 첫 줄을 기다리는 read 에서 터진 것이 `parseHTTPHeader` 프레임으로 보인다.
 
 ```text
 === readTimeout ===
@@ -671,7 +953,8 @@ root cause: java.net.SocketTimeoutException: Read timed out
 | `connect()` | `HttpClient.New` → `kac.get` | keep-alive 캐시 HIT 면 재사용 — **connectTimeout 미사용** |
 | └ 캐시 MISS | `new InetSocketAddress(...)` | **DNS 조회 — 어떤 타임아웃도 안 걸림** |
 | └ | `s.connect(addr, connectTimeout)` | ✅ **connectTimeout 발동 지점** (SYN → SYN_SENT 대기) |
-| └ | `s.setSoTimeout(readTimeout)` | readTimeout 장전 (자바 필드) |
+| └ | `s.setSoTimeout(readTimeout)` | 이 경로에선 `-1` 이라 시스템 프로퍼티만 반영 (4-1) |
+| `plainConnect0` | `http.setReadTimeout(readTimeout)` | ✅ **이번 요청 readTimeout 이 SO_TIMEOUT 에 기록되는 곳** (캐시 HIT 여부와 무관) |
 | `connect()` 리턴 | — | TCP ESTABLISHED, **HTTP 바이트는 아직 0** |
 | 요청 송신 | `writeRequests()` | write 는 보통 논블로킹 (send buffer 가 차면 블로킹) |
 | 응답 첫 줄 read | `parseHTTP` → `timedRead` | ✅ **readTimeout 첫 소비** |
@@ -722,7 +1005,7 @@ RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequest
 
   connectionRequestTimeout → 풀 lease 대기                     InternalExecRuntime#acquireEndpoint  ★ 새 축
   connectTimeout           → socket.connect(addr, timeout)    → 같은 timedFinishConnect
-  socketTimeout            → SO_TIMEOUT 장전
+  socketTimeout            → SO_TIMEOUT 에 기록
   responseTimeout          → 요청 직전 SO_TIMEOUT 덮어쓰기      → 같은 timedRead
 ```
 
@@ -812,7 +1095,7 @@ for (int i = 0; i < remoteAddresses.length; i++) {                        // ★
     final Socket socket = detachedSocketFactory.create(socksProxy);       // new Socket()
     try {
         if (soTimeout != null) {
-            socket.setSoTimeout(soTimeout.toMillisecondsIntBound());      // :196  SocketConfig.soTimeout 장전
+            socket.setSoTimeout(soTimeout.toMillisecondsIntBound());      // :196  SocketConfig.soTimeout 기록
         }
         ...
         socket.connect(remoteAddress,
@@ -901,7 +1184,7 @@ if (connectTimeout >= 0) {
 
 ### 6-4. responseTimeout / socketTimeout — 결국 둘 다 SO_TIMEOUT 이다
 
-SO_TIMEOUT 장전이 세 번 일어난다. 전부 같은 자바 필드를 덮어쓰는 것뿐이다.
+SO_TIMEOUT 쓰기가 세 번 일어난다. 전부 같은 자바 필드를 덮어쓰는 것뿐이다.
 
 1. 소켓 생성 직후 — `SocketConfig.soTimeout` (`DefaultHttpClientConnectionOperator:196`)
 2. 커넥션 수립 완료 후 — `ConnectionConfig.socketTimeout` (`PoolingHttpClientConnectionManager:504`)
@@ -999,7 +1282,7 @@ TLS handshake 가 서버의 `ServerHello`·인증서를 기다리는 시점은 `
 final Timeout soTimeout = socketConfig.getSoTimeout();      // :180  ConnectionConfig 아님, SocketConfig
 ...
 if (soTimeout != null) {
-    socket.setSoTimeout(soTimeout.toMillisecondsIntBound());               // :196  raw 소켓에 장전
+    socket.setSoTimeout(soTimeout.toMillisecondsIntBound());               // :196  raw 소켓에 기록
 }
 ...
 socket.connect(remoteAddress, connectTimeout.toMillisecondsIntBound());    // :216
@@ -1274,7 +1557,7 @@ public void activate() {
 
 `passivate()` 는 풀에 반납할 때(`PoolingHttpClientConnectionManager:440`), `activate()` 는 풀에서 빌릴 때(`:386`) 호출된다. `ConnectionConfig.socketTimeout = 5s` 인 풀에서 **요청 A 에만** `responseTimeout = 1s` 를 준 경우는 이렇게 흘러간다.
 
-1. 새 커넥션 → `PoolingHttpClientConnectionManager:504` 가 5s 장전. 기억값 = **5s**
+1. 새 커넥션 → `PoolingHttpClientConnectionManager:504` 가 5s 기록. 기억값 = **5s**
 2. 요청 A 실행 → `setSocketTimeout(1s)` → 소켓 1s, **기억값도 1s 로 바뀜**
 3. 풀 반납 → `passivate()` → 소켓 0. 기억값은 1s 그대로
 4. 요청 B 가 같은 커넥션 lease → `activate()` → 5s 가 아니라 **1s 로 복원**
