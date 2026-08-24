@@ -102,6 +102,24 @@ HW는 리더가 계산해서 `FetchResponse`의 `high_watermark` 필드로 알�
 
 > Kafka 4.x에서 ELR(Eligible Leader Replicas, KIP-966)을 활성화하면 여기에 조건이 하나 붙는다. ISR 크기가 `min.insync.replicas` 이상일 때만 HW가 전진한다. 이렇게 해야 "HW까지의 데이터는 최소 그만큼의 replica에 있다"가 보장된다. Kafka 4.0은 기본 비활성, 4.1부터 신규 클러스터 기본 활성이다.
 
+### 팔로워가 min을 취해야 하는 이유
+
+리더 HW는 `min(ISR 멤버들의 LEO)`이므로, ISR에 정상적으로 붙어 있는 팔로워라면 응답의 HW가 자기 LEO를 넘을 일이 없다. 위 ①~⑥에서도 min은 늘 응답 HW를 고른다. min이 실제로 값을 바꾸는 건 그 전제가 깨질 때다.
+
+- **ISR 밖의 팔로워** — HW 계산에 들어가는 건 ISR 멤버뿐이다. `replica.lag.time.max.ms`를 넘겨 ISR에서 빠진 팔로워, 재시작 후 따라잡는 중인 replica, 파티션 재할당으로 log start offset부터 받기 시작한 replica는 전부 계산에서 빠져 있으므로 리더 HW가 이들의 LEO보다 한참 앞서 있다.
+- **한 번의 fetch로 꼬리를 다 못 받는 경우** — 응답 크기는 `replica.fetch.max.bytes`(기본 1MB) 등으로 잘린다. 응답에 HW=200이 실려 와도 records는 `[100..150)`까지만 오고, append 후 자기 LEO는 150에 머문다.
+- **로그를 잘라낸 직후** — 리더 교체 후 Leader Epoch 기준으로 자기 로그 꼬리를 truncate하면 LEO가 뒤로 내려간다.
+
+이때 응답 HW를 그대로 받아 쓰면 자기 로그에 없는 오프셋이 committed로 표시된다. 그 replica가 리더로 승격되거나 `client.rack` 기반 follower fetch(KIP-392)로 컨슈머에게 응답하는 순간, 갖고 있지 않은 구간을 읽을 수 있다고 알려주는 셈이 된다.
+
+실제 구현(`UnifiedLog#maybeUpdateHighWatermark`, Kafka 4.1)은 min 하나가 아니라 양쪽으로 자른다.
+
+```
+새 HW = max(log start offset, min(응답 HW, 자기 LEO))
+```
+
+`log start offset ≤ HW ≤ LEO`라는 불변식을 팔로워 쪽에서도 강제하는 것이고, 위쪽 경계가 곧 min이다.
+
 ## LSO (Last Stable Offset)
 
 ---
@@ -215,4 +233,6 @@ replica별 LEO를 보려면 각 브로커의 JMX 지표를 봐야 한다. 복제
 - [KafkaConsumer javadoc — endOffsets (kafka.apache.org/42/javadoc)](https://kafka.apache.org/42/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html) — isolation level에 따라 HW / LSO가 반환된다는 설명
 - [Apache Kafka — A Guide To The Kafka Protocol: Fetch API (kafka.apache.org/protocol)](https://kafka.apache.org/protocol.html) — `fetch_offset`, `high_watermark`, `log_start_offset` 필드
 - [KIP-101: Reduce log complexity with Leader Epoch (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation) — HW 전파 지연이 만드는 문제
+- [KIP-392: Allow consumers to fetch from closest replica (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-392%3A+Allow+consumers+to+fetch+from+closest+replica) — 팔로워가 컨슈머에게 응답할 때의 상한
+- [`UnifiedLog#maybeUpdateHighWatermark` (github.com/apache/kafka, 4.1)](https://github.com/apache/kafka/blob/4.1/storage/src/main/java/org/apache/kafka/storage/internals/log/UnifiedLog.java) — 팔로워 HW를 log start offset과 LEO 사이로 clamp하는 코드
 - [KIP-966: Eligible Leader Replicas (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-966:+Eligible+Leader+Replicas) — ISR 크기에 따른 HW 전진 조건
