@@ -88,6 +88,12 @@ StatementImpl.executeQuery(sql)
 
 > 즉 "짝 없는 따옴표 하나 = 무조건 끝". 따옴표를 값으로 넣으려면 반드시 `''`로 짝을 지어야 한다(escape).
 
+이 escape 규칙은 MySQL 공식문서에 명시돼 있다.
+
+> "A `'` inside a string quoted with `'` may be written as `''`." — [MySQL :: String Literals](https://dev.mysql.com/doc/refman/8.0/en/string-literals.html)
+
+(참고로 규칙 1·3처럼 "파서가 single pass로 따옴표 open/close를 즉시 판정한다"는 서술은 동작을 설명하기 위한 개념 모델이고, 매뉴얼이 렉서 알고리즘으로 기술한 내용은 아니다. 매뉴얼은 리터럴의 *문법*만 정의한다.)
+
 **규칙 3 — 닫힌 뒤의 글자들**
 
 리터럴이 닫히면 그 뒤는 다시 SQL 문법 영역이다.
@@ -215,6 +221,8 @@ for (char c : x) {
 }
 buf.append('\'');                 // 값 뒤에 닫는 따옴표
 ```
+
+> 참고: 위 백슬래시 escape(`\\`, `\n`, `\Z` 등)는 `NO_BACKSLASH_ESCAPES` SQL 모드가 켜지면 무력화된다. 이 모드에서는 `\`가 일반 문자가 되고 `''` doubling만 escape로 인정되는데, 커넥터도 이를 감지해 escape 방식을 바꾼다. ([MySQL :: String Literals](https://dev.mysql.com/doc/refman/8.0/en/string-literals.html) — "certain sequences have special meaning unless the `NO_BACKSLASH_ESCAPES` SQL mode is enabled.")
 
 **NativeProtocol.sendQueryPacket의 queryPacket**
 
