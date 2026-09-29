@@ -38,6 +38,7 @@ tags: [WEB]
 | 10 | 자동 재시도가 stale 실패를 감춘다 | idle | 확인 |
 | 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인 |
 | 12 | 요청 수 상한은 알려주고 닫으므로 stale 을 만들지 않는다 | idle | 확인 |
+| 13 | 커넥션을 풀에 두는 시간은 서버가 광고한 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
 
 9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지가 이 글에서 가장 뜻밖이었던 부분이라 아래에 따로 적는다.
 
@@ -194,6 +195,8 @@ pool:
   # 음수 = 설정하지 않음 -> 매니저가 2초로 채운다
   validate-after-inactivity-ms: ${POOL_VALIDATE_AFTER_INACTIVITY_MS:-1}
   evict-idle-ms: ${POOL_EVICT_IDLE_MS:-1}
+  # 음수 = 설정하지 않음 -> 서버의 Keep-Alive: timeout=N 을 따른다
+  keep-alive-ms: ${POOL_KEEP_ALIVE_MS:-1}
   retry-enabled: ${POOL_RETRY_ENABLED:false}
 ```
 
@@ -239,6 +242,8 @@ public CloseableHttpClient httpClient(PoolingHttpClientConnectionManager manager
             // 이걸 빼면 클라이언트를 닫을 때 매니저까지 닫힌다
             .setConnectionManagerShared(true)
             .setDefaultRequestConfig(requestConfig)
+            // 커넥션을 풀에 둘 시간을 응답마다 정한다. 이렇게 고정하면 서버가 뭐라 하든 이 값이다 (13번)
+            .setKeepAliveStrategy((response, context) -> TimeValue.ofMilliseconds(props.keepAliveMs()))
             // 유휴 커넥션을 백그라운드로 청소하는 주기
             .evictIdleConnections(TimeValue.ofMilliseconds(props.evictIdleMs()))
             // 기본값은 멱등 요청을 1회 재시도한다. 끄면 실패가 그대로 보인다 (10번)
@@ -256,7 +261,7 @@ public PoolingHttpClientConnectionManagerMetricsBinder poolMetrics(PoolingHttpCl
 }
 ```
 
-**여기서 안 건드린 설정이 하나 있다.** `setKeepAliveStrategy` 는 기본값으로 뒀는데, 9번이 예측대로 재현되지 않은 원인이 이것이었다. 커넥션을 풀에 얼마나 두고 재사용할지는 위의 어떤 값도 아니고 이 전략이 응답마다 정한다.
+**`setKeepAliveStrategy` 가 이 중에서 성격이 다르다.** 커넥션을 풀에 얼마나 두고 재사용할지는 위의 어떤 값도 아니고 이 전략이 응답마다 정한다. 9번이 예측대로 재현되지 않은 원인이 이것이었고, 반대로 이 값을 고정하면 9번이 재현된다(13번).
 
 ```java
 // DefaultConnectionKeepAliveStrategy (기본값)
@@ -525,7 +530,7 @@ $ curl -D - http://upstream:8080/echo
 
 HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
-그래서 진짜 stale 은 **말없이 끊는 중간 장비**로 만들어야 한다. 톰캣은 `timeout=60` 을 광고하게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
+그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 광고하게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
 
 | 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
 | --- | --- | --- | --- | --- | --- |
@@ -550,6 +555,44 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 | 6번째 | 새 커넥션에서 다시 `keep-alive` |
 
 **알려주고 닫으므로 stale 을 만들지 않는다.** 시간 상한(`keepAliveTimeout`)은 예고 없이 FIN 을 보내지만, 요청 수 상한은 마지막 응답에 `Connection: close` 를 붙인다. 이 값을 아무리 낮춰도 stale 의 원인은 되지 않는다.
+
+### 13번 — 커넥션 수명은 서버가 정한다
+
+9번에서 톰캣이 광고한 `timeout=1` 을 클라이언트가 지키는 걸 봤는데, 그 판단을 하는 게 `ConnectionKeepAliveStrategy` 다. 이번엔 톰캣이 `timeout=5` 를 광고하게 두고(`keepAliveTimeout=5000`), 유휴 시간을 그 앞뒤로 두면서 잰다.
+
+재사용 여부는 업스트림이 본 **caller 의 소스 포트**로 판별한다. 두 요청의 포트가 같으면 같은 TCP 커넥션이다.
+
+```java
+// caller — 한 번 호출하고 idleMs 쉬었다가 다시 호출한다
+String first = peer();
+Thread.sleep(idleMs);
+String second = peer();
+// peer() 는 업스트림이 돌려준 X-Peer(= servletRequest.getRemotePort()) 를 읽는다
+```
+
+| 클라 전략 | 검증 | idle | 클라가 잡은 수명 | 결과 |
+| --- | --- | --- | --- | --- |
+| 기본 | 끔 | 2초 | `for 5 SECONDS` | 재사용 (48938 → 48938) |
+| 기본 | 끔 | 8초 | `for 5 SECONDS` | 새 커넥션 (49032 → 49034), 에러 없음 |
+| 60초 고정 | 끔 | 3초 | `60000 MILLISECONDS` | 재사용 (49324 → 49324) |
+| **60초 고정** | **끔** | **8초** | `60000 MILLISECONDS` | **`NoHttpResponseException`** |
+| 60초 고정 | 2초(기본) | 8초 | `60000 MILLISECONDS` | 새 커넥션, 에러 없음 |
+
+1·2행이 기본 동작이다. 클라이언트는 서버가 말한 5초를 그대로 풀 엔트리의 수명으로 잡고, 8초 뒤에 빌리려 하면 만료된 엔트리를 버리고 새로 맺는다. **검증을 꺼놨는데도 에러가 안 난다** — 여기서 stale 을 막은 건 `validateAfterInactivity` 가 아니라 서버가 보낸 헤더다.
+
+4행이 9번에서 못 만들었던 그 사각지대다. 전략을 고정하면 서버 말이 무시된다. 톰캣은 5초에 끊었는데 풀은 60초까지 들고 있고, 검증도 없으니 죽은 커넥션에 요청이 실린다. **toxiproxy 없이, 톰캣만으로 재현된다.** 9번에서 중간 장비를 끌어와야 했던 건 톰캣이 정직해서였지 톰캣이라 안 되는 게 아니었다.
+
+3행은 같은 60초 고정인데 멀쩡하다. 서버가 아직 안 끊은 3초 안쪽이기 때문이다. 문제는 전략을 고정하는 것 자체가 아니라 **서버가 끊는 시점보다 길게 잡는 것**이다. 5행은 그 상태에서 검증이 남은 방어선으로 작동하는 경우다.
+
+정리하면 커넥션 수명을 정하는 순서가 이렇다.
+
+```
+서버의 Keep-Alive: timeout=N   →  있으면 그 값
+       없으면                  →  RequestConfig.connectionKeepAlive (기본 3분)
+       전략을 고정했으면        →  서버와 무관하게 그 값
+```
+
+기본값을 바꿀 이유는 거의 없다. 서버가 말해주면 그게 제일 정확하고, 안 말해주는 상대일 때만 3분이라는 값이 실제로 쓰인다.
 
 ## 정리
 ---
@@ -597,7 +640,7 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 2. **`maxPerRoute` 를 명시한다** (2번) — 기본값은 perRoute 5 / total 25 고, 업스트림이 하나면 `maxTotal` 은 도달할 일이 없는 숫자다. 8배 올려도 TPS 가 그대로였다.
 3. **크기는 동시성 기준으로 잡는다** (3번) — 필요 커넥션 = TPS × 응답시간. 넉넉하면 남는 건 그냥 놀지만, 모자라면 곧바로 큐가 된다. **크게 준 쪽의 손해가 작다.**
 4. **상한에는 반드시 포기를 같이 준다** (7번) — `connectionRequestTimeout` 이 없으면 소켓 점유가 스레드 점유로 바뀔 뿐이라 업스트림을 안 쓰는 API 까지 죽는다. 0(`Timeout.DISABLED`)은 무한이 아니라 즉시 실패이므로, "무한"은 충분히 큰 값으로 표현한다.
-5. **클라이언트 검증 주기 < 상대가 끊는 주기** (9·12번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주고 HttpClient5 는 그 값을 지키지만, 중간 LB·프록시는 말없이 끊는다. 헤더가 없으면 풀은 **3분**을 들고 있으므로(`RequestConfig.connectionKeepAlive` 기본값) `validateAfterInactivity`·`evictIdleConnections` 를 상대가 끊는 주기보다 짧게 둔다.
+5. **커넥션 수명은 서버 말을 따르게 두고, 검증 주기를 상대가 끊는 주기보다 짧게** (9·12·13번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주고 HttpClient5 는 그 값을 지킨다. `setKeepAliveStrategy` 로 그걸 덮어쓰면 서버가 끊은 커넥션을 계속 들고 있게 된다(13번). 헤더를 안 주는 상대라면 풀은 **3분**을 들고 있으므로(`RequestConfig.connectionKeepAlive` 기본값), 그때는 `validateAfterInactivity`·`evictIdleConnections` 가 유일한 방어선이다.
 6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 시체도 센다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
 
 ## 재보고 나서 고친 것
