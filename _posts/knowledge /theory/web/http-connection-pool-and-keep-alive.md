@@ -453,20 +453,53 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 
 **갈린 폭이 RTT 와 맞는다.** 73.9 → 95.2ms, 차이 **21.3ms** 로 주입한 RTT 20ms 와 일치한다. TPS 는 675 → 524 로 22% 감소인데, 동시성이 고정이면 TPS 가 응답시간에 반비례하므로 73.9/95.2 = 0.776 과 맞아떨어진다.
 
-#### TIME_WAIT 은 caller 에 안 쌓였다
+#### 재사용을 끄면 TIME_WAIT 이 쌓이나
 
-재사용이 없으면 caller 에 TIME_WAIT 이 쌓일 거라고 봤는데, caller → upstream 커넥션의 TIME_WAIT 은 **0** 이었다.
+재사용이 없으면 요청 수만큼 커넥션이 생기고, 그만큼 TIME_WAIT 이 쌓여 포트·메모리를 먹을 것 같았다. 재보면 **재사용을 어떻게 끄느냐에 따라 갈린다.** 끄는 방법이 두 가지인데 먼저 닫는 쪽이 다르다.
 
-| | caller | upstream |
-| --- | --- | --- |
-| caller → upstream | `SYN_SENT` 50 | `SYN_RECV` 50 |
-| TIME_WAIT | 0 | 0 |
+```bash
+./scripts/run-timewait.sh none      # 재사용 O
+./scripts/run-timewait.sh server    # 업스트림이 Connection: close  (1번에서 쓴 방법)
+./scripts/run-timewait.sh client    # 풀의 timeToLive=0 -> 빌려줄 때마다 버린다
+```
 
-**TIME_WAIT 은 먼저 닫는 쪽에 붙는다.** 이 실험에서 재사용을 끄는 방법은 upstream 이 `Connection: close` 를 붙이는 것이었고, 그러면 능동 종료자는 **서버**다. "재사용이 없으면 TPS × 60초만큼 TIME_WAIT" 이라는 계산 자체는 맞지만, **어느 쪽에 붙는지는 누가 먼저 닫느냐가 정한다.** 클라이언트가 커넥션을 버리는 구성(풀의 TTL·eviction)이어야 클라이언트 쪽 포트 고갈로 이어진다.
+커넥션 수와 종료 방식은 `/proc/net/snmp` 의 카운터 증분으로, TIME_WAIT 은 부하 25초 시점의 `/proc/net/tcp` 로 센다.
 
-`SYN_SENT`·`SYN_RECV` 가 50개씩 잡힌 것도 같이 볼 만하다. VU 50 이 전부 **핸드셰이크 중**이라는 뜻이다. C·D 에서 늘어난 21ms 가 여기 그대로 보인다.
+| 재사용 끈 방법 | 요청 | TPS | 새 커넥션 | RST 로 끝난 수 | caller TIME_WAIT |
+| --- | --- | --- | --- | --- | --- |
+| (안 끔) | 17,648 | 587 | **200** | 150 | 0 |
+| 서버가 닫음 | 14,077 | 467 | 14,077 | **14,077** | **0** |
+| 클라가 버림 | 13,401 | 445 | 13,401 | 0 | **8,179** |
 
-덤으로, caller 쪽 TIME_WAIT 을 필터 없이 세면 100개쯤 잡히는데 전부 **k6 ↔ caller** 커넥션이었다. caller 의 톰캣이 `maxKeepAliveRequests` 기본값 100 에 걸려 닫고 있던 것이다 — 12번을 부하 쪽에서 우연히 먼저 본 셈이다.
+**재사용이 없으면 요청 1건에 커넥션 1개**가 맞다. 17,648 요청을 커넥션 200개로 처리하던 것이 13,401 요청에 13,401개가 된다.
+
+부하 중 상태를 히스토그램으로 뜨면 caller 에 `SYN_SENT`, upstream 에 `SYN_RECV` 가 늘 잡힌다. VU 가 그 시점에 **핸드셰이크 중**이라는 뜻이고, C·D 에서 늘어난 21.3ms 가 여기 그대로 보인다.
+
+**그런데 1번에서 쓴 방법으로는 TIME_WAIT 이 하나도 안 생긴다.** 커넥션 14,077개가 전부 **RST 로 끝났기 때문**이다. 서버가 `Connection: close` 를 붙이면 HttpClient5 는 그 커넥션을 재사용 불가로 표시하고, 반납 대신 `discardEndpoint()` 로 보낸다.
+
+```java
+// InternalExecRuntime — 재사용 못 하는 커넥션은 이 경로로 간다
+private void discardEndpoint(final ConnectionEndpoint endpoint) {
+    endpoint.close(CloseMode.IMMEDIATE);
+    ...
+}
+
+// BHttpConnectionBase.close(CloseMode) — IMMEDIATE 면
+socket.setSoLinger(true, 0);   // linger 0 -> close() 가 FIN 이 아니라 RST 를 보낸다
+socket.close();
+```
+
+`SO_LINGER 0` 은 커널에 "정상 종료 절차 밟지 말고 끊어라"는 뜻이고, **RST 로 끝난 커넥션은 TIME_WAIT 을 남기지 않는다.** 그래서 caller 도 upstream 도 0 이다.
+
+세 번째 줄이 진짜 TIME_WAIT 이 쌓이는 경우다. 풀이 `timeToLive` 만료로 버리는 경로는 `CloseMode.GRACEFUL` 이라 정상적으로 FIN 을 보내고, 먼저 닫은 caller 에 TIME_WAIT 이 붙는다.
+
+**8,179 에서 멈춘 게 눈에 띈다.** 445 TPS × TIME_WAIT 60초면 26,700 개가 쌓여야 하는데 8,192 근처에서 더 안 는다. 컨테이너의 `tcp_max_tw_buckets` 가 **8192** 다. 이 상한을 넘으면 커널이 TIME_WAIT 을 유예 없이 없애버린다. 자원을 아끼려고 있는 값이 아니라, **TIME_WAIT 이 하는 일(지연 도착한 옛 패킷이 새 커넥션에 섞이는 걸 막는 것)을 포기**하는 안전장치다.
+
+자원 영향은 예상과 달랐다. `/proc/net/sockstat` 의 `mem`(소켓 버퍼 페이지 수)은 200 → 205 로 20KB 쯤 움직였을 뿐이다. TIME_WAIT 소켓은 온전한 소켓이 아니라 경량 구조체라 **메모리로는 티가 안 난다.** 걸리는 건 메모리가 아니라 **포트**다. 이 컨테이너의 `ip_local_port_range` 는 32768~60999, 28,232 개다. 445 TPS × 60초 = 26,700 이므로 tw_buckets 상한이 없었다면 포트 고갈 직전까지 갔을 숫자다.
+
+정리하면 "재사용을 끄면 TIME_WAIT 이 쌓인다"는 **맞기도 하고 틀리기도 하다.** 누가 먼저 닫는지, 그리고 그 닫기가 FIN 인지 RST 인지에 달렸다. 상대가 `Connection: close` 로 끊는 구성이면 클라이언트 쪽에는 TIME_WAIT 이 안 쌓이고, 풀의 TTL·eviction 으로 클라이언트가 버리는 구성이면 쌓인다.
+
+> 덤으로, caller 의 TIME_WAIT 을 필터 없이 세면 재사용을 켜도 30~40개가 잡히는데 전부 **k6 ↔ caller** 커넥션이다. caller 톰캣이 `maxKeepAliveRequests` 기본값 100 에 걸려 닫고 있던 것이다 — 12번을 부하 쪽에서 우연히 먼저 본 셈이다.
 
 ### 2번 — `maxPerRoute` 5 에 막힌다
 
