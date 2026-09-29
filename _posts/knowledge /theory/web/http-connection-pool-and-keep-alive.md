@@ -256,6 +256,31 @@ public PoolingHttpClientConnectionManagerMetricsBinder poolMetrics(PoolingHttpCl
 }
 ```
 
+**여기서 안 건드린 설정이 하나 있다.** `setKeepAliveStrategy` 는 기본값으로 뒀는데, 9번이 예측대로 재현되지 않은 원인이 이것이었다. 커넥션을 풀에 얼마나 두고 재사용할지는 위의 어떤 값도 아니고 이 전략이 응답마다 정한다.
+
+```java
+// DefaultConnectionKeepAliveStrategy (기본값)
+public TimeValue getKeepAliveDuration(HttpResponse response, HttpContext context) {
+    // 1. 응답의 Keep-Alive: timeout=N 을 그대로 따른다
+    for (HeaderElement he : iterate(response, "keep-alive")) {
+        if ("timeout".equalsIgnoreCase(he.getName()) && he.getValue() != null) {
+            return TimeValue.ofSeconds(Long.parseLong(he.getValue()));
+        }
+    }
+    // 2. 헤더가 없으면 RequestConfig.connectionKeepAlive -> 기본 3분
+    return clientContext.getRequestConfigOrDefault().getConnectionKeepAlive();
+}
+```
+
+이 값이 `MainClientExec` 에서 `markConnectionReusable(userToken, duration)` 으로 넘어가 풀 엔트리의 만료 시각이 된다. 그래서 **커넥션의 수명은 서버가 정하고, 클라이언트는 서버가 말이 없을 때만 자기 값을 쓴다.**
+
+| 상대 | 풀이 잡는 유효기간 |
+| --- | --- |
+| `Keep-Alive: timeout=N` 을 주는 서버 | N초 |
+| 헤더를 안 주는 서버·프록시 | **3분** (`RequestConfig.connectionKeepAlive` 기본값) |
+
+두 번째 줄이 위험한 쪽이다. 상대가 60초에 조용히 끊어도 풀은 3분을 들고 있으므로, 그 사이의 방어선은 `validateAfterInactivity` 하나뿐이다. 9번이 그 상황이다.
+
 **설정값을 조회해도 실제 적용값은 안 보인다.** 기동 로그에 매니저 상태를 찍어보면 이렇게 나온다.
 
 ```
@@ -485,7 +510,7 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 ex-0000000004 connection can be kept alive for 1 SECONDS
 ```
 
-**톰캣이 `Keep-Alive: timeout=1` 로 자기 타임아웃을 광고하고, HttpClient5 가 그 말을 지킨다.** 풀 엔트리의 만료 시각이 1초로 잡히니 `validateAfterInactivity` 가 개입할 일도 없이 그 전에 버려진다. 서버가 알려주는 한 사각지대는 생기지 않는다.
+**톰캣이 `Keep-Alive: timeout=1` 로 자기 타임아웃을 광고하고, HttpClient5 가 그 말을 지킨다.** 위에서 본 `DefaultConnectionKeepAliveStrategy` 가 그 헤더를 읽어 풀 엔트리의 만료 시각을 1초로 잡으니, `validateAfterInactivity`(2초) 가 개입할 일도 없이 그 전에 버려진다. 서버가 알려주는 한 사각지대는 생기지 않는다.
 
 이 헤더에는 조건이 있다. **클라이언트가 `Connection: keep-alive` 를 명시해야** 톰캣이 붙인다.
 
@@ -572,7 +597,7 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 2. **`maxPerRoute` 를 명시한다** (2번) — 기본값은 perRoute 5 / total 25 고, 업스트림이 하나면 `maxTotal` 은 도달할 일이 없는 숫자다. 8배 올려도 TPS 가 그대로였다.
 3. **크기는 동시성 기준으로 잡는다** (3번) — 필요 커넥션 = TPS × 응답시간. 넉넉하면 남는 건 그냥 놀지만, 모자라면 곧바로 큐가 된다. **크게 준 쪽의 손해가 작다.**
 4. **상한에는 반드시 포기를 같이 준다** (7번) — `connectionRequestTimeout` 이 없으면 소켓 점유가 스레드 점유로 바뀔 뿐이라 업스트림을 안 쓰는 API 까지 죽는다. 0(`Timeout.DISABLED`)은 무한이 아니라 즉시 실패이므로, "무한"은 충분히 큰 값으로 표현한다.
-5. **클라이언트 검증 주기 < 상대가 끊는 주기** (9·12번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주지만 중간 LB·프록시는 말없이 끊는다. `validateAfterInactivity`·`evictIdleConnections` 를 그보다 짧게 둔다.
+5. **클라이언트 검증 주기 < 상대가 끊는 주기** (9·12번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주고 HttpClient5 는 그 값을 지키지만, 중간 LB·프록시는 말없이 끊는다. 헤더가 없으면 풀은 **3분**을 들고 있으므로(`RequestConfig.connectionKeepAlive` 기본값) `validateAfterInactivity`·`evictIdleConnections` 를 상대가 끊는 주기보다 짧게 둔다.
 6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 시체도 센다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
 
 ## 재보고 나서 고친 것
