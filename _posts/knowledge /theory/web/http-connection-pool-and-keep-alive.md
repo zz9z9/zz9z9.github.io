@@ -340,6 +340,35 @@ Gauge(httpcomponents.httpclient.pool.total.connections{state="available"})
 ## 결과
 ---
 
+### 부하를 어떻게 줬나
+
+1번부터 8번까지는 k6 컨테이너를 **같은 브리지 네트워크에 띄워** caller 를 때린다. 호스트에서 쏘면 Docker VM 경계의 지연이 재려는 값과 섞인다.
+
+```js
+// k6/scenario.js — VU 50 이 쉬지 않고 caller 를 호출한다 (constant-vus)
+export const options = { vus: 50, duration: '30s', discardResponseBodies: true };
+
+export default function () {
+  http.get(`http://caller:8080/call?delayMs=50&sizeBytes=0&close=false&mode=safe`);
+}
+```
+
+한 회차는 이렇게 돈다.
+
+```bash
+./scripts/run-case.sh "<설명>" <maxTotal> <maxPerRoute> <close> [delayMs] [VUs]
+
+# 1) caller 재기동 (풀 설정은 env var) + health 대기
+# 2) netem 재적용 후 connect 시간으로 RTT 검증   ← 결과 줄에 같이 찍는다
+# 3) k6 15초    — JIT·풀 예열. 버린다
+# 4) k6 30초    — 이 구간의 http_req_duration·http_reqs 만 쓴다
+#    시작 15초 시점에 leased / pending / tomcat_threads_busy 를 1회 샘플링
+```
+
+표의 **평균·p95·TPS 는 4)의 k6 요약**이고, `leased`·`pending`·`callerThreads` 는 그 한가운데서 뜬 **순간값**이다. `available`·`ESTABLISHED`·`CLOSE_WAIT` 처럼 부하가 끝난 뒤를 보는 값은 종료 후에 `pool-stat.sh` 로 잰다.
+
+0번과 9~13번은 부하 생성기를 안 쓴다. 각 절에 적는다.
+
 ### 0번 — 본문을 소비해야 반납된다
 
 일부러 이상하게 짠 코드가 아니라, **정상 경로에만 `close` 가 있고 에러 경로는 상태코드만 보고 빠져나가는** 흔한 형태다.
@@ -366,7 +395,21 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 }
 ```
 
-순차 60회. `available`·`leased` 는 풀이 센 값이고, 그 오른쪽은 같은 시점 caller 의 `/proc/net/tcp` 다.
+**동시성 1 로 순차 60회**를 쏜다. 부하 생성기 없이 curl 을 한 번에 하나씩 돌리므로, 커넥션이 1개를 넘길 이유가 원래는 없다.
+
+```bash
+./scripts/run-leak.sh leaky 404     # <mode> <업스트림이 줄 상태코드>
+
+#   for i in $(seq 1 60); do
+#     curl "localhost:9080/call?delayMs=0&status=404&mode=leaky"
+#   done
+```
+
+`mode` 는 위 두 코드 중 어느 경로를 탈지고, `status` 는 업스트림이 돌려줄 코드다. 풀은 `maxTotal=maxPerRoute=50`, `connectionRequestTimeout=3000`.
+
+**성공은 caller 가 응답을 돌려준 것**까지 친다. 업스트림이 404·500 을 줘도 caller 는 502 로 옮기고 정상 종료하므로 성공이다. 실패는 커넥션을 못 빌려 `ConnectionRequestTimeoutException` 으로 떨어진 것뿐이다.
+
+60회가 끝난 뒤 풀 게이지와 caller 의 `/proc/net/tcp` 를 같이 읽는다.
 
 | 조건 | 성공 | 첫 실패 | available | leased | ESTABLISHED | CLOSE_WAIT |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -389,6 +432,15 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 ### 1번 — 정상 구간에서 갈리는 건 재사용 축뿐
 
 '풀 없음'이라고 할 때 실제로 없어지는 건 **커넥션 재사용**과 **동시성 상한** 두 가지다. 붙여놓고 비교하면 어느 쪽 기여분인지 갈리지 않으므로 2×2 로 돌린다.
+
+재사용 축은 업스트림이 `Connection: close` 를 붙이게 해서 끄고(네 번째 인자), 상한 축은 풀 크기로 준다.
+
+```bash
+./scripts/run-case.sh "A 재사용O 상한50"    50    50    false
+./scripts/run-case.sh "B 재사용O 상한10000" 10000 10000 false
+./scripts/run-case.sh "C 재사용X 상한50"    50    50    true
+./scripts/run-case.sh "D 재사용X 상한10000" 10000 10000 true
+```
 
 | 조건 | 평균 | p95 | TPS |
 | --- | --- | --- | --- |
@@ -418,6 +470,16 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 
 ### 2번 — `maxPerRoute` 5 에 막힌다
 
+`0` 을 넘기면 빌더가 그 값을 덮어쓰지 않으므로 "설정하지 않음" 이 된다.
+
+```bash
+./scripts/run-case.sh "total200 perRoute미설정" 200 0  false
+./scripts/run-case.sh "둘 다 미설정"              0   0  false
+./scripts/run-case.sh "total200 perRoute50"     200 50 false
+```
+
+실제로 뭐가 적용됐는지는 기동 로그(`pool: maxTotal=…, maxPerRoute=…`)에서 읽어 결과에 같이 찍는다.
+
 | 조건 | 실제 적용값 | 평균 | TPS | 부하 중 |
 | --- | --- | --- | --- | --- |
 | total 200, perRoute 미설정 | maxTotal=200, **maxPerRoute=5** | 740.7ms | 66 | leased=5 pending=45 |
@@ -432,7 +494,11 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 
 ### 3번 — 풀 사이즈와 TPS
 
-VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 이어야 한다.
+VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 이어야 한다. 풀 크기만 바꾸며 다섯 번 돌린다.
+
+```bash
+for n in 1 25 50 100 500; do ./scripts/run-case.sh "풀 $n" $n $n false; done
+```
 
 | 풀 | 평균 | TPS | leased | pending |
 | --- | --- | --- | --- | --- |
@@ -450,7 +516,14 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 ### 4번 — 재사용 이득 = 핸드셰이크 + slow start
 
-먼저 커넥션 수립 비용을 `curl` 로 분해한다. TLS 는 1.3 으로 협상됐다.
+먼저 커넥션 수립 비용을 `curl` 로 분해한다. 매번 새 커넥션이어야 하므로 `Connection: close` 로 쏘고, 첫 요청은 DNS 때문에 튀므로 3회 중앙값을 쓴다. TLS 는 1.3 으로 협상됐다.
+
+```bash
+# 브리지 네트워크 안에서 (호스트에서 쏘면 publish 된 포트가 핸드셰이크 비용을 가린다)
+docker run --rm --network docker_default pool-lab-net sh -c \
+  "curl -sk -o /dev/null -H 'Connection: close' \
+        -w '%{time_connect} %{time_appconnect}\n' https://upstream-tls:8443/echo"
+```
 
 | RTT | http `connect` | https `connect` | https `appconnect`(TLS 완료) |
 | --- | --- | --- | --- |
@@ -460,7 +533,13 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 **RTT 가 0이어도 https 는 28.7ms 가 든다.** TLS 핸드셰이크는 왕복만 드는 게 아니라 비대칭키 연산이라는 CPU 비용이 따로 있다. "RTT × 왕복수" 로만 예측했던 게 여기서 틀렸다. RTT 가 붙으면 그 위에 왕복분이 더해져서, 수립 비용이 http 의 **2~3배**가 된다.
 
-부하를 걸어 TPS 로 보면 이렇다. (RTT 20ms)
+부하를 걸어 TPS 로 보면 이렇다. 프로토콜은 업스트림 주소로, 본문 크기는 `SIZE_BYTES` 로 바꾼다. (RTT 20ms)
+
+```bash
+./scripts/run-case.sh "http"  50 50 false           # 재사용 O / X 는 마지막 인자
+UPSTREAM_BASE_URL=https://upstream-tls:8443 ./scripts/run-case.sh "https" 50 50 false
+SIZE_BYTES=102400 ./scripts/run-case.sh "100KB" 50 50 false
+```
 
 | | 재사용 O | 재사용 X | 차이 | TPS |
 | --- | --- | --- | --- | --- |
@@ -476,6 +555,15 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 ### 5·6번 — 재사용이 꺼져도 풀은 동시성 상한으로 남는다
 
+3번과 같은 방식인데 재사용을 켠 것과 끈 것을 나란히 둔다.
+
+```bash
+for n in 5 25 50; do
+  ./scripts/run-case.sh "풀 $n 재사용O" $n $n false
+  ./scripts/run-case.sh "풀 $n 재사용X" $n $n true
+done
+```
+
 | 풀 | 재사용 O | 재사용 X | 부하 중 |
 | --- | --- | --- | --- |
 | 5 | 732.5ms / 67 TPS | 965.1ms / 51 TPS | leased=5 pending=45 **callerThreads=51** |
@@ -488,9 +576,21 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 ### 7·8번 — 상한만으로는 격리가 안 된다
 
-업스트림 지연 3초, 도착률 100/s 고정. caller 에 업스트림을 **전혀 부르지 않는** `/local` 엔드포인트를 두고 같이 때린다.
+caller 에 업스트림을 **전혀 부르지 않는** `/local` 엔드포인트를 두고, 느린 `/call` 과 **동시에** 때린다. 여기만 k6 시나리오가 다르다.
 
-> 부하를 VU 고정으로 주면 fail-fast 쪽이 훨씬 많이 쏘게 돼서 두 조건의 오퍼 부하가 달라진다. 도착률을 고정해야 비교가 선다.
+```js
+// k6/bulkhead.js — 두 시나리오를 같이 돌린다
+slow:  { executor: 'constant-arrival-rate', rate: 100, timeUnit: '1s', duration: '30s' }  // GET /call?delayMs=3000
+local: { executor: 'constant-arrival-rate', rate: 20,  timeUnit: '1s', duration: '30s' }  // GET /local
+```
+
+```bash
+./scripts/run-bulkhead.sh "CRT 60s" 50 60000     # <설명> <풀 크기> <connectionRequestTimeout ms>
+```
+
+> **도착률 고정(`constant-arrival-rate`)이 핵심이다.** VU 고정으로 주면 빨리 실패하는 조건이 그만큼 더 쏘게 돼서 두 조건의 오퍼 부하가 달라진다. 처음에 `constant-vus` 로 돌렸다가 비교가 성립하지 않아 바꿨다.
+
+`/call` 과 `/local` 은 별도 `Trend` 로 따로 집계하고, `callerThreads`·`leased`·`ESTABLISHED` 는 18초 시점에 한 번 뜬다.
 
 | 조건 | `/call` p95 | **`/local` p95** | 실패율 | callerThreads | leased | ESTABLISHED |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -532,6 +632,20 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
 그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 알려주게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
 
+부하가 아니라 **커넥션 1개로 딱 2번** 쏜다. 첫 요청으로 풀에 커넥션을 만들고, 그걸 죽인 뒤, 두 번째 요청이 그 커넥션을 집게 한다.
+
+```bash
+./scripts/run-stale.sh -1 false 0.3      # <validateAfterInactivity ms> <재시도> <idle 초>
+
+# 1) curl localhost:9080/call                      → 풀에 커넥션 1개
+# 2) toxiproxy 를 disable → enable                  → 중간 장비가 통보 없이 끊는다
+# 3) sleep <idle>                                   → 검증 주기의 앞/뒤를 가른다
+# 4) 풀 게이지 + /proc/net/tcp 를 찍고                → "요청 전 상태" 열
+# 5) curl localhost:9080/call                      → 이 요청의 결과가 표의 HTTP 코드
+```
+
+예외 이름은 4)와 5) 사이에 새로 찍힌 caller 로그에서 뽑는다.
+
 | 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
 | --- | --- | --- | --- | --- | --- |
 | 2초(기본) | off | 0.3초 | available=1, ESTABLISHED=0, **CLOSE_WAIT=1** | **HTTP 500** | `NoHttpResponseException` |
@@ -546,13 +660,19 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
 세 번째 줄은 방어선이 어디인지 보여준다. idle 3초는 검증 주기 2초를 넘겨서 lease 직전에 stale 체크가 돌고, 죽은 커넥션을 버리고 새로 맺는다. **클라이언트 검증 주기 < 상대가 끊는 주기**가 지켜지면 막힌다.
 
-**12번** — 요청 수 상한은 성격이 다르다. `maxKeepAliveRequests=5` 로 두고 한 커넥션에 6번 보내면 이렇게 나온다.
+**12번** — 요청 수 상한은 성격이 다르다. 업스트림을 `maxKeepAliveRequests=5` 로 띄우고, **한 커넥션 위에서** 6번 연속으로 보내며 응답 헤더만 본다.
 
-| 요청 | 응답 헤더 |
-| --- | --- |
-| 1~4번째 | `Keep-Alive: timeout=60`, `Connection: keep-alive` |
-| **5번째** | **`Connection: close`** (Keep-Alive 헤더 사라짐) |
-| 6번째 | 새 커넥션에서 다시 `keep-alive` |
+```bash
+docker run --rm --network docker_default pool-lab-net sh -c \
+  "curl -s -o /dev/null -D - -H 'Connection: keep-alive' \
+        http://upstream:8080/echo?[1-6]"     # [1-6] 이 한 커넥션에서 6번 반복된다
+```
+
+| 요청 | 소스 포트 | 응답 헤더 |
+| --- | --- | --- |
+| 1~4번째 | 55610 | `Keep-Alive: timeout=60`, `Connection: keep-alive` |
+| **5번째** | 55610 | **`Connection: close`** (Keep-Alive 헤더 사라짐) |
+| 6번째 | **55612** | 새 커넥션에서 다시 `keep-alive` |
 
 **알려주고 닫으므로 stale 을 만들지 않는다.** 시간 상한(`keepAliveTimeout`)은 예고 없이 FIN 을 보내지만, 요청 수 상한은 마지막 응답에 `Connection: close` 를 붙인다. 이 값을 아무리 낮춰도 stale 의 원인은 되지 않는다.
 
