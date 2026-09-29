@@ -66,12 +66,12 @@ upstream netns 에 `tc qdisc ... netem delay 5ms` 를 걸어두고 같은 네트
 k6 ──▶ caller:8080 ──▶ upstream:8080       (http)   전부 같은 브리지 네트워크
                    └─▶ upstream-tls:8443  (https, 4번 전용)
                          ▲   ▲
-       (TCP 장애가        │   └─ netem: 각 upstream 의 netns 에 egress 지연
-        필요할 때만)       │
+       (stale 실험        │   └─ netem: 각 upstream 의 netns 에 egress 지연
+        에서만)            │
             toxiproxy ────┘
 ```
 
-기본 경로에 toxiproxy 는 없다. RTT 를 netem 이 맡으면서 남은 역할이 `reset_peer` 같은 TCP 레벨 장애뿐인데, 경로에 끼워두면 위에서 본 것처럼 핸드셰이크 비용이 가려진다. 필요한 실험에서만 `UPSTREAM_BASE_URL` 을 toxiproxy 로 돌린다.
+기본 경로에 toxiproxy 는 없다. RTT 를 netem 이 맡으면서 남은 역할이 "말없이 끊기" 뿐인데, 경로에 끼워두면 위에서 본 것처럼 핸드셰이크 비용이 가려진다. 9·10·11번에서만 `UPSTREAM_BASE_URL` 을 toxiproxy 로 돌린다.
 
 | 컨테이너 | cpus | 역할 |
 | --- | --- | --- |
@@ -80,7 +80,7 @@ k6 ──▶ caller:8080 ──▶ upstream:8080       (http)   전부 같은 �
 | upstream-tls | 2 | 같은 jar 를 TLS 로만 띄운 것. 4번에서 http 와 나란히 잰다 |
 | k6 | 2 | 부하 생성기가 병목이면 TPS가 거짓말이 된다 |
 | netem | — | upstream 의 netns 를 공유하는 사이드카. `NET_ADMIN` 으로 qdisc 만 걸고 끝난다 |
-| toxiproxy | 1 | TCP 레벨 장애. 기본 경로 밖 |
+| toxiproxy | 1 | 통보 없이 끊는 중간 장비. 기본 경로 밖 |
 
 풀 설정은 전부 env var로 뺀다(`@ConfigurationProperties`). 실험 조건 변경이 이미지 재빌드 없이 `docker compose up -d --force-recreate` 로 끝난다. jar는 bind-mount 하고 이미지는 `eclipse-temurin:21-jre` 로 고정한다.
 
@@ -92,9 +92,9 @@ k6 ──▶ caller:8080 ──▶ upstream:8080       (http)   전부 같은 �
 | --- | --- | --- |
 | upstream 앱 | **HTTP 레벨** — 응답 내용·시간·헤더 | 지연, 본문 크기, 상태 코드, `Connection: close` |
 | netem | **패킷 레벨** — 지연·손실 | RTT |
-| toxiproxy | **TCP 레벨** — 커넥션 장애 | `reset_peer`, `timeout`, 대역폭 |
+| toxiproxy | **TCP 레벨** — 통보 없는 커넥션 종료 | 프록시를 껐다 켜서 말없이 끊기 (9·10·11번) |
 
-커넥션을 끊거나 RST를 쏘는 건 앱에서 흉내내기 번거로운데 toxic으로는 한 줄이다. 앱은 정상적인 HTTP 응답만 만든다.
+앱은 정상적인 HTTP 응답만 만든다. 톰캣으로는 "말없이 끊기"가 안 되기 때문에 toxiproxy 가 필요하다. 톰캣은 끊을 때 `Connection: close` 를 붙여 **알려주고** 끊는다(12번). 클라이언트가 모르는 채로 죽은 커넥션을 쥐고 있는 상황은 경로 중간에서 통보 없이 끊어줄 무언가가 있어야 만들어진다.
 
 ### upstream 응답
 
