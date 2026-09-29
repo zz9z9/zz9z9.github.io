@@ -309,6 +309,22 @@ pool: maxTotal=50, maxPerRoute=50, validateAfterInactivity=null
 - **첫 30~60초는 버린다.** JIT warmup 구간이다.
 - **ESTABLISHED 는 `/proc/net/tcp` 에서 읽는다.** `eclipse-temurin` 이미지에는 `ss` 도 `netstat` 도 없다. `$2` 가 local(8080 = `1F90`), `$3` 이 remote, `$4` 가 상태(`01` = ESTABLISHED)다. prometheus 도 같은 포트를 긁으므로 caller 에서 온 것만 골라야 한다.
 
+#### 커널·cgroup 에서 직접 읽는 값
+
+풀 게이지로는 안 보이는 것들이 있다. 커넥션이 **어떻게 끝났는지**, CPU 를 얼마나 썼는지는 컨테이너 안에서 직접 읽는다. `eclipse-temurin` 이미지에 `ss`·`netstat`·`top` 이 없어서 전부 파일로 읽는다.
+
+| 값 | 어디서 | 어떻게 읽나 |
+| --- | --- | --- |
+| ESTABLISHED / TIME_WAIT / CLOSE_WAIT | `/proc/net/tcp` | `$4` 가 상태(`01` ESTABLISHED, `06` TIME_WAIT, `08` CLOSE_WAIT), `$2` local, `$3` remote. 포트는 16진수(8080 = `1F90`) |
+| TIME_WAIT 총계, 소켓 메모리 | `/proc/net/sockstat` | `TCP: inuse … tw … mem …`. `mem` 은 소켓이 잡은 **페이지 수**(4KB/페이지) |
+| 새로 맺은 커넥션 수 | `/proc/net/snmp` | `Tcp: ActiveOpens`(내가 건 것) / `PassiveOpens`(받은 것) |
+| **RST 로 끝난 커넥션 수** | 〃 | `Tcp: EstabResets`. ESTABLISHED·CLOSE_WAIT 에서 곧바로 CLOSED 로 간 횟수 |
+| CPU 사용량 | `/sys/fs/cgroup/cpuacct/cpuacct.usage` | 컨테이너 누적 CPU **나노초** |
+
+**앞의 둘은 순간값이고 뒤의 셋은 누적값이다.** `/proc/net/tcp` 를 세면 "지금 몇 개"는 알아도 "그동안 몇 개가 생겼다 사라졌는지"는 모른다. 누적 카운터는 부하 전후로 두 번 읽어 **증분**을 쓴다. 1번에서 TIME_WAIT 이 0 인 이유를 찾을 때 이 차이가 갈랐다 — 순간값으로는 아무 일도 안 일어난 것처럼 보였는데, 증분을 보니 커넥션 14,077개가 전부 RST 로 끝나 있었다.
+
+요청당 CPU 도 같은 식이다. `cpuacct.usage` 증분을 요청 수로 나눈다. `docker stats` 의 CPU% 는 순간 샘플이라 회차마다 흔들려서 안 쓴다.
+
 #### 풀 게이지는 소켓이 아니라 자바 객체를 센다
 
 `available` · `leased` 가 어디서 나오는 값인지는 짚고 가야 한다. 소켓 상태를 조회하는 게 아니라 **풀 내부 자료구조의 `size()`** 다.
@@ -365,6 +381,57 @@ export default function () {
 #    시작 15초 시점에 leased / pending / tomcat_threads_busy 를 1회 샘플링
 ```
 
+<details markdown="1">
+<summary>회차 전체 — <code>scripts/run-case.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-case.sh "<설명>" <MAX_TOTAL> <MAX_PER_ROUTE> <CLOSE> [DELAY_MS] [VUS]
+#   MAX_TOTAL / MAX_PER_ROUTE 에 0 = "설정하지 않음" -> httpclient5 기본값
+#   env: NETEM_MS(기본 20), SIZE_BYTES(기본 0), UPSTREAM_BASE_URL
+set -e
+cd "$(dirname "$0")/.."
+DESC="$1"; TOTAL="$2"; PER_ROUTE="$3"; CLOSE="$4"; DELAY="${5:-50}"; VUS="${6:-50}"
+NET=docker_default
+D="${NETEM_MS:-20}"
+
+export POOL_MAX_TOTAL="$TOTAL" POOL_MAX_PER_ROUTE="$PER_ROUTE"
+(cd docker && docker-compose up -d --force-recreate caller >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+
+# qdisc 는 컨테이너 netns 에 붙어 있어 재생성 때마다 사라진다. 매 실험 전에 다시 걸고 검증한다.
+TARGET=docker_upstream_1 ./scripts/netem.sh "$D" >/dev/null
+if [ -n "${UPSTREAM_BASE_URL##*upstream:8080}" ] && [ -n "$UPSTREAM_BASE_URL" ]; then
+  RTT=$(TARGET=docker_upstream-tls_1 VERIFY_URL=https://upstream-tls:8443/echo ./scripts/netem.sh "$D" | grep -o 'connect=[0-9.]*ms')
+else
+  RTT=$(TARGET=docker_upstream_1 ./scripts/netem.sh "$D" | grep -o 'connect=[0-9.]*ms')
+fi
+EFF=$(docker logs docker_caller_1 2>&1 | grep -o 'pool: maxTotal=[0-9]*, maxPerRoute=[0-9]*' | tail -1)
+
+k6run() {
+  docker run --rm --network "$NET" --cpus 2 -v "$PWD/k6:/scripts:ro" \
+    -e VUS="$VUS" -e DURATION="$1" -e DELAY_MS="$DELAY" -e CLOSE="$CLOSE" -e MODE=safe \
+    -e SIZE_BYTES="${SIZE_BYTES:-0}" \
+    grafana/k6:0.53.0 run --quiet /scripts/scenario.js 2>&1
+}
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+
+k6run 15s >/dev/null 2>&1                      # JIT warmup — 버린다
+( k6run 30s > /tmp/_k6out 2>&1 ) &
+sleep 15
+MID="leased=$(gauge 'state="leased"') pending=$(gauge 'pool_total_pending') callerThreads=$(gauge '^tomcat_threads_busy')"
+wait
+OUT=$(cat /tmp/_k6out)
+AVG=$(echo "$OUT" | grep -E "^ *http_req_duration" | sed -E 's/.*avg=([^ ]+).*/\1/')
+TPS=$(echo "$OUT" | grep -E "^ *http_reqs" | sed -E 's#.* ([0-9.]+)/s.*#\1#')
+printf '%-28s | %-34s | %-15s | %-9s | %-7s | %s\n' "$DESC" "$EFF" "$RTT" "$AVG" "${TPS%.*}" "$MID"
+```
+
+</details>
+
 표의 **평균·p95·TPS 는 4)의 k6 요약**이고, `leased`·`pending`·`callerThreads` 는 그 한가운데서 뜬 **순간값**이다. `available`·`ESTABLISHED`·`CLOSE_WAIT` 처럼 부하가 끝난 뒤를 보는 값은 종료 후에 `pool-stat.sh` 로 잰다.
 
 0번과 9~13번은 부하 생성기를 안 쓴다. 각 절에 적는다.
@@ -404,6 +471,46 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 #     curl "localhost:9080/call?delayMs=0&status=404&mode=leaky"
 #   done
 ```
+
+<details markdown="1">
+<summary>순차 60회 + 풀·소켓 상태 — <code>scripts/run-leak.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-leak.sh <MODE: leaky|safe> <STATUS>
+#
+# 동시성 1 로 60번 순차 호출한다(부하 생성기 없이 curl 루프).
+# 반납이 안 되면 동시성이 1인데도 요청 수만큼 커넥션이 늘어난다.
+set -e
+cd "$(dirname "$0")/.."
+MODE="$1"; STATUS="$2"
+export POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 POOL_EVICT_IDLE_MS=-1 POOL_TIME_TO_LIVE_MS=-1 \
+       POOL_KEEP_ALIVE_MS=-1 POOL_RETRY_ENABLED=false \
+       UPSTREAM_BASE_URL=http://upstream:8080 KEEP_ALIVE_TIMEOUT=60000 NETEM_DELAY_MS=0
+(cd docker && docker-compose up -d --force-recreate caller upstream >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+
+OK=0; FIRST_FAIL=""
+for i in $(seq 1 60); do
+  code=$(curl -s -o /dev/null -m 10 -w '%{http_code}' \
+    "http://localhost:9080/call?delayMs=0&status=${STATUS}&mode=${MODE}")
+  # 502 는 업스트림 에러를 caller 가 정상적으로 옮긴 것 -> 호출 자체는 성공
+  if [ "$code" = "200" ] || [ "$code" = "502" ]; then OK=$((OK+1))
+  elif [ -z "$FIRST_FAIL" ]; then FIRST_FAIL="$i"; fi
+done
+
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+sock()  { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:1F90\$/ {n++} END {print n+0}' /proc/net/tcp"; }
+printf '%-6s + %-3s | 성공 %2d/60 | 첫 실패 %-6s | available=%-3s leased=%-3s | ESTABLISHED=%-3s CLOSE_WAIT=%s\n' \
+  "$MODE" "$STATUS" "$OK" "${FIRST_FAIL:-없음}" \
+  "$(gauge 'state="available"')" "$(gauge 'state="leased"')" "$(sock 01)" "$(sock 08)"
+```
+
+</details>
 
 `mode` 는 위 두 코드 중 어느 경로를 탈지고, `status` 는 업스트림이 돌려줄 코드다. 풀은 `maxTotal=maxPerRoute=50`, `connectionRequestTimeout=3000`.
 
@@ -463,6 +570,64 @@ try (CloseableHttpResponse response = httpClient.execute(request)) {
 ./scripts/run-timewait.sh client    # 풀의 timeToLive=0 -> 빌려줄 때마다 버린다
 ```
 
+<details markdown="1">
+<summary>커넥션 수·RST·TIME_WAIT — <code>scripts/run-timewait.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-timewait.sh <CLOSER: none|server|client>
+#
+# 재사용을 끄는 방법이 두 가지인데, 먼저 닫는 쪽이 달라서 TIME_WAIT 이 쌓이는 자리가 다르다.
+#   server — 업스트림이 Connection: close 를 붙인다 (1번에서 쓴 방법)
+#   client — 풀이 빌려줄 때마다 TTL 만료로 버린다 (timeToLive=0) -> caller 가 먼저 닫는다
+# 부하 중에 caller/upstream 양쪽의 TIME_WAIT 과 소켓 메모리를 같이 센다.
+set -e
+cd "$(dirname "$0")/.."
+CLOSER="$1"
+case "$CLOSER" in
+  none)   CLOSE=false; TTL=-1 ;;
+  server) CLOSE=true;  TTL=-1 ;;
+  client) CLOSE=false; TTL=0  ;;
+esac
+export POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_KEEP_ALIVE_MS=-1 \
+       POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 \
+       POOL_EVICT_IDLE_MS=-1 POOL_TIME_TO_LIVE_MS="$TTL" POOL_RETRY_ENABLED=false \
+       UPSTREAM_BASE_URL=http://upstream:8080 KEEP_ALIVE_TIMEOUT=60000 MAX_KEEP_ALIVE_REQUESTS=100
+(cd docker && docker-compose up -d --force-recreate caller upstream >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+TARGET=docker_upstream_1 ./scripts/netem.sh 20 >/dev/null 2>&1
+
+# $4=상태(06=TIME_WAIT), 포트 1F90=8080. caller 는 remote(=$3), upstream 은 local(=$2) 이 8080 이다
+tw() { docker exec "$1" sh -c \
+  "awk 'NR>1 && \$4==\"06\" && \$$2 ~ /:1F90\$/ {n++} END {print n+0}' /proc/net/tcp"; }
+# sockstat 의 tw = TIME_WAIT 총계, mem = 소켓 버퍼로 잡은 페이지 수(4KB/페이지)
+sockstat() { docker exec "$1" sh -c "grep '^TCP:' /proc/net/sockstat"; }
+
+opens() { docker exec "$1" sh -c "awk '/^Tcp:/{if(h){split(h,a,\" \");split(\$0,b,\" \");for(i=1;i<=length(a);i++) if(a[i]==\"$2\") print b[i]} else h=\$0}' /proc/net/snmp"; }
+A0=$(opens docker_caller_1 ActiveOpens); R0=$(opens docker_caller_1 EstabResets)
+
+( docker run --rm --network docker_default --cpus 2 -v "$PWD/k6:/scripts:ro" \
+    -e VUS=50 -e DURATION=30s -e DELAY_MS=50 -e CLOSE="$CLOSE" -e MODE=safe \
+    grafana/k6:0.53.0 run --quiet /scripts/scenario.js > /tmp/_tw 2>&1 ) &
+sleep 25
+C_TW=$(tw docker_caller_1 3); U_TW=$(tw docker_upstream_1 2)
+C_SS=$(sockstat docker_caller_1); U_SS=$(sockstat docker_upstream_1)
+wait
+TPS=$(grep -E "^ *http_reqs" /tmp/_tw | sed -E 's#.* ([0-9.]+)/s.*#\1#')
+REQ=$(grep -E "^ *http_reqs" /tmp/_tw | sed -E 's/.*: ([0-9]+) .*/\1/')
+A1=$(opens docker_caller_1 ActiveOpens); R1=$(opens docker_caller_1 EstabResets)
+
+printf '%-7s | 요청 %-6s TPS %-5s | 새 커넥션 %-6s RST 로 끝 %-6s | TIME_WAIT caller=%-5s upstream=%s\n' \
+  "$CLOSER" "$REQ" "${TPS%.*}" "$((A1-A0))" "$((R1-R0))" "$C_TW" "$U_TW"
+printf '          caller   %s\n' "$C_SS"
+printf '          upstream %s\n' "$U_SS"
+```
+
+</details>
+
 커넥션 수와 종료 방식은 `/proc/net/snmp` 의 카운터 증분으로, TIME_WAIT 은 부하 25초 시점의 `/proc/net/tcp` 로 센다.
 
 | 재사용 끈 방법 | 요청 | TPS | 새 커넥션 | RST 로 끝난 수 | caller TIME_WAIT |
@@ -500,6 +665,75 @@ socket.close();
 정리하면 "재사용을 끄면 TIME_WAIT 이 쌓인다"는 **맞기도 하고 틀리기도 하다.** 누가 먼저 닫는지, 그리고 그 닫기가 FIN 인지 RST 인지에 달렸다. 상대가 `Connection: close` 로 끊는 구성이면 클라이언트 쪽에는 TIME_WAIT 이 안 쌓이고, 풀의 TTL·eviction 으로 클라이언트가 버리는 구성이면 쌓인다.
 
 > 덤으로, caller 의 TIME_WAIT 을 필터 없이 세면 재사용을 켜도 30~40개가 잡히는데 전부 **k6 ↔ caller** 커넥션이다. caller 톰캣이 `maxKeepAliveRequests` 기본값 100 에 걸려 닫고 있던 것이다 — 12번을 부하 쪽에서 우연히 먼저 본 셈이다.
+
+#### 상한이 없으면 뭐가 먼저 바닥나나
+
+그럼 풀 상한을 사실상 없애고(10000) 재사용도 없으면 어디까지 가나. 먼저 바닥나는 건 커넥션 수 자체가 아니라 **그걸 담는 커널 자원**이다. 기본값(포트 28,232개 / fd 1,048,576개)으로는 닿는 데 오래 걸리므로 caller 컨테이너의 한계를 좁혀서 같은 상황을 빨리 만든다.
+
+```bash
+./scripts/run-exhaust.sh port     # ephemeral port 를 500개로 줄인다
+./scripts/run-exhaust.sh fd       # 열 수 있는 파일 수를 256개로 줄인다
+```
+
+<details markdown="1">
+<summary>포트·fd 한계를 좁혀 고갈 — <code>scripts/run-exhaust.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-exhaust.sh <port|fd>
+#
+# 풀 상한이 없을 때 뭐가 먼저 바닥나는지 본다. 실제 한계까지 가려면 오래 걸리므로
+# caller 컨테이너의 한계를 좁혀서 같은 상황을 빨리 만든다.
+#   port — ephemeral port 를 500개로 줄이고, 클라이언트가 커넥션을 버리게 해서 TIME_WAIT 을 쌓는다
+#   fd   — 열 수 있는 파일 수를 256개로 줄이고, 느린 업스트림에 상한 없는 풀로 붙는다
+set -e
+cd "$(dirname "$0")/.."
+KIND="$1"
+case "$KIND" in
+  port) export PORT_RANGE="32768 33267" NOFILE=1048576 \
+               POOL_MAX_TOTAL=10000 POOL_MAX_PER_ROUTE=10000 POOL_TIME_TO_LIVE_MS=0 \
+               DELAY=50 VUS=50 ;;
+  fd)   export PORT_RANGE="32768 60999" NOFILE=256 \
+               POOL_MAX_TOTAL=10000 POOL_MAX_PER_ROUTE=10000 POOL_TIME_TO_LIVE_MS=-1 \
+               DELAY=3000 VUS=200 ;;
+esac
+export POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 POOL_KEEP_ALIVE_MS=-1 \
+       POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 POOL_EVICT_IDLE_MS=-1 POOL_RETRY_ENABLED=false \
+       POOL_RESPONSE_TIMEOUT_MS=20000 POOL_SOCKET_TIMEOUT_MS=20000 \
+       UPSTREAM_BASE_URL=http://upstream:8080 KEEP_ALIVE_TIMEOUT=60000 CALLER_TOMCAT_THREADS_MAX=200
+(cd docker && docker-compose up -d --force-recreate caller >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+echo "  한계: 포트=$(docker exec docker_caller_1 cat /proc/sys/net/ipv4/ip_local_port_range | tr '\t' '-') nofile=$(docker exec docker_caller_1 sh -c 'ulimit -n')"
+
+N=$(docker logs docker_caller_1 2>&1 | wc -l)
+docker run --rm --network docker_default --cpus 2 -v "$PWD/k6:/scripts:ro" \
+  -e VUS="$VUS" -e DURATION=30s -e DELAY_MS="$DELAY" -e CLOSE=false -e MODE=safe \
+  grafana/k6:0.53.0 run --quiet /scripts/scenario.js > /tmp/_ex 2>&1
+LOG=$(docker logs docker_caller_1 2>&1 | tail -n +$((N+1)))
+
+REQ=$(grep -E "^ *http_reqs" /tmp/_ex | sed -E 's/.*: ([0-9]+) .*/\1/')
+FAIL=$(grep -E "^ *http_req_failed" /tmp/_ex | sed -E 's/.*: ([0-9.]+%).*✓ ([0-9]+).*/\1 (\2건)/')
+echo "  요청 $REQ, 실패 $FAIL"
+# 스택트레이스에 같은 문구가 여러 번 나오므로 로그 줄 수가 아니라 k6 실패 수가 기준이다
+echo "$LOG" | grep -oiE "Cannot assign requested address|Too many open files|Address already in use|Connection refused|No buffer space" \
+  | sort | uniq -c | sed 's/^/  /' || echo "  (해당 에러 없음)"
+```
+
+</details>
+
+| 좁힌 것 | 값 | 요청 | 실패 | 에러 |
+| --- | --- | --- | --- | --- |
+| ephemeral port | 500개 (32768~33267) | 11,111 | **95.5%** (10,611건) | `Cannot assign requested address` |
+| 열 수 있는 파일 수 | 256 | 1,712 | **30.3%** (518건) | `Too many open files` |
+
+**포트 쪽은 성공한 게 정확히 500건이다.** 포트 번호 500개가 전부 TIME_WAIT 에 묶이는 순간 그 뒤로는 `connect` 자체가 안 된다. 상대 서버는 멀쩡한데 **커널이 빌려줄 번호가 없어서** 나가는 에러다. 앞의 tw_buckets 8192 가 없었다면 기본 포트 범위(28,232개)로도 445 TPS × 60초 = 26,700 이라 같은 벽에 닿는다.
+
+fd 쪽은 소켓 하나가 fd 하나를 먹기 때문이다. 256개 안에는 JVM 이 이미 열어둔 jar·클래스·로그 파일도 들어가므로 소켓에 쓸 수 있는 건 그보다 적다.
+
+**둘 다 풀 상한과 무관하게 걸린다.** 풀이 "10000개까지 허용"이어도 커널이 못 준다. 8번에서 ESTABLISHED 가 200 에서 멈춘 건 caller 톰캣 스레드가 200개라서였는데, 스레드를 더 줬다면 다음 벽이 이 둘이다.
 
 ### 2번 — `maxPerRoute` 5 에 막힌다
 
@@ -592,6 +826,56 @@ SIZE_BYTES=102400 ./scripts/run-case.sh "100KB" 50 50 false
 ./scripts/run-cpu.sh https noreuse     # <http|https> <reuse|noreuse>
 ```
 
+<details markdown="1">
+<summary>cgroup CPU 증분 — <code>scripts/run-cpu.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-cpu.sh <http|https> <reuse|noreuse>
+#
+# 4번에서 TLS 핸드셰이크에 비대칭키 연산 CPU 비용이 있다는 걸 curl 로 봤다.
+# 부하 중 caller/upstream 의 실제 CPU 사용량을 재서, 재사용이 그 비용을 얼마나 없애는지 본다.
+# CPU 는 cgroup 의 cpuacct 누적값 증분으로 잰다(나노초). docker stats 의 순간값보다 안정적이다.
+set -e
+cd "$(dirname "$0")/.."
+PROTO="$1"; REUSE="$2"
+[ "$PROTO" = "https" ] && URL=https://upstream-tls:8443 && SRV=docker_upstream-tls_1 || { URL=http://upstream:8080; SRV=docker_upstream_1; }
+[ "$REUSE" = "noreuse" ] && CLOSE=true || CLOSE=false
+export POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       POOL_KEEP_ALIVE_MS=-1 POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 POOL_EVICT_IDLE_MS=-1 \
+       POOL_TIME_TO_LIVE_MS=-1 POOL_RETRY_ENABLED=false UPSTREAM_BASE_URL="$URL" \
+       KEEP_ALIVE_TIMEOUT=60000 MAX_KEEP_ALIVE_REQUESTS=100
+(cd docker && docker-compose up -d --force-recreate caller >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+# RTT 는 양쪽 업스트림에 똑같이 건다. https 쪽만 빼먹으면 TPS 비교가 어긋난다
+TARGET="$SRV" VERIFY_URL="$URL/echo" ./scripts/netem.sh 20 >/dev/null 2>&1
+
+cpu() { docker exec "$1" sh -c "cat /sys/fs/cgroup/cpuacct/cpuacct.usage"; }   # 나노초 누적
+
+docker run --rm --network docker_default --cpus 2 -v "$PWD/k6:/scripts:ro" \
+  -e VUS=50 -e DURATION=10s -e DELAY_MS=50 -e CLOSE="$CLOSE" -e MODE=safe \
+  grafana/k6:0.53.0 run --quiet /scripts/scenario.js >/dev/null 2>&1   # 워밍업
+
+C0=$(cpu docker_caller_1); U0=$(cpu "$SRV")
+docker run --rm --network docker_default --cpus 2 -v "$PWD/k6:/scripts:ro" \
+  -e VUS=50 -e DURATION=30s -e DELAY_MS=50 -e CLOSE="$CLOSE" -e MODE=safe \
+  grafana/k6:0.53.0 run --quiet /scripts/scenario.js > /tmp/_cpu 2>&1
+C1=$(cpu docker_caller_1); U1=$(cpu "$SRV")
+
+REQ=$(grep -E "^ *http_reqs" /tmp/_cpu | sed -E 's/.*: ([0-9]+) .*/\1/')
+TPS=$(grep -E "^ *http_reqs" /tmp/_cpu | sed -E 's#.* ([0-9.]+)/s.*#\1#')
+CD=$((C1-C0)); UD=$((U1-U0))
+# 요청 1건당 CPU(마이크로초) = 증분 / 요청 수
+printf '%-5s %-8s | 요청 %-6s TPS %-5s | CPU 총 caller=%-7sms upstream=%-7sms | 요청당 caller=%-8sus upstream=%sus\n' \
+  "$PROTO" "$REUSE" "$REQ" "${TPS%.*}" "$((CD/1000000))" "$((UD/1000000))" \
+  "$(echo "scale=1; $CD/1000/$REQ" | bc)" "$(echo "scale=1; $UD/1000/$REQ" | bc)"
+```
+
+</details>
+
 | 조건 | TPS | 요청당 caller CPU | 재사용 상실 비용 |
 | --- | --- | --- | --- |
 | http 재사용 O | 664 | 1,835us | |
@@ -643,6 +927,42 @@ local: { executor: 'constant-arrival-rate', rate: 20,  timeUnit: '1s', duration:
 ```bash
 ./scripts/run-bulkhead.sh "CRT 60s" 50 60000     # <설명> <풀 크기> <connectionRequestTimeout ms>
 ```
+
+<details markdown="1">
+<summary>두 API 동시 부하 — <code>scripts/run-bulkhead.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-bulkhead.sh "<설명>" <POOL> <CRT_MS>   (CRT_MS 음수 = 무한 대기)
+set -e
+cd "$(dirname "$0")/.."
+DESC="$1"; POOL="$2"; CRT="$3"
+export POOL_MAX_TOTAL="$POOL" POOL_MAX_PER_ROUTE="$POOL" POOL_CONNECTION_REQUEST_TIMEOUT_MS="$CRT"
+(cd docker && docker-compose up -d --force-recreate caller >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+sock() { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:1F90\$/ {n++} END {print n+0}' /proc/net/tcp"; }
+
+( docker run --rm --network docker_default --cpus 2 -v "$PWD/k6:/scripts:ro" \
+    -e SLOW_VUS="${SLOW_VUS:-250}" -e DURATION=30s -e DELAY_MS="${DELAY_MS:-3000}" \
+    grafana/k6:0.53.0 run --quiet /scripts/bulkhead.js > /tmp/_bh 2>&1 ) &
+sleep 18
+MID="threads=$(gauge '^tomcat_threads_busy') leased=$(gauge 'state="leased"') pending=$(gauge 'pool_total_pending') EST=$(sock 01)"
+wait
+OUT=$(cat /tmp/_bh)
+m() { echo "$OUT" | grep -E "^ *$1\\.*" | sed -E "s/.*avg=([^ ]+).*p\\(95\\)=([^ ]+).*/\\1 \\2/"; }
+read -r CALL_AVG CALL_P95 <<< "$(m call_duration)"
+read -r LOC_AVG LOC_P95 <<< "$(m local_duration)"
+FAIL=$(echo "$OUT" | grep -E "^ *call_failed" | sed -E "s/.*: ([0-9.]+%).*/\\1/")
+RPS=$(echo "$OUT" | grep -E "^ *http_reqs" | sed -E "s#.* ([0-9.]+)/s.*#\\1#")
+printf '%-20s | call avg=%-9s p95=%-9s | local avg=%-9s p95=%-9s | 실패=%-7s | %s\n' \
+  "$DESC" "$CALL_AVG" "$CALL_P95" "$LOC_AVG" "$LOC_P95" "$FAIL" "$MID"
+```
+
+</details>
 
 > **도착률 고정(`constant-arrival-rate`)이 핵심이다.** VU 고정으로 주면 빨리 실패하는 조건이 그만큼 더 쏘게 돼서 두 조건의 오퍼 부하가 달라진다. 처음에 `constant-vus` 로 돌렸다가 비교가 성립하지 않아 바꿨다.
 
@@ -700,6 +1020,47 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 # 5) curl localhost:9080/call                      → 이 요청의 결과가 표의 HTTP 코드
 ```
 
+<details markdown="1">
+<summary>말없이 끊긴 커넥션 — <code>scripts/run-stale.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-stale.sh <VALIDATE_MS> <RETRY_ENABLED> <IDLE_SEC>
+#
+# upstream(톰캣)은 Keep-Alive: timeout=60 을 알려준다. 클라이언트는 그 말을 믿는다.
+# 그런데 경로 중간의 toxiproxy 가 그보다 먼저, 아무 통보 없이 커넥션을 끊는다.
+# 실제 LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
+set -e
+cd "$(dirname "$0")/.."
+VALIDATE="$1"; RETRY="$2"; IDLE="$3"
+export POOL_VALIDATE_AFTER_INACTIVITY_MS="$VALIDATE" POOL_RETRY_ENABLED="$RETRY" \
+       POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       UPSTREAM_BASE_URL=http://toxiproxy:8666 \
+       KEEP_ALIVE_TIMEOUT=60000 MAX_KEEP_ALIVE_REQUESTS=100
+(cd docker && docker-compose up -d --force-recreate caller upstream toxiproxy >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+sock() { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:21DA\$/ {n++} END {print n+0}' /proc/net/tcp"; }  # 8666 = 21DA
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+
+curl -s -o /dev/null http://localhost:9080/call                                   # 커넥션 하나를 풀에 만든다
+curl -s -X POST -d '{"enabled":false}' http://localhost:8474/proxies/upstream_http >/dev/null  # 중간 장비가 말없이 끊는다
+curl -s -X POST -d '{"enabled":true}'  http://localhost:8474/proxies/upstream_http >/dev/null
+sleep "$IDLE"
+BEFORE="available=$(gauge 'state="available"') ESTABLISHED=$(sock 01) CLOSE_WAIT=$(sock 08)"
+N=$(docker logs docker_caller_1 2>&1 | wc -l)
+code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' http://localhost:9080/call)
+err=$(docker logs docker_caller_1 2>&1 | tail -n +$((N+1)) | grep -oE "NoHttpResponseException|Connection reset|SocketException" | head -1)
+
+V=$([ "$VALIDATE" -lt 0 ] && echo "2s(기본)" || echo "$((VALIDATE/1000))s")
+printf '검증=%-8s 재시도=%-5s idle=%-5s | 요청 전: %-44s | HTTP %-3s | %s\n' \
+  "$V" "$RETRY" "${IDLE}s" "$BEFORE" "$code" "${err:-예외없음}"
+```
+
+</details>
+
 예외 이름은 4)와 5) 사이에 새로 찍힌 caller 로그에서 뽑는다.
 
 | 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
@@ -745,6 +1106,53 @@ Thread.sleep(idleMs);
 String second = peer();
 // peer() 는 업스트림이 돌려준 X-Peer(= servletRequest.getRemotePort()) 를 읽는다
 ```
+
+```bash
+./scripts/run-keepalive.sh 60000 -1 8   # <keepAliveStrategy 고정값 ms> <validateAfterInactivity ms> <idle 초>
+#   음수를 주면 그 설정을 건드리지 않는다 = 기본 전략 / 기본 검증 주기
+```
+
+<details markdown="1">
+<summary>커넥션 수명 — <code>scripts/run-keepalive.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-keepalive.sh <KEEP_ALIVE_MS> <VALIDATE_MS> <IDLE_SEC>
+#
+# 커넥션을 풀에 얼마나 둘지는 ConnectionKeepAliveStrategy 가 응답마다 정한다.
+# 기본 전략(KEEP_ALIVE_MS < 0)은 서버의 Keep-Alive: timeout=N 을 그대로 따르고,
+# 값을 주면 서버가 뭐라 하든 그 값으로 고정한다.
+# 톰캣은 5초(=timeout=5)로 알려주게 두고, 유휴 시간을 그 앞뒤로 둬서 갈리는 지점을 본다.
+set -e
+cd "$(dirname "$0")/.."
+KEEP_ALIVE="$1"; VALIDATE="$2"; IDLE="$3"
+export POOL_KEEP_ALIVE_MS="$KEEP_ALIVE" POOL_VALIDATE_AFTER_INACTIVITY_MS="$VALIDATE" \
+       POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       POOL_RETRY_ENABLED=false POOL_EVICT_IDLE_MS=-1 POOL_TIME_TO_LIVE_MS=-1 \
+       UPSTREAM_BASE_URL=http://upstream:8080 LOGGING_LEVEL_ORG_APACHE_HC=DEBUG \
+       KEEP_ALIVE_TIMEOUT=5000 MAX_KEEP_ALIVE_REQUESTS=100 NETEM_DELAY_MS=0
+(cd docker && docker-compose up -d --force-recreate caller upstream >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+
+# 톰캣이 실제로 뭐라고 알려주는지 먼저 확인한다 (클라가 Connection: keep-alive 를 보내야 붙는다)
+ADV=$(docker exec docker_caller_1 sh -c \
+  "curl -s -D - -o /dev/null -H 'Connection: keep-alive' http://upstream:8080/echo" \
+  | tr -d '\r' | grep -i '^Keep-Alive:' || echo "(알려주지 않음)")
+
+N=$(docker logs docker_caller_1 2>&1 | wc -l)
+BODY=$(curl -s -m 40 "http://localhost:9080/keepalive?idleMs=$((IDLE*1000))")
+DUR=$(docker logs docker_caller_1 2>&1 | tail -n +$((N+1)) | grep -oE "can be kept alive (for [0-9]+ [A-Z]+|indefinitely)" | head -1)
+
+K=$([ "$KEEP_ALIVE" -lt 0 ] && echo "기본(서버따름)" || echo "$((KEEP_ALIVE/1000))s고정")
+V=$([ "$VALIDATE" -lt 0 ] && echo "2s(기본)" || echo "$((VALIDATE/1000))s")
+printf '전략=%-14s 검증=%-8s idle=%-4s | %-42s | %s\n' "$K" "$V" "${IDLE}s" "${DUR:-로그없음}" "$BODY"
+echo "  ($ADV)"
+```
+
+</details>
 
 | 클라 전략 | 검증 | idle | 클라가 잡은 수명 | 결과 |
 | --- | --- | --- | --- | --- |
