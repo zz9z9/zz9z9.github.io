@@ -23,7 +23,7 @@ tags: [WEB]
 
 기준 조건은 `delayMs=50`, RTT 20ms, `sizeBytes=0`, 풀 50, VU 50 고정, 30초다. 각 실험은 여기서 **한 가지만** 바꾼다. 워밍업 15초는 버린다.
 
-| # | 가설 | 구간 | 결과 |
+| # | 확인할 것 | 구간 | 결과 |
 | --- | --- | --- | --- |
 | 0 | 응답 본문을 끝까지 소비해야 커넥션이 풀로 반환된다 | 전제 | 확인 |
 | 1 | 정상 구간에서 풀의 이득은 재사용 축에서만 나온다 | 정상 | 확인 |
@@ -32,13 +32,13 @@ tags: [WEB]
 | 4 | 재사용 이득 = RTT × 왕복수 (+ slow start 회피) | 정상 | 확인. https 가 3.4배 |
 | 5 | keep-alive off 면 풀은 동시성 상한으로만 남는다 | 정상 | 확인 |
 | 6 | 풀이 스레드풀보다 작으면 초과분은 큐에서 잔다 | 정상 | 확인 |
-| 7 | 풀 상한만으로는 bulkhead 가 안 된다 | 장애 | 확인 |
+| 7 | 풀 상한만으로는 느린 업스트림이 무관한 API 까지 잡아먹는 걸 못 막는다 | 장애 | 확인 |
 | 8 | 풀이 없으면 소켓이 무한히 는다 | 장애 | 확인 |
 | 9 | 중간 장비가 말없이 끊으면 stale 커넥션에 요청이 실린다 | idle | 확인 |
 | 10 | 자동 재시도가 stale 실패를 감춘다 | idle | 확인 |
 | 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인 |
 | 12 | 요청 수 상한은 알려주고 닫으므로 stale 을 만들지 않는다 | idle | 확인 |
-| 13 | 커넥션을 풀에 두는 시간은 서버가 광고한 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
+| 13 | 커넥션을 풀에 두는 시간은 서버가 알려준 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
 
 9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지가 이 글에서 가장 뜻밖이었던 부분이라 아래에 따로 적는다.
 
@@ -231,7 +231,7 @@ public PoolingHttpClientConnectionManager connectionManager(PoolProperties props
 @Bean
 public CloseableHttpClient httpClient(PoolingHttpClientConnectionManager manager, PoolProperties props) {
     RequestConfig requestConfig = RequestConfig.custom()
-            // 풀에서 커넥션을 빌리려고 기다리는 한도. 상한을 bulkhead 로 만드는 값 (7번)
+            // 풀에서 커넥션을 빌리려고 기다리는 한도. 상한이 실제로 다른 요청을 지키게 만드는 값 (7번)
             .setConnectionRequestTimeout(props.connectionRequestTimeoutMs(), TimeUnit.MILLISECONDS)
             // 요청을 보낸 뒤 응답을 기다리는 한도
             .setResponseTimeout(props.responseTimeoutMs(), TimeUnit.MILLISECONDS)
@@ -486,7 +486,7 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 6번은 맨 오른쪽 열이다. **`callerThreads` 가 풀 크기와 무관하게 항상 51 이다.** 풀이 5든 50이든 caller 톰캣 스레드 51개는 똑같이 점유된다. 풀 5 일 때 46개는 커넥션을 못 빌려 lease 대기에서 블록돼 있을 뿐이다. `leased + pending = 50` 으로 VU 수와 정확히 맞는다.
 
-### 7·8번 — 상한만으로는 bulkhead 가 안 된다
+### 7·8번 — 상한만으로는 격리가 안 된다
 
 업스트림 지연 3초, 도착률 100/s 고정. caller 에 업스트림을 **전혀 부르지 않는** `/local` 엔드포인트를 두고 같이 때린다.
 
@@ -501,7 +501,7 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 
 **풀 상한이 있어도 포기가 없으면 소용없다.** 첫 줄에서 caller 톰캣 스레드 200개가 전부 먹히고, **업스트림을 전혀 안 부르는 `/local` 의 p95 가 20.36초**가 됐다. 풀이 막아준 건 소켓 50개뿐이고, 막지 못한 건 스레드 200개다. 소켓 점유가 스레드 점유로 자리를 옮겼을 뿐이다.
 
-`connectionRequestTimeout` 을 200ms 로 주면 `/local` p95 가 **2.28ms** 다. 약 9,000배 차이다. `/call` 은 83% 가 실패하지만, 그게 bulkhead 가 하는 일이다 — 살릴 수 없는 요청을 빨리 포기해서 나머지를 살린다.
+`connectionRequestTimeout` 을 200ms 로 주면 `/local` p95 가 **2.28ms** 다. 약 9,000배 차이다. `/call` 은 83% 가 실패하지만, 그게 격리가 하는 일이다 — 살릴 수 없는 요청을 빨리 포기해서 나머지를 살린다. 흔히 bulkhead 라 부르는 것이 이 동작이다.
 
 마지막 줄이 8번이다. 상한을 사실상 없애면(10000) ESTABLISHED 가 **200개**까지 늘고 `/local` p95 도 4.89초로 무너진다. 200 에서 멈춘 건 caller 톰캣 스레드가 200개라서지 풀이 막은 게 아니다.
 
@@ -515,7 +515,7 @@ VU 50 고정이므로 동시성은 항상 50 이다. 필요한 커넥션도 50 �
 ex-0000000004 connection can be kept alive for 1 SECONDS
 ```
 
-**톰캣이 `Keep-Alive: timeout=1` 로 자기 타임아웃을 광고하고, HttpClient5 가 그 말을 지킨다.** 위에서 본 `DefaultConnectionKeepAliveStrategy` 가 그 헤더를 읽어 풀 엔트리의 만료 시각을 1초로 잡으니, `validateAfterInactivity`(2초) 가 개입할 일도 없이 그 전에 버려진다. 서버가 알려주는 한 사각지대는 생기지 않는다.
+**톰캣이 `Keep-Alive: timeout=1` 로 자기 타임아웃을 알려주고, HttpClient5 가 그 말을 지킨다.** 위에서 본 `DefaultConnectionKeepAliveStrategy` 가 그 헤더를 읽어 풀 엔트리의 만료 시각을 1초로 잡으니, `validateAfterInactivity`(2초) 가 개입할 일도 없이 그 전에 버려진다. 서버가 알려주는 한 사각지대는 생기지 않는다.
 
 이 헤더에는 조건이 있다. **클라이언트가 `Connection: keep-alive` 를 명시해야** 톰캣이 붙인다.
 
@@ -530,7 +530,7 @@ $ curl -D - http://upstream:8080/echo
 
 HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
-그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 광고하게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
+그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 알려주게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
 
 | 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
 | --- | --- | --- | --- | --- | --- |
@@ -558,7 +558,7 @@ HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
 ### 13번 — 커넥션 수명은 서버가 정한다
 
-9번에서 톰캣이 광고한 `timeout=1` 을 클라이언트가 지키는 걸 봤는데, 그 판단을 하는 게 `ConnectionKeepAliveStrategy` 다. 이번엔 톰캣이 `timeout=5` 를 광고하게 두고(`keepAliveTimeout=5000`), 유휴 시간을 그 앞뒤로 두면서 잰다.
+9번에서 톰캣이 알려준 `timeout=1` 을 클라이언트가 지키는 걸 봤는데, 그 판단을 하는 게 `ConnectionKeepAliveStrategy` 다. 이번엔 톰캣이 `timeout=5` 를 알려주게 두고(`keepAliveTimeout=5000`), 유휴 시간을 그 앞뒤로 두면서 잰다.
 
 재사용 여부는 업스트림이 본 **caller 의 소스 포트**로 판별한다. 두 요청의 포트가 같으면 같은 TCP 커넥션이다.
 
