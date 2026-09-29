@@ -197,61 +197,53 @@ pool:
   retry-enabled: ${POOL_RETRY_ENABLED:false}
 ```
 
-**"설정하지 않음"과 "0/무한으로 설정함"을 구분하는 게 이 실험의 전제다.** 2번은 *안 건드렸을 때* 기본값에 막히는 걸 봐야 하고, 7번은 *명시적으로 무한*으로 뒀을 때를 봐야 한다. 둘을 같은 값으로 표현하면 두 실험이 섞인다. 그래서 음수를 "안 건드림"으로 약속하고 분기한다.
+**"설정하지 않음"과 "0/무한으로 설정함"을 구분하는 게 이 실험의 전제다.** 2번은 *안 건드렸을 때* 기본값에 막히는 걸 봐야 하고, 7번은 *명시적으로 무한*으로 뒀을 때를 봐야 한다. 둘을 같은 값으로 표현하면 두 실험이 섞인다. 그래서 음수를 "안 건드림"으로 약속한다.
+
+빈 설정은 이렇다. 어떤 값이 걸리는지 보이도록 그 분기는 걷어낸 것이고, **실제 코드는 각 `setXxx` 앞에 "음수면 이 줄을 호출하지 않는다" 가 붙는다**([원본](https://github.com/zz9z9/blog-code-practice/blob/master/traffic/http-connection-pool/caller/src/main/java/com/zz9z9/blogcode/traffic/httpconnectionpool/caller/HttpClientConfig.java)). 호출을 건너뛰어야 라이브러리 기본값이 그대로 남기 때문이다.
 
 ```java
 @Bean
 public PoolingHttpClientConnectionManager connectionManager(PoolProperties props) {
-    ConnectionConfig.Builder connectionConfig = ConnectionConfig.custom()
+    ConnectionConfig connectionConfig = ConnectionConfig.custom()
+            // TCP 연결 수립까지 기다리는 한도
             .setConnectTimeout(Timeout.ofMilliseconds(props.connectTimeoutMs()))
-            .setSocketTimeout(Timeout.ofMilliseconds(props.socketTimeoutMs()));
+            // 소켓 read 한도
+            .setSocketTimeout(Timeout.ofMilliseconds(props.socketTimeoutMs()))
+            // 이 시간 이상 논 커넥션은 재사용 직전에 살아있는지 검증한다 (미설정 시 2초, 9번)
+            .setValidateAfterInactivity(TimeValue.ofMilliseconds(props.validateAfterInactivityMs()))
+            // 커넥션 최대 수명. 멀쩡해도 이 시간이 지나면 버린다
+            .setTimeToLive(TimeValue.ofMilliseconds(props.timeToLiveMs()))
+            .build();
 
-    // 음수면 아예 안 건드린다 -> 매니저가 null 을 보고 2초로 채운다 (resolveValidateAfterInactivity)
-    if (props.validateAfterInactivityMs() >= 0) {
-        connectionConfig.setValidateAfterInactivity(TimeValue.ofMilliseconds(props.validateAfterInactivityMs()));
-    }
-    if (props.timeToLiveMs() >= 0) {
-        connectionConfig.setTimeToLive(TimeValue.ofMilliseconds(props.timeToLiveMs()));
-    }
-
-    PoolingHttpClientConnectionManagerBuilder builder = PoolingHttpClientConnectionManagerBuilder.create()
-            .setDefaultConnectionConfig(connectionConfig.build())
-            .setDefaultSocketConfig(SocketConfig.custom().setTcpNoDelay(true).build());
-
-    // 0 이하로 두면 builder 가 덮어쓰지 않는다 -> 라이브러리 기본값 perRoute 5 / total 25 (가설 2)
-    if (props.maxTotal() > 0) {
-        builder.setMaxConnTotal(props.maxTotal());
-    }
-    if (props.maxPerRoute() > 0) {
-        builder.setMaxConnPerRoute(props.maxPerRoute());
-    }
-    return builder.build();
+    return PoolingHttpClientConnectionManagerBuilder.create()
+            .setDefaultConnectionConfig(connectionConfig)
+            .setDefaultSocketConfig(SocketConfig.custom().setTcpNoDelay(true).build())
+            // 풀 전체 상한 (미설정 시 25)
+            .setMaxConnTotal(props.maxTotal())
+            // 라우트(scheme+host+port)별 상한. 실제 병목은 여기다 (미설정 시 5, 2번)
+            .setMaxConnPerRoute(props.maxPerRoute())
+            .build();
 }
 
 @Bean
 public CloseableHttpClient httpClient(PoolingHttpClientConnectionManager manager, PoolProperties props) {
-    RequestConfig.Builder requestConfig = RequestConfig.custom()
-            .setResponseTimeout(props.responseTimeoutMs(), TimeUnit.MILLISECONDS);
+    RequestConfig requestConfig = RequestConfig.custom()
+            // 풀에서 커넥션을 빌리려고 기다리는 한도. 상한을 bulkhead 로 만드는 값 (7번)
+            .setConnectionRequestTimeout(props.connectionRequestTimeoutMs(), TimeUnit.MILLISECONDS)
+            // 요청을 보낸 뒤 응답을 기다리는 한도
+            .setResponseTimeout(props.responseTimeoutMs(), TimeUnit.MILLISECONDS)
+            .build();
 
-    // 음수면 무한 대기 (가설 7 의 "포기가 없는" 쪽)
-    if (props.connectionRequestTimeoutMs() >= 0) {
-        requestConfig.setConnectionRequestTimeout(props.connectionRequestTimeoutMs(), TimeUnit.MILLISECONDS);
-    } else {
-        requestConfig.setConnectionRequestTimeout(Timeout.DISABLED);
-    }
-
-    var clientBuilder = HttpClients.custom()
+    return HttpClients.custom()
             .setConnectionManager(manager)
+            // 이걸 빼면 클라이언트를 닫을 때 매니저까지 닫힌다
             .setConnectionManagerShared(true)
-            .setDefaultRequestConfig(requestConfig.build());
-
-    if (!props.retryEnabled()) {
-        clientBuilder.disableAutomaticRetries();   // 가설 10 — 기본값은 멱등 요청을 1회 재시도한다
-    }
-    if (props.evictIdleMs() >= 0) {
-        clientBuilder.evictIdleConnections(TimeValue.ofMilliseconds(props.evictIdleMs()));
-    }
-    return clientBuilder.build();
+            .setDefaultRequestConfig(requestConfig)
+            // 유휴 커넥션을 백그라운드로 청소하는 주기
+            .evictIdleConnections(TimeValue.ofMilliseconds(props.evictIdleMs()))
+            // 기본값은 멱등 요청을 1회 재시도한다. 끄면 실패가 그대로 보인다 (10번)
+            .disableAutomaticRetries()
+            .build();
 }
 
 @Bean
@@ -263,8 +255,6 @@ public PoolingHttpClientConnectionManagerMetricsBinder poolMetrics(PoolingHttpCl
     return binder;
 }
 ```
-
-`setConnectionManagerShared(true)` 를 주지 않으면 `CloseableHttpClient` 를 닫을 때 매니저까지 닫혀서, 매니저를 빈으로 들고 지표를 붙이는 구성과 충돌한다.
 
 **설정값을 조회해도 실제 적용값은 안 보인다.** 기동 로그에 매니저 상태를 찍어보면 이렇게 나온다.
 
