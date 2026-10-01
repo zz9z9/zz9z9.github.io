@@ -19,15 +19,12 @@ tags: [WEB]
 ## 실측해볼 것
 ---
 
-> 14~16번은 풀이 어떻게 동작하는지, 나머지는 "무엇을 바꿔서 무엇이 갈라지는가" 를 하나씩 본다.
+> 0~13번은 "무엇을 바꿔서 무엇이 갈라지는가" 를 하나씩 보고, 마지막 14~16번은 풀이 어떻게 동작하는지를 본다.
 
-기준 조건은 `delayMs=50`, RTT 20ms, `sizeBytes=0`, 풀 50, VU 50 고정, 30초다. 각 실험은 여기서 **한 가지만** 바꾼다. 워밍업 15초는 버린다. 14~16번과 0번, 9~13번은 부하 생성기를 안 쓰므로 조건이 다르고, 각 절에 적는다.
+기준 조건은 `delayMs=50`, RTT 20ms, `sizeBytes=0`, 풀 50, VU 50 고정, 30초다. 각 실험은 여기서 **한 가지만** 바꾼다. 워밍업 15초는 버린다. 0번과 9~13번, 14~16번은 부하 생성기를 안 쓰므로 조건이 다르고, 각 절에 적는다.
 
 | # | 확인할 것 | 구간 | 결과 |
 | --- | --- | --- | --- |
-| 14 | 풀은 미리 채워지지 않고 동시 요청 수만큼만 늘어난다 | 동작 | 확인 |
-| 15 | 반납은 본문을 다 읽거나 응답을 닫는 순간 일어난다 | 동작 | 확인. 닫기만 해도 된다 |
-| 16 | 재사용 못 하는 커넥션은 반납이 곧 폐기다 | 동작 | 확인 |
 | 0 | 응답을 닫지도, 본문을 읽지도 않으면 커넥션이 반환되지 않는다 | 전제 | 확인 |
 | 1 | 정상 구간에서 풀의 이득은 재사용 축에서만 나온다 | 정상 | 확인 |
 | 2 | 설정 안 하면 `maxPerRoute` 5 에 막힌다 | 정상 | 확인 |
@@ -39,9 +36,12 @@ tags: [WEB]
 | 8 | 풀이 없으면 소켓이 무한히 는다 | 장애 | 확인 |
 | 9 | 중간 장비가 말없이 끊으면 stale 커넥션에 요청이 실린다 | idle | 확인 |
 | 10 | 자동 재시도가 stale 실패를 감춘다 | idle | 확인 |
-| 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인 |
+| 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인. 알려주고 닫으면 안다. 원인은 넷 |
 | 12 | 요청 수 상한은 알려주고 닫으므로 stale 을 만들지 않는다 | idle | 확인 |
 | 13 | 커넥션을 풀에 두는 시간은 서버가 알려준 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
+| 14 | 풀은 미리 채워지지 않고 동시 요청 수만큼만 늘어난다 | 동작 | 확인 |
+| 15 | 반납은 본문을 다 읽거나 응답을 닫는 순간 일어난다 | 동작 | 확인. 닫기만 해도 된다 |
+| 16 | 재사용 못 하는 커넥션은 반납이 곧 폐기다 | 동작 | 확인 |
 
 9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지는 아래에 따로 적는다.
 
@@ -578,7 +578,7 @@ printf '%-6s + %-3s | 성공 %2d/60 | 첫 실패 %-6s | available=%-3s leased=%-
 - **404** — 서버는 커넥션을 살려둔다. 살아 있는 커넥션 50개를 풀이 붙잡고 못 돌려준다. 순수한 누수다.
 - **500** — 서버가 FIN 을 보내 닫았다. caller 소켓은 전부 `CLOSE_WAIT` 이고 살아 있는 커넥션은 **0개**다. 그런데 풀은 여전히 `leased=50` 으로 센다.
 
-**3 에서는 풀이 "빌려준 상태"로 세고 있는 50개가 전부 시체다.** 풀은 `PoolEntry` 가 `leased` Set 에 있다는 것만 알지, 그 소켓이 살았는지는 반납을 받아봐야 안다. 반납이 없으므로 영원히 모른다.
+**3 에서는 풀이 "빌려준 상태"로 세고 있는 50개가 전부 이미 끊긴 커넥션이다.** 풀은 `PoolEntry` 가 `leased` Set 에 있다는 것만 알지, 그 소켓이 살았는지는 반납을 받아봐야 안다. 반납이 없으므로 영원히 모른다.
 
 ### 1번 — 정상 구간에서 갈리는 건 재사용 축뿐
 
@@ -1237,6 +1237,17 @@ public int getKeepAliveTimeout() {
 
 그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 알려주게 두고(위 `keep-alive-timeout: 60000`), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
 
+**여기서 "말없이" 는 끊긴다는 사실이 요청-응답 대화에 실려 오지 않는다는 뜻이다.** 마지막 응답은 `Keep-Alive: timeout=60` 으로 "계속 써도 된다"고 말한 상태였고, 그 뒤에 오는 건 HTTP 메시지가 아니라 TCP 세그먼트 하나(FIN)다. 어떤 요청에도 속하지 않으니 클라이언트의 HTTP 계층에는 들어올 자리가 없다. 통보가 어느 층에 오는지로 갈라보면 이렇다.
+
+| 어떻게 끊나 | 신호 | HTTP 계층이 아나 | 커널이 아나 |
+| --- | --- | --- | --- |
+| 응답에 `Connection: close` | HTTP 헤더 | **안다** — 그 응답을 읽는 중이다 | 안다 |
+| **FIN 만 보낸다** (여기, LB idle timeout) | TCP | 모른다 | **안다** — `CLOSE_WAIT` |
+| RST | TCP | 모른다 | 안다 — 소켓이 에러로 바뀐다 |
+| 패킷만 버린다 (방화벽 blackhole) | 없음 | 모른다 | **모른다** — `ESTABLISHED` 로 남는다 |
+
+여기서 만든 건 둘째 줄이다. toxiproxy 를 껐다 켜면 FIN 이 오므로 `/proc/net/tcp` 에 `CLOSE_WAIT` 으로 찍힌다 — 아래 표의 `CLOSE_WAIT=1` 이 그 증거다. 넷째 줄이 제일 고약한데 커널조차 모르니 `isStale()` 로도 안 걸러진다. 그건 뒤의 D4 에서 따로 재현했다. RST 줄만 재현하지 않았다.
+
 ```
  caller (풀)              toxiproxy              upstream (톰캣)
      │                        │                        │
@@ -1395,9 +1406,266 @@ public boolean retryRequest(HttpRequest request, IOException exception, int exec
 
 전략과 무관하게 막히는 경우도 하나 있다. `HttpRequestRetryExec` 는 전략에 묻기 **전에** 요청 본문을 다시 읽을 수 있는지 보고, `InputStreamEntity` 처럼 `isRepeatable()` 이 false 면 어떤 전략을 줘도 재시도하지 않는다. 전략을 갈아끼우는 자리는 요청 단위인 `RequestConfig` 가 아니라 `HttpClientBuilder.setRetryStrategy(...)` 다.
 
-**11번** — 1~3 모두 `available=1` 인데 `ESTABLISHED=0`, `CLOSE_WAIT=1` 이다. 풀이 "빌려줄 수 있다"고 세는 그 1개가 시체다. 0번의 `leased` 와 같은 얘기가 `available` 쪽에서도 성립한다.
+**11번** — 앞 표의 1~3 은 모두 `available=1` 인데 `ESTABLISHED=0`, `CLOSE_WAIT=1` 이다. 풀이 "빌려줄 수 있다"고 세는 그 1개는 이미 끊긴 커넥션이다. 0번의 `leased` 와 같은 얘기가 `available` 쪽에서도 성립한다.
 
-3 은 방어선이 어디인지 보여준다. idle 3초는 검증 주기 2초를 넘겨서 lease 직전에 stale 체크가 돌고, 죽은 커넥션을 버리고 새로 맺는다. **클라이언트 검증 주기 < 상대가 끊는 주기**가 지켜지면 막힌다.
+그런데 커넥션이 풀에서 **사라지는** 것 자체는 비정상이 아니다. 오히려 매일 일어난다. 문제는 **그걸 클라이언트가 아는 경우와 모르는 경우가 갈린다**는 것이고, 그 차이를 같은 조건에서 나란히 봤다. 커넥션 1개로 "만들고 → 끊고 → 다시 쏜다" 를 세 번 돌린다.
+
+```bash
+./scripts/run-vanish.sh
+```
+
+<details markdown="1">
+<summary>알려주고 닫는 경우와 말없이 끊기는 경우 — <code>scripts/run-vanish.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-vanish.sh
+#
+# 풀에서 커넥션이 사라지는 경우를 "서버가 알려주고 닫는" 쪽과 "말없이 끊기는" 쪽으로 갈라 본다.
+#   A. 응답에 Connection: close              -> 알려준다. 풀도 같이 버린다 (게이지와 소켓이 일치)
+#   B. 서버가 keep-alive 를 안 씀            -> 알려준다. 매 응답에 Connection: close 가 붙는다
+#   C. 중간 장비가 말없이 끊음               -> 안 알려준다. 게이지는 1 인데 소켓은 CLOSE_WAIT
+# 셋 다 커넥션 1개로 "만들고 -> 끊고 -> 다시 쏜다" 를 돌린다. 부하 생성기는 안 쓴다.
+# B 는 업스트림을 다시 띄워야 해서 마지막에 돌린다 (출력은 A, C, B 순).
+set -e
+cd "$(dirname "$0")/.."
+export POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 POOL_RETRY_ENABLED=false \
+       POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       UPSTREAM_BASE_URL=http://toxiproxy:8666 \
+       KEEP_ALIVE_TIMEOUT=60000 MAX_KEEP_ALIVE_REQUESTS=100
+up() { (cd docker && docker-compose up -d --force-recreate "$@" >/dev/null 2>&1); }
+health() { for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done; }
+up caller upstream toxiproxy
+health
+
+sock() { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:21DA\$/ {n++} END {print n+0}' /proc/net/tcp"; }  # 8666 = 21DA
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+
+probe() {   # <라벨> — 끊긴 직후 상태를 찍고, 그 커넥션을 쓸 차례의 요청 결과까지 찍는다
+  STATE="available=$(gauge 'state="available"') ESTABLISHED=$(sock 01) CLOSE_WAIT=$(sock 08)"
+  N=$(docker logs docker_caller_1 2>&1 | wc -l)
+  CODE=$(curl -s -o /dev/null -m 20 -w '%{http_code}' http://localhost:9080/call)
+  ERR=$(docker logs docker_caller_1 2>&1 | tail -n +$((N+1)) | grep -oE "NoHttpResponseException|Connection reset|SocketException" | head -1)
+  printf '%-32s | 끊긴 뒤: %-44s | 다음 요청 HTTP %-3s | %s\n' "$1" "$STATE" "$CODE" "${ERR:-예외없음}"
+}
+
+# A. 서버가 이 응답만 close 로 닫는다 (EchoController 가 Connection: close 를 붙인다)
+curl -s -o /dev/null 'http://localhost:9080/call?close=true'
+sleep 0.3
+probe "A. 응답에 Connection: close"
+
+# C. 중간 장비가 말없이 끊는다
+curl -s -o /dev/null http://localhost:9080/call                                                 # 풀에 커넥션 1개
+curl -s -X POST -d '{"enabled":false}' http://localhost:8474/proxies/upstream_http >/dev/null   # 통보 없이 끊는다
+curl -s -X POST -d '{"enabled":true}'  http://localhost:8474/proxies/upstream_http >/dev/null
+sleep 0.3                                                                                       # 검증 주기 2초 안쪽
+probe "C. 말없이 끊김 (idle 0.3s)"
+
+# B. 서버가 keep-alive 자체를 안 쓴다 (max-keep-alive-requests=1 -> 매 응답에 Connection: close)
+export MAX_KEEP_ALIVE_REQUESTS=1
+up upstream
+sleep 3
+up caller        # 풀을 비우고 시작한다
+health
+echo "--- 응답 헤더 (max-keep-alive-requests=1)"
+docker run --rm --network docker_default pool-lab-net sh -c \
+  "curl -s -o /dev/null -D - -H 'Connection: keep-alive' http://upstream:8080/echo" | grep -iE '^(connection|keep-alive)'
+curl -s -o /dev/null http://localhost:9080/call   # close 파라미터 없이 평범한 요청
+sleep 0.3
+probe "B. 서버가 keep-alive 를 안 씀"
+```
+
+</details>
+
+| # | 어떻게 끊겼나 | 서버가 알렸나 | available | ESTABLISHED | CLOSE_WAIT | 다음 요청 |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 응답에 `Connection: close` (`close=true`) | 알림 | **0** | 0 | 0 | HTTP 200 |
+| B | 서버가 keep-alive 를 안 씀 (`max-keep-alive-requests=1`) | 알림 | **0** | 0 | 0 | HTTP 200 |
+| C | 중간 장비가 말없이 끊음 (idle 0.3초) | **안 알림** | **1** | 0 | **1** | **HTTP 500** `NoHttpResponseException` |
+
+**A·B — 알려주고 닫으면 풀은 모를 수가 없다.** 닫겠다는 말이 **응답 헤더로** 오기 때문이다. 그 응답을 읽고 있는 스레드가 바로 그 자리에 있으니, `MainClientExec` 의 `reuseStrategy` 가 그 헤더를 보고 false 를 돌려주고 반납이 곧 폐기가 된다(16번). 그래서 `available` 도 0, 소켓도 0 이다 — **게이지와 커널이 일치한다.** 다음 요청은 새로 맺어서 성공한다.
+
+B 가 "서버가 keep-alive 를 안 쓰는" 경우다. `max-keep-alive-requests` 를 0 이나 1 로 주면 응답이 이렇게 나간다.
+
+```
+$ curl -D - -H 'Connection: keep-alive' http://upstream:8080/echo
+Connection: close
+(Keep-Alive 헤더 없음)
+```
+
+클라이언트가 `Connection: keep-alive` 를 요청해도 서버가 거절한 것이고, 풀은 그 말을 그대로 따른다. **서버가 keep-alive 를 안 쓰면 풀은 재사용을 못 하지만 stale 도 안 생긴다.** 5·6번에서 본 "풀이 세마포어로 격하된다"가 이 상태다.
+
+**C — 말없이 끊기면 아무도 못 본다.** 신호가 응답이 아니라 **유휴 소켓에 도착하는 FIN** 이다. blocking 클라이언트는 유휴 소켓을 읽는 스레드가 없어서 그 FIN 을 아무도 수거하지 않는다. 커널은 소켓을 `CLOSE_WAIT` 으로 바꿔두지만 `PoolEntry` 는 `available` 에 그대로 남아 있고, 다음 요청이 그 죽은 커넥션을 집는다. 쓰기는 half-close 라 성공하고 읽기에서 EOF 가 나면서 `NoHttpResponseException` 이 된다.
+
+| | 알려주고 닫음 (A·B) | 말없이 끊김 (C) |
+| --- | --- | --- |
+| 신호가 오는 곳 | 응답 헤더 `Connection: close` | 유휴 소켓의 FIN |
+| 누가 보나 | 그 응답을 읽는 스레드 | blocking 이면 아무도 (비동기는 I/O 리액터가 본다) |
+| 풀 게이지 | 소켓 상태와 일치 | 어긋난다 (`available=1`, `CLOSE_WAIT=1`) |
+| 다음 요청 | 새로 맺고 성공 | 죽은 커넥션을 집어 실패 |
+| 필요한 방어 | 없음 | `validateAfterInactivity` / `evictIdleConnections` |
+
+**그래서 풀 설정으로 막는 건 C 하나뿐이다.** A·B 는 프로토콜이 알려주니 공짜로 맞고, C 는 클라이언트가 스스로 의심해야 맞는다. 앞 표의 3 이 그 방어선을 보여준다 — idle 3초는 검증 주기 2초를 넘겨서 lease 직전에 stale 체크가 돌고, 죽은 커넥션을 버리고 새로 맺는다. **클라이언트 검증 주기 < 상대가 끊는 주기**가 지켜지면 막힌다.
+
+
+#### 알려주지 않는 쪽이 중간 장비만은 아니다
+
+C 는 toxiproxy 로 만들었지만, **중간 장비가 없어도 같은 모양이 나온다.** 서버가 "60초는 써도 된다"고 말한 뒤 그 60초 안에 사라지는 길이 여럿이다. 원인별로 하나씩 만들어봤다.
+
+```bash
+./scripts/run-dead.sh
+```
+
+<details markdown="1">
+<summary>원인별로 죽은 커넥션 만들기 — <code>scripts/run-dead.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-dead.sh
+#
+# "서버는 끊었는데 클라이언트는 모르는" 상황을 원인별로 만든다. 중간 장비(toxiproxy)는 안 쓴다.
+#   D1. 배포 중 — 업스트림을 재기동하는 동안 0.2초 간격으로 계속 때린다. 검증 2초(기본)
+#   D2. 같은 부하에 검증만 매 lease 마다 (validateAfterInactivity=0)
+#         두 실패를 예외로 구분한다:
+#           ConnectException     = 서버가 없던 동안의 정직한 실패
+#           NoHttpResponseException = 서버가 돌아온 뒤 죽은 커넥션을 집어서 난 실패 (stale)
+#   D3. 설정 어긋남 — 서버가 Keep-Alive 헤더를 안 주면 클라는 기본 3분을 잡는데 서버는 1초에 끊는다
+#   D4. 네트워크 단절(blackhole) — FIN 도 RST 도 없다. 검증을 매번 해도 못 걸러낸다
+set -e
+cd "$(dirname "$0")/.."
+PORT_HEX=1F90   # upstream 8080
+
+boot() {   # <validate_ms> <keep_alive_timeout_ms> <keep_alive_header>
+  export POOL_VALIDATE_AFTER_INACTIVITY_MS="$1" KEEP_ALIVE_TIMEOUT="$2" KEEP_ALIVE_RESPONSE_HEADER="$3" \
+         POOL_RETRY_ENABLED=false POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 \
+         POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 POOL_RESPONSE_TIMEOUT_MS=10000 \
+         UPSTREAM_BASE_URL=http://upstream:8080 MAX_KEEP_ALIVE_REQUESTS=100 \
+         LOGGING_LEVEL_ORG_APACHE_HC=DEBUG
+  (cd docker && docker-compose up -d --force-recreate upstream caller >/dev/null 2>&1)
+  for i in $(seq 1 60); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+    sleep 1
+  done
+}
+sock() { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:$PORT_HEX\$/ {n++} END {print n+0}' /proc/net/tcp"; }
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+errs() { docker logs docker_caller_1 2>&1 | tail -n +$((1+$1)) | grep -oE "NoHttpResponseException|SocketTimeoutException|HttpHostConnectException|ConnectException|Connection reset" | sort | uniq -c | tr '\n' ' '; }
+
+# ── D1/D2. 배포 중에 계속 때린다
+deploy_case() {   # <라벨> <validate_ms>
+  boot "$2" 60000 true
+  curl -s -o /dev/null http://localhost:9080/call          # 풀에 커넥션 1개
+  N=$(docker logs docker_caller_1 2>&1 | wc -l)
+  ( sleep 2; cd docker && docker-compose restart upstream >/dev/null 2>&1 ) &
+  OK=0; BAD=0
+  for i in $(seq 1 120); do                                # 0.2초 * 120 = 약 24초
+    code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:9080/call)
+    [ "$code" = "200" ] && OK=$((OK+1)) || BAD=$((BAD+1))
+    sleep 0.2
+  done
+  wait
+  printf '%-28s | 성공 %-4s 실패 %-4s | %s\n' "$1" "$OK" "$BAD" "$(errs "$N")"
+}
+deploy_case "D1. 배포, 검증 2초(기본)" -1
+deploy_case "D2. 배포, 검증 매번(0)"    0
+
+# ── D3/D4. 단발로 상태까지 본다
+probe() {   # <라벨>
+  STATE="available=$(gauge 'state="available"') ESTABLISHED=$(sock 01) CLOSE_WAIT=$(sock 08)"
+  N=$(docker logs docker_caller_1 2>&1 | wc -l)
+  T0=$(date +%s)
+  CODE=$(curl -s -o /dev/null -m 30 -w '%{http_code}' http://localhost:9080/call)
+  T=$(( $(date +%s) - T0 ))
+  LIFE=$(docker logs docker_caller_1 2>&1 | grep -o "can be kept alive .*" | head -1)
+  printf '%-28s | 클라가 잡은 수명: %-26s | 끊긴 뒤: %-42s | 다음 요청 HTTP %-3s (%ss) | %s\n' \
+    "$1" "$LIFE" "$STATE" "$CODE" "$T" "$(errs "$N")"
+}
+
+# D3. 서버가 Keep-Alive 헤더를 안 준다 -> 클라는 기본 3분, 서버는 1초에 끊는다
+# 상태를 읽는 데 1초 가까이 걸리므로 상태 보기와 요청 쏘기를 따로 돌린다.
+# (상태를 읽는 동안에는 lease 가 없으니 검증도 안 돈다 — 유휴가 길어져도 상관없다)
+boot -1 1000 false
+curl -s -o /dev/null http://localhost:9080/call            # 커넥션 하나
+sleep 1.5                                                  # 서버는 1초에 끊는다
+STATE="available=$(gauge 'state="available"') ESTABLISHED=$(sock 01) CLOSE_WAIT=$(sock 08)"
+LIFE=$(docker logs docker_caller_1 2>&1 | grep -o "can be kept alive .*" | head -1)
+
+boot -1 1000 false                                         # 소켓을 깨끗이 비우고 요청만 쏜다
+curl -s -o /dev/null http://localhost:9080/call
+N=$(docker logs docker_caller_1 2>&1 | wc -l)
+sleep 1.5                                                  # 서버는 끊었고 클라 검증 주기 2초는 아직 안 됐다
+CODE=$(curl -s -o /dev/null -m 30 -w '%{http_code}' http://localhost:9080/call)
+printf '%-28s | 클라가 잡은 수명: %-26s | 끊긴 뒤: %-42s | 다음 요청 HTTP %-3s | %s\n' \
+  "D3. 헤더 없음, 검증 2초(기본)" "$LIFE" "$STATE" "$CODE" "$(errs "$N")"
+
+# D4. 네트워크 단절 — FIN 도 RST 도 안 온다
+boot 0 60000 true
+curl -s -o /dev/null http://localhost:9080/call
+docker network disconnect docker_default docker_upstream_1
+sleep 0.3
+probe "D4. 네트워크 단절, 검증 매번(0)"
+docker network connect docker_default docker_upstream_1 >/dev/null 2>&1 || true
+```
+
+</details>
+
+| # | 원인 | 클라가 잡은 수명 | 끊긴 뒤 | 결과 |
+| --- | --- | --- | --- | --- |
+| D1 | **배포** — 업스트림 재기동. 재기동 중에도 0.2초 간격으로 계속 호출 | `for 60 SECONDS` | `available=1`, `CLOSE_WAIT=1` | 120건 중 성공 88 / 실패 32. `ConnectException` 30 + **`NoHttpResponseException` 1** |
+| D2 | 같은 배포인데 검증을 **매 lease 마다**(`validateAfterInactivity=0`) | `for 60 SECONDS` | 〃 | 성공 88 / 실패 32. `ConnectException` 31 + **`NoHttpResponseException` 0** |
+| D3 | **서버가 `Keep-Alive` 헤더를 안 줌** — 서버는 1초에 끊는데 클라는 기본값을 잡는다 | **`for 3 MINUTES`** | `available=1`, `ESTABLISHED=0`, `CLOSE_WAIT=1` | **HTTP 500** `NoHttpResponseException` |
+| D4 | **경로가 조용히 사라짐**(네트워크 단절). 검증은 매번(`0`) | `for 60 SECONDS` | `available=1`, **`ESTABLISHED=1`**, `CLOSE_WAIT=0` | **HTTP 500** `SocketTimeoutException`, **10초** 매달렸다 |
+
+**D1 — 가장 흔한 원인은 배포다.** 서버가 알려준 60초가 끝나기 전에 서버가 먼저 사라진다. 톰캣은 정상 종료라 FIN 을 보내므로 C 와 같은 모양(`available=1`, `CLOSE_WAIT=1`)이 된다. 실패를 예외로 갈라보면 두 종류가 섞여 있다 — **서버가 실제로 없던 동안의 `ConnectException` 30건**과, **서버가 돌아온 뒤 죽은 커넥션을 집어서 난 `NoHttpResponseException` 1건**이다. 앞의 30건은 풀 설정으로 어쩔 수 있는 게 아니고, 뒤의 1건이 풀이 만든 몫이다.
+
+**그럼 2초를 기다리지 말고 매번 검사하면 되지 않나.** 된다. `validateAfterInactivity` 는 **음수면 아예 안 하고, 0 이면 매 lease 마다** 한다.
+
+```java
+// org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.java — lease 직후
+final TimeValue timeValue = resolveValidateAfterInactivity(connectionConfig);
+if (TimeValue.isNonNegative(timeValue)) {                        // 음수면 이 블록을 건너뛴다
+    if (timeValue.getDuration() == 0                             // 0 이면 매번
+            || Deadline.calculate(poolEntry.getUpdated(), timeValue).isExpired()) {
+        final ManagedHttpClientConnection conn = poolEntry.getConnection();
+        boolean stale;
+        try {
+            stale = conn.isStale();                              // 1ms 타임아웃으로 한 번 읽어본다
+        } catch (final IOException ignore) {
+            stale = true;
+        }
+        if (stale) {
+            poolEntry.discardConnection(CloseMode.IMMEDIATE);
+        }
+    }
+}
+```
+
+D2 에서 그 1건이 0 이 됐다. 다만 **보장은 아니다.** 검사와 쓰기가 원자적이지 않아서, `isStale()` 로 1ms 들여다본 직후에 FIN 이 와도 그 요청은 이미 나간다. 같은 실험을 세 번 돌렸을 때 `validateAfterInactivity=0` 으로도 1건이 난 회차가 있었다. 실패 건수가 한 자리라 비율로 읽을 수 없고, **"창이 줄어들지만 0 이 보장되지는 않는다"** 까지만 말할 수 있다. 공짜도 아니다 — 매 요청마다 1ms 타임아웃 읽기 syscall 이 하나 더 붙고, D4 처럼 커널도 모르는 경우에는 아무 도움이 안 된다. 이 틈을 메우는 자리가 재시도(10번)인데 그쪽은 멱등성 문제를 같이 들고 온다.
+
+**D3 — 서버가 알려주지 않으면 클라이언트 기본값이 이긴다.** 톰캣의 `useKeepAliveResponseHeader` 를 끄면 `Keep-Alive` 헤더가 안 나간다. 그러면 `DefaultConnectionKeepAliveStrategy` 가 두 번째 분기로 떨어진다 — `RequestConfig.connectionKeepAlive`, **기본 3분**이다. 서버는 1초에 끊는데 풀은 3분을 들고 있으니, **9번에서 틀렸던 그 예측이 여기서는 그대로 맞는다.** 로그에 `can be kept alive for 3 MINUTES` 가 찍힌다. 9번이 재현되지 않은 건 "사각지대가 없어서"가 아니라 **톰캣이 알려주는 서버였기 때문**이었다.
+
+```java
+// upstream 쪽. 이 한 줄로 "자기 타임아웃을 안 알려주는 서버" 가 된다
+if (handler instanceof AbstractHttp11Protocol<?> protocol) {
+    protocol.setUseKeepAliveResponseHeader(enabled);
+}
+```
+
+13번에서 클라이언트가 서버 말을 **무시하게** 만든 것과 원인은 같다. 한쪽은 서버가 말을 안 하고 한쪽은 클라이언트가 안 듣는데, 결과는 똑같이 **클라가 잡은 수명 > 서버가 닫는 시점** 이다. 그 부등호가 stale 의 조건이다.
+
+**D4 — 커널조차 모르면 타임아웃까지 매달린다.** 경로만 사라지면 FIN 도 RST 도 안 온다. 소켓은 `ESTABLISHED` 로 남아 있고 `isStale()` 의 1ms 읽기도 "읽을 게 없다"로 통과한다. 그래서 검증을 매번 해도 못 걸러내고, 요청은 `responseTimeout`(여기선 10초)까지 매달렸다. 위 "말없이" 표의 넷째 줄이 이 경우다. **여기서 실패를 빨리 끝내는 건 풀 설정이 아니라 타임아웃 값이다.**
+
+정리하면 stale 의 원인은 넷이고, 풀 설정이 닿는 범위가 서로 다르다.
+
+| 원인 | 신호 | 검증(`validateAfterInactivity`)이 막나 |
+| --- | --- | --- |
+| 중간 장비 idle timeout (9·11번 C) | FIN | 주기가 상대보다 짧으면 막는다 |
+| 배포·재기동 (D1) | FIN | 대체로 막지만 틈이 남는다 |
+| 수명 설정 어긋남 (D3, 13번) | FIN | 막는다. 애초에 수명을 맞추는 게 먼저다 |
+| 경로 소실 (D4) | **없음** | **못 막는다.** 타임아웃과 재시도의 영역이다 |
 
 **12번** — 요청 수 상한은 성격이 다르다. 업스트림을 `maxKeepAliveRequests=5` 로 띄우고, **한 커넥션 위에서** 6번 연속으로 보내며 응답 헤더만 본다.
 
@@ -1766,7 +2034,7 @@ if (keepAlive) {
 | 2 | 8초 유휴 (서버 `timeout=5`) | **10** | 0 | **0** | **10** | +0 |
 | 3 | 그 뒤 요청 1회 | **1** | 0 | 1 | 0 | +1 |
 
-2 에서 풀은 여전히 10개를 들고 있다고 말하는데 **그 10개가 전부 시체다.** 서버가 FIN 을 보내서 소켓은 전부 `CLOSE_WAIT` 이다. 풀 게이지가 커널이 본 소켓 상태와 어긋나는 경우고, 0번의 `leased=50` 과 11번의 `available=1` 이 같은 어긋남이었다.
+2 에서 풀은 여전히 10개를 들고 있다고 말하는데 **그 10개가 전부 이미 끊긴 커넥션이다.** 서버가 FIN 을 보내서 소켓은 전부 `CLOSE_WAIT` 이다. 풀 게이지가 커널이 본 소켓 상태와 어긋나는 경우고, 0번의 `leased=50` 과 11번의 `available=1` 이 같은 어긋남이었다.
 
 치우는 시점은 **다음 lease** 다. 요청 한 번에 `available` 이 10 → 1 로 떨어졌다. 만료된 엔트리를 하나씩 버리며 쓸 만한 걸 찾고, 없으니 새로 맺고, 그게 반납되어 1개가 남았다.
 
@@ -1836,7 +2104,7 @@ for (;;) {
 3. **크기는 동시성 기준으로 잡는다** (3·14번) — 필요 커넥션 = TPS × 응답시간. 풀 크기는 예약이 아니라 상한이라 넉넉히 줘도 실제로 드는 건 동시 요청 수만큼이고, 모자라면 곧바로 큐가 된다. **크게 준 쪽의 손해가 작다.**
 4. **상한에는 반드시 포기를 같이 준다** (7번) — `connectionRequestTimeout` 이 없으면 소켓 점유가 스레드 점유로 바뀔 뿐이라 업스트림을 안 쓰는 API 까지 죽는다. 0(`Timeout.DISABLED`)은 무한이 아니라 즉시 실패이므로, "무한"은 충분히 큰 값으로 표현한다.
 5. **커넥션 수명은 서버 말을 따르게 두고, 검증 주기를 상대가 끊는 주기보다 짧게** (9·12·13번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주고 HttpClient5 는 그 값을 지킨다. `setKeepAliveStrategy` 로 그걸 덮어쓰면 서버가 끊은 커넥션을 계속 들고 있게 된다(13번). 헤더를 안 주는 상대라면 풀은 **3분**을 들고 있으므로(`RequestConfig.connectionKeepAlive` 기본값), 그때는 `validateAfterInactivity`·`evictIdleConnections` 가 유일한 방어선이다.
-6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11·16번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 시체도 센다. 만료된 엔트리도 다음 lease 때까지 `available` 에 그대로 남으므로, 유휴가 길었다면 더 못 믿는다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
+6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11·16번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 이미 끊긴 것도 센다. 만료된 엔트리도 다음 lease 때까지 `available` 에 그대로 남으므로, 유휴가 길었다면 더 못 믿는다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
 
 ## 재보고 나서 고친 것
 ---
@@ -1851,7 +2119,7 @@ for (;;) {
 
 **`Timeout.DISABLED`(0) 은 무한이 아니다.** 즉시 실패다. "상한은 있는데 포기가 없는" 조건을 만들려면 충분히 큰 값(60초)을 줘야 한다.
 
-**톰캣은 자기 타임아웃을 알려준다.** 9번에서 예측했던 사각지대가 안 생긴 이유다. 위에 따로 적었다.
+**톰캣은 자기 타임아웃을 알려준다.** 9번에서 예측했던 사각지대가 안 생긴 이유다. 다만 예측 자체가 틀린 건 아니었다 — 헤더를 안 보내는 서버로 바꿔 보니(11번 D3) 클라이언트가 기본 3분을 잡고 그 사각지대가 그대로 재현됐다. 둘 다 위에 적었다.
 
 **TIME_WAIT 을 가른 건 먼저 닫는 쪽이 아니었다.** 1번에서 caller 쪽이 0 으로 나온 걸 "서버가 능동 종료자라서"로 적어뒀는데, 재보니 양쪽 다 0 이었다. FIN 이 아니라 RST 로 끝나서다. 위에 따로 적었다.
 
