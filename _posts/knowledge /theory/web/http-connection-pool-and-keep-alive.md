@@ -25,7 +25,7 @@ tags: [WEB]
 
 | # | 확인할 것 | 구간 | 결과 |
 | --- | --- | --- | --- |
-| 0 | 응답 본문을 끝까지 소비해야 커넥션이 풀로 반환된다 | 전제 | 확인 |
+| 0 | 응답을 닫지도, 본문을 읽지도 않으면 커넥션이 반환되지 않는다 | 전제 | 확인 |
 | 1 | 정상 구간에서 풀의 이득은 재사용 축에서만 나온다 | 정상 | 확인 |
 | 2 | 설정 안 하면 `maxPerRoute` 5 에 막힌다 | 정상 | 확인 |
 | 3 | 필요 커넥션 수는 TPS × 응답시간으로 예측된다 | 정상 | 확인 |
@@ -39,6 +39,9 @@ tags: [WEB]
 | 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인 |
 | 12 | 요청 수 상한은 알려주고 닫으므로 stale 을 만들지 않는다 | idle | 확인 |
 | 13 | 커넥션을 풀에 두는 시간은 서버가 알려준 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
+| 14 | 풀은 미리 채워지지 않고 동시 요청 수만큼만 늘어난다 | 전제 | 확인 |
+| 15 | 반납은 본문을 다 읽거나 응답을 닫는 순간 일어난다 | 전제 | 확인. 닫기만 해도 된다 |
+| 16 | 재사용 못 하는 커넥션은 반납이 곧 폐기다 | 전제 | 확인 |
 
 9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지가 이 글에서 가장 뜻밖이었던 부분이라 아래에 따로 적는다.
 
@@ -434,9 +437,9 @@ printf '%-28s | %-34s | %-15s | %-9s | %-7s | %s\n' "$DESC" "$EFF" "$RTT" "$AVG"
 
 표의 **평균·p95·TPS 는 4)의 k6 요약**이고, `leased`·`pending`·`callerThreads` 는 그 한가운데서 뜬 **순간값**이다. `available`·`ESTABLISHED`·`CLOSE_WAIT` 처럼 부하가 끝난 뒤를 보는 값은 종료 후에 `pool-stat.sh` 로 잰다.
 
-0번과 9~13번은 부하 생성기를 안 쓴다. 각 절에 적는다.
+0번과 9~16번은 부하 생성기를 안 쓴다. 각 절에 적는다.
 
-### 0번 — 본문을 소비해야 반납된다
+### 0번 — 응답을 닫지 않으면 반납되지 않는다
 
 일부러 이상하게 짠 코드가 아니라, **정상 경로에만 `close` 가 있고 에러 경로는 상태코드만 보고 빠져나가는** 흔한 형태다.
 
@@ -1178,6 +1181,253 @@ echo "  ($ADV)"
 
 기본값을 바꿀 이유는 거의 없다. 서버가 말해주면 그게 제일 정확하고, 안 말해주는 상대일 때만 3분이라는 값이 실제로 쓰인다.
 
+### 14~16번 — 언제 만들고, 언제 돌려받고, 언제 버리나
+
+여기까지는 풀이 **이미 돌고 있는 상태**를 봤다. 그 앞 단계 — 풀이 커넥션을 어떻게 확보하고 어떻게 돌려받는지 — 는 숫자가 작아서 부하 생성기로는 안 보인다. 동시성을 한 단계씩 내가 정해야 하므로 curl 을 직접 띄운다.
+
+```bash
+./scripts/run-lifecycle.sh
+```
+
+<details markdown="1">
+<summary>단계별 풀·소켓 상태 — <code>scripts/run-lifecycle.sh</code></summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-lifecycle.sh
+#
+# 풀이 커넥션을 "언제 만들고 / 언제 반납받고 / 반납 후 어떻게 하는지" 를 단계별로 찍는다.
+# 동시성을 내가 정해야 하므로 부하 생성기 대신 curl 을 직접 띄운다.
+#   available  = 풀에 놀고 있는 PoolEntry, leased = 빌려준 PoolEntry
+#   ESTABLISHED= caller -> upstream 살아 있는 소켓 (/proc/net/tcp)
+#   새 소켓    = /proc/net/snmp ActiveOpens 증분. 괄호는 그 단계에서 새로 만든 수
+set -e
+cd "$(dirname "$0")/.."
+export POOL_MAX_TOTAL=50 POOL_MAX_PER_ROUTE=50 POOL_CONNECTION_REQUEST_TIMEOUT_MS=3000 \
+       POOL_VALIDATE_AFTER_INACTIVITY_MS=-1 POOL_EVICT_IDLE_MS=-1 POOL_TIME_TO_LIVE_MS=-1 \
+       POOL_KEEP_ALIVE_MS=-1 POOL_RETRY_ENABLED=false \
+       UPSTREAM_BASE_URL=http://upstream:8080 KEEP_ALIVE_TIMEOUT=60000 \
+       MAX_KEEP_ALIVE_REQUESTS=1000 NETEM_DELAY_MS=0
+(cd docker && docker-compose up -d --force-recreate caller upstream >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+
+gauge() { curl -s http://localhost:9080/actuator/prometheus | awk -v s="$1" '$0 ~ s && $0 !~ /^#/ {printf "%d", $2}'; }
+sock()  { docker exec docker_caller_1 sh -c "awk 'NR>1 && \$4==\"$1\" && \$3 ~ /:1F90\$/ {n++} END {print n+0}' /proc/net/tcp"; }
+opens() { docker exec docker_caller_1 sh -c "awk '/^Tcp:/{if(h){split(h,a,\" \");split(\$0,b,\" \");for(i=1;i<=length(a);i++) if(a[i]==\"ActiveOpens\") print b[i]} else h=\$0}' /proc/net/snmp"; }
+
+A0=$(opens); PREV=0
+show() {
+  local now=$(( $(opens) - A0 ))
+  printf '%-30s | available=%-3s leased=%-3s | ESTABLISHED=%-3s CLOSE_WAIT=%-3s | 새 소켓 %-3s (+%s)\n' \
+    "$1" "$(gauge 'state="available"')" "$(gauge 'state="leased"')" "$(sock 01)" "$(sock 08)" "$now" "$((now-PREV))"
+  PREV=$now
+}
+# call <delayMs> <close> <mode> <sizeBytes>
+call() { curl -s -o /dev/null -m 30 \
+  "http://localhost:9080/call?delayMs=${1:-0}&close=${2:-false}&mode=${3:-safe}&sizeBytes=${4:-0}"; }
+loop() { local n="$1"; shift; for i in $(seq 1 "$n"); do call "$@"; done; }
+
+echo "# 1) 풀을 미리 채워두는가"
+show "기동 직후 — 요청 0회"
+call;        show "요청 1회"
+loop 19;     show "순차 20회 (동시성 1)"
+
+echo
+echo "# 2) 동시성이 오르면 / 내려가면"
+for i in $(seq 1 10); do call 1000 & done; sleep 0.6; show "동시 10 — 처리 중"
+wait;                                                 show "동시 10 — 끝난 뒤"
+for i in $(seq 1 3);  do call 1000 & done; sleep 0.6; show "동시 3 — 처리 중"
+wait;                                                 show "동시 3 — 끝난 뒤"
+
+echo
+echo "# 3) 반납 시점"
+call 3000 & sleep 1; show "응답 대기 중 (delayMs=3000)"
+wait;                show "응답 다 읽은 뒤"
+
+echo
+echo "# 4) 서버가 Connection: close 를 붙이면"
+call 0 true;      show "close 응답 1회"
+loop 19 0 true;   show "close 순차 20회"
+call;             show "다시 keep-alive 1회"
+
+echo
+echo "# 5) 응답을 닫기만 하고 본문을 안 읽으면 (100KB 본문)"
+loop 20 0 false safe      102400; show "safe 순차 20회"
+loop 20 0 false closeonly  102400; show "closeonly 순차 20회"
+loop 20 0 false safe      102400; show "다시 safe 순차 20회"
+
+echo
+echo "# 6) 서버가 알려준 keep-alive 가 지나면 (upstream 재기동: timeout=5s)"
+export KEEP_ALIVE_TIMEOUT=5000
+(cd docker && docker-compose up -d --force-recreate caller upstream >/dev/null 2>&1)
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9080/actuator/health)" = "200" ] && break
+  sleep 1
+done
+A0=$(opens); PREV=0
+for i in $(seq 1 10); do call 1000 & done; wait;  show "동시 10 — 끝난 뒤"
+sleep 8;                                          show "8초 유휴 (서버 timeout=5s)"
+call;                                             show "그 뒤 요청 1회"
+```
+
+</details>
+
+단계마다 **풀 게이지**(`available`·`leased`)와 **커널의 소켓 상태**를 같이 읽고, `/proc/net/snmp` 의 `ActiveOpens` 증분으로 **그 단계에서 새로 맺은 소켓 수**를 센다. 풀은 `maxTotal=maxPerRoute=50`, RTT 0, 업스트림은 `Keep-Alive: timeout=60`, eviction·TTL 은 끈 상태다.
+
+#### 14번 — 풀은 미리 채워지지 않는다
+
+| 단계 | available | leased | ESTABLISHED | 새 소켓 |
+| --- | --- | --- | --- | --- |
+| 기동 직후 — 요청 0회 | **0** | 0 | **0** | - |
+| 요청 1회 | 1 | 0 | 1 | +1 |
+| 순차 20회 (동시성 1) | 1 | 0 | 1 | **+0** |
+| 동시 10 — 처리 중 | 0 | 10 | 10 | +9 |
+| 동시 10 — 끝난 뒤 | **10** | 0 | 10 | +0 |
+| 동시 3 — 처리 중 | 7 | 3 | **10** | +0 |
+| 동시 3 — 끝난 뒤 | **10** | 0 | 10 | +0 |
+
+**`maxTotal=50` 을 줬는데 기동 직후 커넥션은 0개다.** 풀 크기는 예약이 아니라 상한이다. 첫 요청이 와야 하나 만든다.
+
+**풀 크기를 정하는 건 설정값이 아니라 동시 요청 수다.** 동시성 1 로 20회를 쏘면 소켓 하나로 다 처리하고(새 소켓 +0), 동시 10 이 되면 10개까지 늘어난다. 3번의 "필요 커넥션 = TPS × 응답시간" 과 같은 얘기를 반대쪽에서 본 것이다.
+
+**한 번 커진 풀은 스스로 줄지 않는다.** 동시성이 3 으로 내려가도 소켓은 10개 그대로고, 그중 3개만 빌려주고 7개는 `available` 에 남는다. 줄어드는 경로는 `evictIdleConnections` 와 만료뿐이다(아래).
+
+소스에서 보면 엔트리를 만드는 지점은 하나뿐이다. **빌려줄 free 엔트리가 없을 때만** 부른다.
+
+```java
+// StrictConnPool.PerRoutePool
+public PoolEntry<T, C> createEntry(final TimeValue timeToLive) {
+    final PoolEntry<T, C> entry = new PoolEntry<>(this.route, timeToLive, disposalCallback);
+    this.leased.add(entry);     // 태어날 때부터 leased 다
+    return entry;
+}
+```
+
+두 가지가 여기서 따라온다. 엔트리는 **`leased` 로 태어난다** — `available` 로 들어가는 유일한 경로는 반납이다. 그리고 `new PoolEntry` 는 **소켓이 없는 빈 껍데기**다. TCP 연결은 exec chain 이 `connectionManager.connect(endpoint, ...)` 를 부를 때 맺어진다. 풀 엔트리 생성과 소켓 수립은 다른 단계다.
+
+#### 15번 — 반납은 응답을 닫는 순간 일어난다
+
+| 단계 | available | leased |
+| --- | --- | --- |
+| 응답 대기 중 (`delayMs=3000`) | 9 | **1** |
+| 응답 다 읽은 뒤 | 10 | 0 |
+
+빌리는 건 요청을 보내기 전이고, 돌려주는 건 응답을 다 처리한 뒤다. 업스트림이 3초를 끌고 있는 동안 그 커넥션은 `leased` 에 잡혀 있다.
+
+그럼 "다 처리한 뒤"가 정확히 언제인가. `MainClientExec` 에서 두 갈래로 갈린다.
+
+```java
+// 본문이 스트리밍이면 반납 책임을 응답 객체에 넘긴다
+final HttpEntity entity = response.getEntity();
+if (entity == null || !entity.isStreaming()) {
+    execRuntime.releaseEndpoint();                            // 여기서 바로 반납
+    return new CloseableHttpResponse(response);
+}
+return new CloseableHttpResponse(response, execRuntime);       // 반납은 나중에
+```
+
+본문이 있으면 반납 시점은 호출자 코드에 달린다. 트리거는 셋이다.
+
+| 무엇을 하면 | 어떤 경로로 반납되나 |
+| --- | --- |
+| 본문을 EOF 까지 읽는다 | `EofSensorInputStream` → `ResponseEntityProxy.eofDetected` → `releaseEndpoint()` |
+| 본문 스트림을 닫는다 | 〃 `streamClosed` → 〃 |
+| 응답 객체를 닫는다 | `ResponseEntityProxy.close` → 남은 본문 드레인 → `releaseEndpoint()` |
+
+**세 번째가 예상과 달랐다.** 본문에 손을 안 대고 `try-with-resources` 로만 닫으면 재사용을 잃을 거라고 봤는데, 100KB 본문으로 20회씩 돌려보면 새 소켓이 하나도 안 늘어난다.
+
+| 순차 20회 (100KB 본문) | available | ESTABLISHED | 새 소켓 |
+| --- | --- | --- | --- |
+| `safe` — `EntityUtils.consume` + close | 1 | 1 | +0 |
+| `closeonly` — **본문 손 안 대고 close 만** | 1 | 1 | **+0** |
+| 다시 `safe` | 1 | 1 | +0 |
+
+이유가 소스에 주석으로 적혀 있다.
+
+```java
+// ResponseEntityProxy.close()
+public void close() throws IOException {
+    // HttpEntity.close will close the underlying resource. Closing a reusable request stream results in
+    // draining remaining data, allowing for connection reuse.
+    super.close();        // ContentLengthInputStream.close() 가 남은 본문을 끝까지 읽어 버린다
+    releaseConnection();
+}
+```
+
+닫기만 해도 되는 대신 **남은 본문을 네트워크로 다 받아내는 값은 치른다.** 큰 응답을 중간에 버리는 코드라면 그게 공짜가 아니다.
+
+그러면 0번은 왜 샜나. leaky 는 **셋 중 아무것도 안 했다.** 에러 경로에서 그냥 `return` 으로 빠져나가 close 도 consume 도 호출되지 않았다. 반납 조건이 "본문 소비"뿐인 게 아니라 세 갈래인데, 그 셋 다 안 타는 코드였던 것이다.
+
+#### 16번 — 재사용 못 하는 커넥션은 반납이 곧 폐기다
+
+앞 단계에서 풀에 10개가 쌓여 있는 상태에서, 업스트림이 `Connection: close` 를 붙이게 한다.
+
+| 단계 | available | leased | ESTABLISHED | 새 소켓 |
+| --- | --- | --- | --- | --- |
+| close 응답 1회 | **9** | 0 | 9 | +0 |
+| close 순차 20회 | **0** | 0 | **0** | +10 |
+| 다시 keep-alive 1회 | 1 | 0 | 1 | +1 |
+
+첫 줄이 이 실험의 답이다. 풀에 있던 10개 중 하나를 꺼내 썼는데 **되돌아온 게 없다.** `leased` 가 0 이니 반납은 됐고, 그런데 `available` 은 9 로 줄었다. 반납받자마자 버린 것이다. 둘째 줄에서 20회를 돌리면 풀에 있던 10개를 다 소진하고 나머지 10회는 새로 맺는다(+10) — **요청 1회당 소켓 1개**다. 셋째 줄처럼 keep-alive 응답 하나가 오면 다시 1개가 쌓인다.
+
+경로는 두 군데로 나뉜다.
+
+```java
+// InternalExecRuntime.releaseEndpoint() — 재사용 불가면 discard 로 빠진다
+if (reusable) {
+    manager.release(endpoint, state, validDuration);
+} else {
+    discardEndpoint(endpoint);   // endpoint.close(IMMEDIATE) 하고 나서 manager.release(endpoint, null, ZERO)
+}
+
+// StrictConnPool.release(entry, reusable)
+final boolean keepAlive = entry.hasConnection() && reusable;
+pool.free(entry, keepAlive);
+if (keepAlive) {
+    this.available.addFirst(entry);                 // 풀로 복귀
+} else {
+    entry.discardConnection(CloseMode.GRACEFUL);    // available 에 안 넣는다 = 사라진다
+}
+```
+
+소켓을 먼저 죽이고(`CloseMode.IMMEDIATE` — 1번에서 본 RST 가 이것이다) 그 다음에 엔트리를 반납하므로, 매니저가 볼 때는 이미 `conn.isOpen()` 이 false 다. `reusable=false` 로 판정돼 `available` 에 들어가지 못한다. "반납된 뒤에 풀에서 사라진다"기보다 **반납과 폐기가 같은 동작**이다.
+
+#### 만료된 엔트리는 다음 lease 때 치운다
+
+16번은 서버가 `Connection: close` 로 **알려준** 경우였다. 아무 말 없이 keep-alive 시간만 지난 경우는 다르다. 업스트림을 `timeout=5` 로 띄워 커넥션 10개를 만들고 8초 쉬었다.
+
+| 단계 | available | leased | ESTABLISHED | CLOSE_WAIT | 새 소켓 |
+| --- | --- | --- | --- | --- | --- |
+| 동시 10 — 끝난 뒤 | 10 | 0 | 10 | 0 | +10 |
+| 8초 유휴 (서버 `timeout=5`) | **10** | 0 | **0** | **10** | +0 |
+| 그 뒤 요청 1회 | **1** | 0 | 1 | 0 | +1 |
+
+둘째 줄에서 풀은 여전히 10개를 들고 있다고 말하는데 **그 10개가 전부 시체다.** 서버가 FIN 을 보내서 소켓은 전부 `CLOSE_WAIT` 이다. 0번의 `leased=50`, 11번의 `available=1` 과 같은 종류의 어긋남이다.
+
+치우는 시점은 **다음 lease** 다. 요청 한 번에 `available` 이 10 → 1 로 떨어졌다. 만료된 엔트리를 하나씩 버리며 쓸 만한 걸 찾고, 없으니 새로 맺고, 그게 반납되어 1개가 남았다.
+
+```java
+// StrictConnPool.processPendingRequest — 빌려줄 엔트리를 찾는 루프
+for (;;) {
+    entry = pool.getFree(state);
+    if (entry == null) {
+        break;
+    }
+    if (entry.getExpiryDeadline().isExpired()) {
+        entry.discardConnection(CloseMode.GRACEFUL);   // 만료된 건 여기서 버린다
+        this.available.remove(entry);
+        pool.free(entry, false);
+    } else {
+        break;
+    }
+}
+```
+
+그래서 `evictIdleConnections` 를 안 켜면 풀은 **유휴 커넥션을 스스로 줄이지 않는다.** 피크에 50개까지 커진 풀은 트래픽이 없는 새벽에도 50개로 남아 있고, 그 엔트리들이 이미 죽었는지는 다음 요청이 와야 알게 된다. 들고 있는 fd 자체가 큰 비용은 아니지만, **풀 게이지만 보고 "지금 쓸 수 있는 커넥션이 N개"라고 읽으면 안 되는 이유**가 하나 더 늘어난 셈이다.
+
 ## 정리
 ---
 
@@ -1220,12 +1470,12 @@ echo "  ($ADV)"
 
 ### 주의사항
 
-1. **본문은 어느 경로로 나가든 소비한다** (0번) — 정상 경로에만 `close` 를 두면 업스트림 에러율이 오르는 순간 풀이 마른다. `try-with-resources` 로 감싼다.
+1. **응답은 어느 경로로 나가든 닫는다** (0·15번) — 반납 트리거는 본문 소비·스트림 닫기·응답 닫기 셋 중 하나고, 정상 경로에만 `close` 를 두면 에러 경로가 그 셋 다 안 탄다. `try-with-resources` 로 감싸면 세 번째가 보장된다.
 2. **`maxPerRoute` 를 명시한다** (2번) — 기본값은 perRoute 5 / total 25 고, 업스트림이 하나면 `maxTotal` 은 도달할 일이 없는 숫자다. 8배 올려도 TPS 가 그대로였다.
-3. **크기는 동시성 기준으로 잡는다** (3번) — 필요 커넥션 = TPS × 응답시간. 넉넉하면 남는 건 그냥 놀지만, 모자라면 곧바로 큐가 된다. **크게 준 쪽의 손해가 작다.**
+3. **크기는 동시성 기준으로 잡는다** (3·14번) — 필요 커넥션 = TPS × 응답시간. 풀 크기는 예약이 아니라 상한이라 넉넉히 줘도 실제로 드는 건 동시 요청 수만큼이고, 모자라면 곧바로 큐가 된다. **크게 준 쪽의 손해가 작다.**
 4. **상한에는 반드시 포기를 같이 준다** (7번) — `connectionRequestTimeout` 이 없으면 소켓 점유가 스레드 점유로 바뀔 뿐이라 업스트림을 안 쓰는 API 까지 죽는다. 0(`Timeout.DISABLED`)은 무한이 아니라 즉시 실패이므로, "무한"은 충분히 큰 값으로 표현한다.
 5. **커넥션 수명은 서버 말을 따르게 두고, 검증 주기를 상대가 끊는 주기보다 짧게** (9·12·13번) — 톰캣은 `Keep-Alive: timeout=N` 으로 알려주고 HttpClient5 는 그 값을 지킨다. `setKeepAliveStrategy` 로 그걸 덮어쓰면 서버가 끊은 커넥션을 계속 들고 있게 된다(13번). 헤더를 안 주는 상대라면 풀은 **3분**을 들고 있으므로(`RequestConfig.connectionKeepAlive` 기본값), 그때는 `validateAfterInactivity`·`evictIdleConnections` 가 유일한 방어선이다.
-6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 시체도 센다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
+6. **지표는 풀이 센 값과 커널 소켓 상태를 같이 본다** (0·11·16번) — `leased`·`available` 은 `PoolEntry` 개수일 뿐이라 시체도 센다. 만료된 엔트리도 다음 lease 때까지 `available` 에 그대로 남으므로, 유휴가 길었다면 더 못 믿는다. `/proc/net/tcp` 의 `CLOSE_WAIT` 과 나란히 놓아야 갈린다.
 
 ## 재보고 나서 고친 것
 ---
@@ -1242,12 +1492,13 @@ echo "  ($ADV)"
 
 **톰캣은 자기 타임아웃을 알려준다.** 9번에서 예측했던 사각지대가 안 생긴 이유다. 위에 따로 적었다.
 
-**TIME_WAIT 은 먼저 닫는 쪽에 붙는다.** 1번에서 caller 쪽이 0 으로 나온 이유다.
+**TIME_WAIT 을 가른 건 먼저 닫는 쪽이 아니었다.** 1번에서 caller 쪽이 0 으로 나온 걸 "서버가 능동 종료자라서"로 적어뒀는데, 재보니 양쪽 다 0 이었다. FIN 이 아니라 RST 로 끝나서다. 위에 따로 적었다.
+
+**`try-with-resources` 로 닫기만 하면 재사용을 잃을 거라고 봤다.** 반납 트리거가 본문 소비뿐이라고 읽었기 때문인데, 재보면 새 소켓이 안 늘었다. `ResponseEntityProxy.close()` 가 남은 본문을 드레인하고 반납까지 한다 (15번).
 
 ## 나중 단계로 미뤄둘 것
 ---
 
 - **upstream 플랫폼 스레드 vs 가상 스레드** — 7번에서 caller 쪽에 보이는 "소켓 점유 → 스레드 점유" 가 서버 쪽에서 반복되는 그림이라, 짝지어 보면 한 바퀴 돈다.
 - **지연에 지터 주기** — 평균 지연으로 계산한 필요 커넥션 수는 응답시간에 꼬리가 있으면 **과소평가**한다. 3번에서 고정 지연으로 예측이 맞는 걸 확인했으니, 이제 깨볼 차례다.
-- **클라이언트가 먼저 닫는 구성에서의 TIME_WAIT** — 1번에서 서버가 능동 종료자였다. 풀의 `timeToLive`·`evictIdleConnections` 로 클라이언트가 버리게 만들면 포트 고갈 쪽으로 이어지는지.
 - **TLS 세션 재개** — 4번에서 RTT 0 인데도 https 수립에 28.7ms 가 들었다. 세션 티켓이 이 비용을 얼마나 깎는지.
