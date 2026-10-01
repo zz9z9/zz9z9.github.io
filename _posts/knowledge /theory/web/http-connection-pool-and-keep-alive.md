@@ -19,12 +19,15 @@ tags: [WEB]
 ## 실측해볼 것
 ---
 
-> 각 항목은 "무엇을 바꿔서 무엇이 갈라지는가" 하나씩만 본다.
+> 14~16번은 풀이 어떻게 동작하는지, 나머지는 "무엇을 바꿔서 무엇이 갈라지는가" 를 하나씩 본다.
 
-기준 조건은 `delayMs=50`, RTT 20ms, `sizeBytes=0`, 풀 50, VU 50 고정, 30초다. 각 실험은 여기서 **한 가지만** 바꾼다. 워밍업 15초는 버린다.
+기준 조건은 `delayMs=50`, RTT 20ms, `sizeBytes=0`, 풀 50, VU 50 고정, 30초다. 각 실험은 여기서 **한 가지만** 바꾼다. 워밍업 15초는 버린다. 14~16번과 0번, 9~13번은 부하 생성기를 안 쓰므로 조건이 다르고, 각 절에 적는다.
 
 | # | 확인할 것 | 구간 | 결과 |
 | --- | --- | --- | --- |
+| 14 | 풀은 미리 채워지지 않고 동시 요청 수만큼만 늘어난다 | 동작 | 확인 |
+| 15 | 반납은 본문을 다 읽거나 응답을 닫는 순간 일어난다 | 동작 | 확인. 닫기만 해도 된다 |
+| 16 | 재사용 못 하는 커넥션은 반납이 곧 폐기다 | 동작 | 확인 |
 | 0 | 응답을 닫지도, 본문을 읽지도 않으면 커넥션이 반환되지 않는다 | 전제 | 확인 |
 | 1 | 정상 구간에서 풀의 이득은 재사용 축에서만 나온다 | 정상 | 확인 |
 | 2 | 설정 안 하면 `maxPerRoute` 5 에 막힌다 | 정상 | 확인 |
@@ -39,11 +42,8 @@ tags: [WEB]
 | 11 | 풀은 자기가 들고 있는 커넥션이 죽은 걸 모른다 | idle | 확인 |
 | 12 | 요청 수 상한은 알려주고 닫으므로 stale 을 만들지 않는다 | idle | 확인 |
 | 13 | 커넥션을 풀에 두는 시간은 서버가 알려준 값을 따른다 | idle | 확인. 덮어쓰면 9번이 재현된다 |
-| 14 | 풀은 미리 채워지지 않고 동시 요청 수만큼만 늘어난다 | 전제 | 확인 |
-| 15 | 반납은 본문을 다 읽거나 응답을 닫는 순간 일어난다 | 전제 | 확인. 닫기만 해도 된다 |
-| 16 | 재사용 못 하는 커넥션은 반납이 곧 폐기다 | 전제 | 확인 |
 
-9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지가 이 글에서 가장 뜻밖이었던 부분이라 아래에 따로 적는다.
+9번은 원래 "서버 keepAliveTimeout < 클라 `validateAfterInactivity` 면 그 사이가 사각지대"로 적어뒀는데, 톰캣 상대로는 그 사각지대가 안 생겼다. 왜 안 생기는지는 아래에 따로 적는다.
 
 ## 실측 환경
 ---
@@ -267,15 +267,23 @@ public PoolingHttpClientConnectionManagerMetricsBinder poolMetrics(PoolingHttpCl
 **`setKeepAliveStrategy` 가 이 중에서 성격이 다르다.** 커넥션을 풀에 얼마나 두고 재사용할지는 위의 어떤 값도 아니고 이 전략이 응답마다 정한다. 9번이 예측대로 재현되지 않은 원인이 이것이었고, 반대로 이 값을 고정하면 9번이 재현된다(13번).
 
 ```java
-// DefaultConnectionKeepAliveStrategy (기본값)
-public TimeValue getKeepAliveDuration(HttpResponse response, HttpContext context) {
+// org.apache.hc.client5.http.impl.DefaultConnectionKeepAliveStrategy.java
+public TimeValue getKeepAliveDuration(final HttpResponse response, final HttpContext context) {
     // 1. 응답의 Keep-Alive: timeout=N 을 그대로 따른다
-    for (HeaderElement he : iterate(response, "keep-alive")) {
-        if ("timeout".equalsIgnoreCase(he.getName()) && he.getValue() != null) {
-            return TimeValue.ofSeconds(Long.parseLong(he.getValue()));
+    final Iterator<HeaderElement> it = MessageSupport.iterate(response, HeaderElements.KEEP_ALIVE);
+    while (it.hasNext()) {
+        final HeaderElement he = it.next();
+        final String param = he.getName();
+        final String value = he.getValue();
+        if (value != null && param.equalsIgnoreCase("timeout")) {
+            try {
+                return TimeValue.ofSeconds(Long.parseLong(value));
+            } catch (final NumberFormatException ignore) {
+            }
         }
     }
     // 2. 헤더가 없으면 RequestConfig.connectionKeepAlive -> 기본 3분
+    final HttpClientContext clientContext = HttpClientContext.cast(context);
     return clientContext.getRequestConfigOrDefault().getConnectionKeepAlive();
 }
 ```
@@ -347,6 +355,30 @@ Gauge(httpcomponents.httpclient.pool.total.connections{state="available"})
 | `pending` | `pendingRequests` 를 순회하며 `isDone()` 아니고 deadline 안 지난 것만 카운트 |
 | `max` | `maxTotal` 필드 — 측정값이 아니라 설정값 그대로 |
 
+그 `PoolEntry` 는 소켓이 아니라 **소켓을 담는 칸**이다. `connRef` 가 nullable 이라 칸과 소켓의 생애가 분리된다 — 빈 칸으로 태어나고(`new PoolEntry`), 소켓이 꽂히고(`assignConnection`), 소켓만 떼이기도 한다(`discardConnection`). 칸이 어느 자료구조에 있는지가 그대로 게이지다.
+
+```
+ createEntry()  ──►  leased          태어나는 자리는 항상 여기
+                       │  free(entry, reusable=true)
+                       ▼
+                   available         들어오는 유일한 경로가 반납이다
+                       │  getFree() 때 만료됐으면 discardConnection
+                       ▼
+                    버려진다          reusable=false 면 available 을 안 거친다
+```
+
+`free(entry, reusable)` 가 `false` 를 받으면 `leased` 에서만 빼고 `available` 에 넣지 않는다. 16번의 "반납과 폐기가 같은 동작"이 이 한 줄이다.
+
+재사용 기한도 엔트리가 들고 있다.
+
+| 필드 | 언제 정해지나 |
+| --- | --- |
+| `validityDeadline` | 소켓을 꽂을 때 `created + timeToLive` 로 한 번 |
+| `expiryDeadline` | 반납할 때마다 `min(now + keepAlive, validityDeadline)` |
+| `updated` | 반납 시각. `validateAfterInactivity` 가 이 값을 기준으로 stale 체크를 돌린다 |
+
+`min` 이라서 **`timeToLive` 는 서버가 알려준 keep-alive 가 넘을 수 없는 천장**이다(13번).
+
 여기서 두 가지가 따라온다.
 
 **이 숫자는 실제 TCP 상태와 얼마든지 어긋난다.** 0번에서 `leased=50` 이 남은 게 그 예다. `PoolEntry` 50개가 `leased` Set 에 들어간 채 아무도 release 를 안 불렀다는 뜻이고, 그 소켓이 살았는지 죽었는지는 풀이 모른다. `/proc/net/tcp` 를 따로 세는 건 풀이 센 값을 커널 쪽과 맞춰보기 위해서다. 0번에서는 50/50 으로 일치했지만 **9~11번에서는 갈라진다** — 서버가 FIN 을 보내도 풀이 센 `available` 은 그대로다.
@@ -371,6 +403,15 @@ export default function () {
   http.get(`http://caller:8080/call?delayMs=50&sizeBytes=0&close=false&mode=safe`);
 }
 ```
+
+**VU(Virtual User)** 는 k6 의 가상 사용자다. 각 VU 가 위의 `default` 함수를 쉬는 시간 없이 반복하는데, **한 VU 는 한 번에 요청 하나**만 띄우고 응답을 받은 뒤 다음 회차로 넘어간다. 그래서 `vus: 50` 은 "초당 50 요청"이 아니라 **동시 요청 수 50**이라는 뜻이고, TPS 는 설정이 아니라 결과로 나온다 — 1번의 응답시간 73.9ms 면 50/0.0739 ≈ 677 이고, 실측 TPS 가 675 였다. 6번에서 `leased + pending` 이 정확히 50 으로 맞는 이유가 이것이다.
+
+| 익스큐터 | 고정하는 것 | 따라 움직이는 것 |
+| --- | --- | --- |
+| `constant-vus` | **동시성**(VU 수) | TPS, 오퍼 부하 |
+| `constant-arrival-rate` | **도착률**(TPS) | VU 수 (`preAllocatedVUs`~`maxVUs` 범위에서) |
+
+1~8번은 동시성을 고정해야 "풀 50 에 동시성 50" 같은 조건이 성립하므로 `constant-vus` 를 쓴다. 7·8번만 도착률 고정인데, 이유는 그 절에 적는다. 스크립트의 `VUS` 는 그 개수를 넘기는 환경변수 이름일 뿐이다.
 
 한 회차는 이렇게 돈다.
 
@@ -437,7 +478,7 @@ printf '%-28s | %-34s | %-15s | %-9s | %-7s | %s\n' "$DESC" "$EFF" "$RTT" "$AVG"
 
 표의 **평균·p95·TPS 는 4)의 k6 요약**이고, `leased`·`pending`·`callerThreads` 는 그 한가운데서 뜬 **순간값**이다. `available`·`ESTABLISHED`·`CLOSE_WAIT` 처럼 부하가 끝난 뒤를 보는 값은 종료 후에 `pool-stat.sh` 로 잰다.
 
-0번과 9~16번은 부하 생성기를 안 쓴다. 각 절에 적는다.
+14~16번과 0번, 9~13번은 부하 생성기를 안 쓴다. 각 절에 적는다.
 
 ### 0번 — 응답을 닫지 않으면 반납되지 않는다
 
@@ -521,12 +562,12 @@ printf '%-6s + %-3s | 성공 %2d/60 | 첫 실패 %-6s | available=%-3s leased=%-
 
 60회가 끝난 뒤 풀 게이지와 caller 의 `/proc/net/tcp` 를 같이 읽는다.
 
-| 조건 | 성공 | 첫 실패 | available | leased | ESTABLISHED | CLOSE_WAIT |
-| --- | --- | --- | --- | --- | --- | --- |
-| leaky + 정상(200) | 60/60 | 없음 | 1 | 0 | 1 | 0 |
-| leaky + 404 | 50/60 | **51번째** | 0 | **50** | **50** | 0 |
-| leaky + 500 | 50/60 | **51번째** | 0 | **50** | 0 | **50** |
-| safe + 500 | 60/60 | 없음 | 0 | 0 | 0 | 0 |
+| # | 조건 | 성공 | 첫 실패 | available | leased | ESTABLISHED | CLOSE_WAIT |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | leaky + 정상(200) | 60/60 | 없음 | 1 | 0 | 1 | 0 |
+| 2 | leaky + 404 | 50/60 | **51번째** | 0 | **50** | **50** | 0 |
+| 3 | leaky + 500 | 50/60 | **51번째** | 0 | **50** | 0 | **50** |
+| 4 | safe + 500 | 60/60 | 없음 | 0 | 0 | 0 | 0 |
 
 **평소에는 아무 일도 없다.** 같은 leaky 코드인데 업스트림이 200 을 주는 동안은 커넥션 1개로 60회를 처리한다. 누수 경로는 에러 응답에서만 열린다. 배포하고 한참 뒤 업스트림 에러율이 오르는 순간 풀이 마르는 형태다.
 
@@ -537,7 +578,7 @@ printf '%-6s + %-3s | 성공 %2d/60 | 첫 실패 %-6s | available=%-3s leased=%-
 - **404** — 서버는 커넥션을 살려둔다. 살아 있는 커넥션 50개를 풀이 붙잡고 못 돌려준다. 순수한 누수다.
 - **500** — 서버가 FIN 을 보내 닫았다. caller 소켓은 전부 `CLOSE_WAIT` 이고 살아 있는 커넥션은 **0개**다. 그런데 풀은 여전히 `leased=50` 으로 센다.
 
-세 번째 줄이 볼 만하다. **풀이 "빌려준 상태"로 세고 있는 50개가 전부 시체다.** 풀은 `PoolEntry` 가 `leased` Set 에 있다는 것만 알지, 그 소켓이 살았는지는 반납을 받아봐야 안다. 반납이 없으므로 영원히 모른다.
+**3 에서는 풀이 "빌려준 상태"로 세고 있는 50개가 전부 시체다.** 풀은 `PoolEntry` 가 `leased` Set 에 있다는 것만 알지, 그 소켓이 살았는지는 반납을 받아봐야 안다. 반납이 없으므로 영원히 모른다.
 
 ### 1번 — 정상 구간에서 갈리는 건 재사용 축뿐
 
@@ -552,14 +593,14 @@ printf '%-6s + %-3s | 성공 %2d/60 | 첫 실패 %-6s | available=%-3s leased=%-
 ./scripts/run-case.sh "D 재사용X 상한10000" 10000 10000 true
 ```
 
-| 조건 | 평균 | p95 | TPS |
-| --- | --- | --- | --- |
-| A 재사용 O, 상한 50 | 73.9ms | 78.7ms | 675 |
-| B 재사용 O, 상한 10000 | 73.5ms | 78.1ms | 679 |
-| C 재사용 X, 상한 50 | 95.2ms | 101.7ms | 524 |
-| D 재사용 X, 상한 10000 | 94.9ms | 101.1ms | 526 |
+| # | 조건 | 평균 | p95 | TPS |
+| --- | --- | --- | --- | --- |
+| 1 | 재사용 O, 상한 50 | 73.9ms | 78.7ms | 675 |
+| 2 | 재사용 O, 상한 10000 | 73.5ms | 78.1ms | 679 |
+| 3 | 재사용 X, 상한 50 | 95.2ms | 101.7ms | 524 |
+| 4 | 재사용 X, 상한 10000 | 94.9ms | 101.1ms | 526 |
 
-**A ≈ B, C ≈ D.** 상한을 200배 늘려도 차이가 0.5% 안쪽이다. 부하가 상한 밑이면 lease 대기가 안 생기니 상한은 존재만 하고 아무 일도 하지 않는다. 상한 축은 장애 구간(7·8번)에서만 갈린다.
+**1 ≈ 2, 3 ≈ 4.** 상한을 200배 늘려도 차이가 0.5% 안쪽이다. 부하가 상한 밑이면 lease 대기가 안 생기니 상한은 존재만 하고 아무 일도 하지 않는다. 상한 축은 장애 구간(7·8번)에서만 갈린다.
 
 **갈린 폭이 RTT 와 맞는다.** 73.9 → 95.2ms, 차이 **21.3ms** 로 주입한 RTT 20ms 와 일치한다. TPS 는 675 → 524 로 22% 감소인데, 동시성이 고정이면 TPS 가 응답시간에 반비례하므로 73.9/95.2 = 0.776 과 맞아떨어진다.
 
@@ -633,41 +674,41 @@ printf '          upstream %s\n' "$U_SS"
 
 커넥션 수와 종료 방식은 `/proc/net/snmp` 의 카운터 증분으로, TIME_WAIT 은 부하 25초 시점의 `/proc/net/tcp` 로 센다.
 
-| 재사용 끈 방법 | 요청 | TPS | 새 커넥션 | RST 로 끝난 수 | caller TIME_WAIT |
-| --- | --- | --- | --- | --- | --- |
-| (안 끔) | 17,648 | 587 | **200** | 150 | 0 |
-| 서버가 닫음 | 14,077 | 467 | 14,077 | **14,077** | **0** |
-| 클라가 버림 | 13,401 | 445 | 13,401 | 0 | **8,179** |
+| # | 재사용 끈 방법 | 요청 | TPS | 새 커넥션 | RST 로 끝난 수 | caller TIME_WAIT |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | (안 끔) | 17,648 | 587 | **200** | 150 | 0 |
+| 2 | 서버가 닫음 | 14,077 | 467 | 14,077 | **14,077** | **0** |
+| 3 | 클라가 버림 | 13,401 | 445 | 13,401 | 0 | **8,179** |
 
 **재사용이 없으면 요청 1건에 커넥션 1개**가 맞다. 17,648 요청을 커넥션 200개로 처리하던 것이 13,401 요청에 13,401개가 된다.
 
-부하 중 상태를 히스토그램으로 뜨면 caller 에 `SYN_SENT`, upstream 에 `SYN_RECV` 가 늘 잡힌다. VU 가 그 시점에 **핸드셰이크 중**이라는 뜻이고, C·D 에서 늘어난 21.3ms 가 여기 그대로 보인다.
+부하 중 상태를 히스토그램으로 뜨면 caller 에 `SYN_SENT`, upstream 에 `SYN_RECV` 가 늘 잡힌다. VU 가 그 시점에 **핸드셰이크 중**이라는 뜻이고, 3·4 에서 늘어난 21.3ms 가 여기 그대로 보인다.
 
 **그런데 1번에서 쓴 방법으로는 TIME_WAIT 이 하나도 안 생긴다.** 커넥션 14,077개가 전부 **RST 로 끝났기 때문**이다. 서버가 `Connection: close` 를 붙이면 HttpClient5 는 그 커넥션을 재사용 불가로 표시하고, 반납 대신 `discardEndpoint()` 로 보낸다.
 
 ```java
-// InternalExecRuntime — 재사용 못 하는 커넥션은 이 경로로 간다
+// org.apache.hc.client5.http.impl.classic.InternalExecRuntime.java — 재사용 못 하는 커넥션은 이 경로로 간다
 private void discardEndpoint(final ConnectionEndpoint endpoint) {
     endpoint.close(CloseMode.IMMEDIATE);
     ...
 }
 
-// BHttpConnectionBase.close(CloseMode) — IMMEDIATE 면
+// org.apache.hc.core5.http.impl.io.BHttpConnectionBase.java — close(CloseMode), IMMEDIATE 면
 socket.setSoLinger(true, 0);   // linger 0 -> close() 가 FIN 이 아니라 RST 를 보낸다
 socket.close();
 ```
 
 `SO_LINGER 0` 은 커널에 "정상 종료 절차 밟지 말고 끊어라"는 뜻이고, **RST 로 끝난 커넥션은 TIME_WAIT 을 남기지 않는다.** 그래서 caller 도 upstream 도 0 이다.
 
-세 번째 줄이 진짜 TIME_WAIT 이 쌓이는 경우다. 풀이 `timeToLive` 만료로 버리는 경로는 `CloseMode.GRACEFUL` 이라 정상적으로 FIN 을 보내고, 먼저 닫은 caller 에 TIME_WAIT 이 붙는다.
+3 이 진짜 TIME_WAIT 이 쌓이는 경우다. 풀이 `timeToLive` 만료로 버리는 경로는 `CloseMode.GRACEFUL` 이라 정상적으로 FIN 을 보내고, 먼저 닫은 caller 에 TIME_WAIT 이 붙는다.
 
-**8,179 에서 멈춘 게 눈에 띈다.** 445 TPS × TIME_WAIT 60초면 26,700 개가 쌓여야 하는데 8,192 근처에서 더 안 는다. 컨테이너의 `tcp_max_tw_buckets` 가 **8192** 다. 이 상한을 넘으면 커널이 TIME_WAIT 을 유예 없이 없애버린다. 자원을 아끼려고 있는 값이 아니라, **TIME_WAIT 이 하는 일(지연 도착한 옛 패킷이 새 커넥션에 섞이는 걸 막는 것)을 포기**하는 안전장치다.
+**8,179 에서 멈춘다.** 445 TPS × TIME_WAIT 60초면 26,700 개가 쌓여야 하는데 8,192 근처에서 더 안 는다. 컨테이너의 `tcp_max_tw_buckets` 가 **8192** 다. 이 상한을 넘으면 커널이 TIME_WAIT 을 유예 없이 없애버린다. 자원을 아끼려고 있는 값이 아니라, **TIME_WAIT 이 하는 일(지연 도착한 옛 패킷이 새 커넥션에 섞이는 걸 막는 것)을 포기**하는 안전장치다.
 
 자원 영향은 예상과 달랐다. `/proc/net/sockstat` 의 `mem`(소켓 버퍼 페이지 수)은 200 → 205 로 20KB 쯤 움직였을 뿐이다. TIME_WAIT 소켓은 온전한 소켓이 아니라 경량 구조체라 **메모리로는 티가 안 난다.** 걸리는 건 메모리가 아니라 **포트**다. 이 컨테이너의 `ip_local_port_range` 는 32768~60999, 28,232 개다. 445 TPS × 60초 = 26,700 이므로 tw_buckets 상한이 없었다면 포트 고갈 직전까지 갔을 숫자다.
 
 정리하면 "재사용을 끄면 TIME_WAIT 이 쌓인다"는 **맞기도 하고 틀리기도 하다.** 누가 먼저 닫는지, 그리고 그 닫기가 FIN 인지 RST 인지에 달렸다. 상대가 `Connection: close` 로 끊는 구성이면 클라이언트 쪽에는 TIME_WAIT 이 안 쌓이고, 풀의 TTL·eviction 으로 클라이언트가 버리는 구성이면 쌓인다.
 
-> 덤으로, caller 의 TIME_WAIT 을 필터 없이 세면 재사용을 켜도 30~40개가 잡히는데 전부 **k6 ↔ caller** 커넥션이다. caller 톰캣이 `maxKeepAliveRequests` 기본값 100 에 걸려 닫고 있던 것이다 — 12번을 부하 쪽에서 우연히 먼저 본 셈이다.
+> caller 의 TIME_WAIT 을 필터 없이 세면 재사용을 켜도 30~40개가 잡히는데 전부 **k6 ↔ caller** 커넥션이다. caller 톰캣이 `maxKeepAliveRequests` 기본값 100 에 걸려 닫고 있던 것이다 — 12번과 같은 동작이 부하 생성기 ↔ caller 구간에서 나타난 것이다.
 
 #### 상한이 없으면 뭐가 먼저 바닥나나
 
@@ -750,13 +791,13 @@ fd 쪽은 소켓 하나가 fd 하나를 먹기 때문이다. 256개 안에는 JV
 
 실제로 뭐가 적용됐는지는 기동 로그(`pool: maxTotal=…, maxPerRoute=…`)에서 읽어 결과에 같이 찍는다.
 
-| 조건 | 실제 적용값 | 평균 | TPS | 부하 중 |
-| --- | --- | --- | --- | --- |
-| total 200, perRoute 미설정 | maxTotal=200, **maxPerRoute=5** | 740.7ms | 66 | leased=5 pending=45 |
-| 둘 다 미설정 | maxTotal=25, **maxPerRoute=5** | 741.8ms | 66 | leased=5 pending=45 |
-| total 200, perRoute 50 | maxTotal=200, maxPerRoute=50 | 73.7ms | **676** | leased=50 pending=0 |
+| # | 조건 | 실제 적용값 | 평균 | TPS | 부하 중 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | total 200, perRoute 미설정 | maxTotal=200, **maxPerRoute=5** | 740.7ms | 66 | leased=5 pending=45 |
+| 2 | 둘 다 미설정 | maxTotal=25, **maxPerRoute=5** | 741.8ms | 66 | leased=5 pending=45 |
+| 3 | total 200, perRoute 50 | maxTotal=200, maxPerRoute=50 | 73.7ms | **676** | leased=50 pending=0 |
 
-앞의 두 줄이 **완전히 같다.** `maxTotal` 을 25 에서 200 으로 8배 늘려도 TPS 가 66 에서 66 이다. 업스트림이 하나면 route 도 하나뿐이라 `maxPerRoute` 가 먼저 걸리고, `maxTotal` 은 도달할 일이 없는 숫자다. perRoute 까지 올리면 **TPS 가 10배**가 된다.
+1·2 가 **완전히 같다.** `maxTotal` 을 25 에서 200 으로 8배 늘려도 TPS 가 66 에서 66 이다. 업스트림이 하나면 route 도 하나뿐이라 `maxPerRoute` 가 먼저 걸리고, `maxTotal` 은 도달할 일이 없는 숫자다. perRoute 까지 올리면 **TPS 가 10배**가 된다.
 
 `leased=5 pending=45` 가 그림을 그대로 보여준다. 50개 요청 중 5개만 커넥션을 잡고 45개는 큐에서 기다린다.
 
@@ -786,7 +827,7 @@ for n in 1 25 50 100 500; do ./scripts/run-case.sh "풀 $n" $n $n false; done
 
 ### 4번 — 재사용 이득 = 핸드셰이크 + slow start
 
-먼저 커넥션 수립 비용을 `curl` 로 분해한다. 매번 새 커넥션이어야 하므로 `Connection: close` 로 쏘고, 첫 요청은 DNS 때문에 튀므로 3회 중앙값을 쓴다. TLS 는 1.3 으로 협상됐다.
+먼저 커넥션 수립 비용을 `curl` 로 분해한다. 매번 새 커넥션이어야 하므로 `Connection: close` 로 쏘고, 첫 요청은 ARP 에 1 RTT 를 더 쓰므로 3회 중앙값을 쓴다(아래). TLS 는 1.3 으로 협상됐다.
 
 ```bash
 # 브리지 네트워크 안에서 (호스트에서 쏘면 publish 된 포트가 핸드셰이크 비용을 가린다)
@@ -794,6 +835,29 @@ docker run --rm --network docker_default pool-lab-net sh -c \
   "curl -sk -o /dev/null -H 'Connection: close' \
         -w '%{time_connect} %{time_appconnect}\n' https://upstream-tls:8443/echo"
 ```
+
+`curl` 의 타이머는 구간 길이가 아니라 **요청 시작부터의 누적값**이다. 스톱워치 랩타임이라고 보면 된다.
+
+```
+요청 시작
+  │
+  ├─ time_namelookup     DNS 이름 해석 끝
+  │
+  ├─ time_connect        TCP 핸드셰이크 끝 (SYN → SYN-ACK → ACK)
+  │
+  ├─ time_appconnect     TLS 핸드셰이크 끝 — 암호화 통로 완성, 아직 요청 안 보냄
+  │
+  ├─ time_starttransfer  첫 바이트 도착 (= TTFB)
+  │
+  └─ time_total          응답 다 받음
+```
+
+표의 두 열이 가리키는 건 각각 이렇다.
+
+- **`connect`** — TCP 핸드셰이크(SYN → SYN-ACK → ACK)가 끝난 시점이다. 여기까지면 바이트를 흘릴 수는 있지만 아직 평문이고, http 는 이 다음에 바로 요청을 보낸다. 앞단의 DNS 해석 시간(`time_namelookup`)도 누적값이라 이 안에 들어 있다.
+- **`appconnect`** — TLS 핸드셰이크까지 끝난 시점이다. TCP 위에 얹히는 애플리케이션 레벨 커넥션이라 이 이름이 붙었고, https 일 때만 값이 찍힌다.
+
+그래서 **TLS 핸드셰이크만의 비용은 `appconnect - connect`** 다 — 아래 세 줄이 순서대로 27.8 / 41.7 / 66.7ms 다.
 
 | RTT | http `connect` | https `connect` | https `appconnect`(TLS 완료) |
 | --- | --- | --- | --- |
@@ -803,6 +867,47 @@ docker run --rm --network docker_default pool-lab-net sh -c \
 
 **RTT 가 0이어도 https 는 28.7ms 가 든다.** TLS 핸드셰이크는 왕복만 드는 게 아니라 비대칭키 연산이라는 CPU 비용이 따로 있다. "RTT × 왕복수" 로만 예측했던 게 여기서 틀렸다. RTT 가 붙으면 그 위에 왕복분이 더해져서, 수립 비용이 http 의 **2~3배**가 된다.
 
+<details markdown="1">
+<summary>첫 요청이 튀는 건 DNS 가 아니라 ARP 였다</summary>
+
+같은 컨테이너에서 curl 프로세스를 여섯 번 돌리면 1회차만 `connect` 가 두 배다. 그런데 `namelookup` 은 거의 그대로다.
+
+| 회차 | `namelookup` | `connect` |
+| --- | --- | --- |
+| 1 | 1.56ms | **44.7ms** |
+| 2 | 1.08ms | 21.8ms |
+| 3~6 | 0.8~1.2ms | 21.7~23.7ms |
+
+DNS 몫은 0.5ms 뿐이다. 원인을 둘로 갈라봤다.
+
+```bash
+# A. DNS 만 미리 녹여놓고 쏜다
+docker run --rm --network docker_default pool-lab-net sh -c \
+  'getent hosts upstream-tls >/dev/null; curl -sk -o /dev/null -H "Connection: close" \
+     -w "connect=%{time_connect}\n" https://upstream-tls:8443/echo'
+# -> connect=0.042950   그대로 튄다
+
+# B. ping 으로 ARP 까지 미리 하고 쏜다
+docker run --rm --network docker_default pool-lab-net sh -c \
+  'ping -c2 upstream-tls >/dev/null; curl -sk ... '
+# -> connect=0.022295   안 튄다
+```
+
+같은 브리지 서브넷이라 SYN 을 내보내려면 커널이 상대의 MAC 을 먼저 알아야 한다. 컨테이너가 막 떴을 때는 이웃 테이블이 비어 있어서, SYN 이 큐에 붙들린 채 ARP request 가 나갔다 reply 가 돌아오기를 기다린다. 그 왕복에도 netem 지연이 똑같이 걸려서 1 RTT 가 더 붙는다. ping 출력 자체가 같은 얘기를 한다 — `min/avg/max = 20.578/31.452/42.327`, 첫 패킷만 두 배다.
+
+```
+--- 컨테이너 시작 직후
+(이웃 테이블 비어 있음)
+--- curl 1회 후
+172.21.0.6 dev eth0 lladdr 02:42:ac:15:00:06 REACHABLE
+```
+
+한 번 `REACHABLE` 이 되면 수십 초 유지되니 이후 요청은 1 RTT 만 낸다. **"커넥션 수립 = SYN 왕복" 모델에 없는 L2 해석 단계가 첫 패킷에만 끼는 것이다.**
+
+DNS 가 싼 건 이 환경 덕이다. 컨테이너의 리졸버가 Docker 내장 DNS(`127.0.0.11`)고, 컨테이너 이름은 데몬이 자기 테이블에서 바로 답한다. 그 경로는 업스트림에 걸어둔 netem 도 타지 않는다. 외부 도메인이면 리졸버까지 나가느라 수십 ms 가 붙고, 그때는 첫 요청이 DNS 때문에 튀는 게 맞다. `curl` 의 `time_connect` 은 프로세스 시작부터의 누적값이라 `time_namelookup` 을 포함하므로, 그랬다면 위 표의 `connect` 열에 그대로 드러난다.
+
+</details>
+
 부하를 걸어 TPS 로 보면 이렇다. 프로토콜은 업스트림 주소로, 본문 크기는 `SIZE_BYTES` 로 바꾼다. (RTT 20ms)
 
 ```bash
@@ -811,13 +916,13 @@ UPSTREAM_BASE_URL=https://upstream-tls:8443 ./scripts/run-case.sh "https" 50 50 
 SIZE_BYTES=102400 ./scripts/run-case.sh "100KB" 50 50 false
 ```
 
-| | 재사용 O | 재사용 X | 차이 | TPS |
-| --- | --- | --- | --- | --- |
-| http | 73.9ms | 95.2ms | **+21.3ms** | 675 → 524 (-22%) |
-| https | 73.8ms | 147.1ms | **+73.3ms** | 674 → 338 (**-50%**) |
-| http, 본문 100KB | 74.1ms | 154.8ms | **+80.7ms** | 672 → 321 (-52%) |
+| # | | 재사용 O | 재사용 X | 차이 | TPS |
+| --- | --- | --- | --- | --- | --- |
+| 1 | http | 73.9ms | 95.2ms | **+21.3ms** | 675 → 524 (-22%) |
+| 2 | https | 73.8ms | 147.1ms | **+73.3ms** | 674 → 338 (**-50%**) |
+| 3 | http, 본문 100KB | 74.1ms | 154.8ms | **+80.7ms** | 672 → 321 (-52%) |
 
-**재사용만 되면 프로토콜이 무의미해진다.** 첫 열이 전부 74ms 다. https 든 100KB 든 커넥션이 이미 서 있으면 차이가 없다.
+**재사용만 되면 프로토콜이 무의미해진다.** 첫 열이 전부 74ms 다. https 든 100KB 든 핸드셰이크를 이미 치러둔 커넥션을 쓰면 차이가 없다.
 
 **재사용을 잃었을 때의 손해가 https 는 http 의 3.4배다**(73.3 / 21.3). 원래 질문이었던 "https 일수록 이득이 큰가"의 답이 이 숫자다. TPS 는 절반이 된다.
 
@@ -879,22 +984,82 @@ printf '%-5s %-8s | 요청 %-6s TPS %-5s | CPU 총 caller=%-7sms upstream=%-7sms
 
 </details>
 
-| 조건 | TPS | 요청당 caller CPU | 재사용 상실 비용 |
-| --- | --- | --- | --- |
-| http 재사용 O | 664 | 1,835us | |
-| http 재사용 X | 519 | 2,331us | **+496us** |
-| https 재사용 O | 627 | 2,588us | |
-| https 재사용 X | 262 | 7,719us | **+5,131us** |
+| # | 조건 | TPS | 요청당 caller CPU | 재사용 상실 비용 |
+| --- | --- | --- | --- | --- |
+| 1 | http 재사용 O | 664 | 1,835us | |
+| 2 | http 재사용 X | 519 | 2,331us | **+496us** |
+| 3 | https 재사용 O | 627 | 2,588us | |
+| 4 | https 재사용 X | 262 | 7,719us | **+5,131us** |
 
 **재사용을 잃었을 때 드는 CPU 가 https 는 http 의 10.3배다**(5,131 / 496). 업스트림 쪽도 +331us 대 +3,344us 로 10.1배다.
 
 앞에서 응답시간으로 본 배수는 3.4배였는데 CPU 로는 10배다. **지연은 기다리는 시간(RTT)이 섞여서 희석되지만 CPU 는 순수한 연산**이라 그렇다. 커넥션당 비용이니 TPS 가 높을수록 그대로 곱해진다 — 초당 500 커넥션이면 캘러 코어 2.5개어치다.
 
-첫 줄과 셋째 줄의 차이(1,835 → 2,588us)도 볼 만하다. **재사용이 잘 되고 있어도 https 는 요청당 CPU 가 41% 더 든다.** 이건 핸드셰이크가 아니라 레코드 암복호화(대칭키) 비용이라 재사용으로 없앨 수 없는 몫이다.
+1 과 3 의 차이(1,835 → 2,588us)는 핸드셰이크와 별개다. **재사용이 잘 되고 있어도 https 는 요청당 CPU 가 41% 더 든다.** 이건 핸드셰이크가 아니라 레코드 암복호화(대칭키) 비용이라 재사용으로 없앨 수 없는 몫이다.
 
 > 업스트림 CPU 를 http 와 https 사이에 직접 비교하면 안 된다. `upstream` 에만 톰캣 MBean 레지스트리가 켜져 있어서 조건이 다르다. 같은 컨테이너에서 재사용만 켰다 껐다 한 **증분**은 유효하다.
 
-세 번째 줄이 slow start 다. 본문 0바이트일 때 재사용 상실 비용은 21.3ms(= 1 RTT, 핸드셰이크)인데, 100KB 면 80.7ms 로 는다. 늘어난 **59.4ms 는 핸드셰이크가 아니라 congestion window 를 키우는 시간**이다. RTT 20ms 로 나누면 약 3 RTT — 초기 cwnd 로는 100KB 를 한 번에 못 밀어서 세 번 더 왕복한 것이다. 같은 100KB 도 따뜻한 커넥션에서는 0.2ms 밖에 안 든다.
+3 이 slow start 다. 본문 0바이트일 때 재사용 상실 비용은 21.3ms(= 1 RTT, 핸드셰이크)인데, 100KB 면 80.7ms 로 는다. 늘어난 **59.4ms 는 핸드셰이크가 아니라 congestion window 를 키우는 시간**이다. RTT 20ms 로 나누면 약 3 RTT — 초기 cwnd 로는 100KB 를 한 번에 못 밀어서 세 번 더 왕복한 것이다. 같은 100KB 도 cwnd 가 이미 커져 있는 커넥션에서는 0.2ms 밖에 안 든다.
+
+<details markdown="1">
+<summary>congestion window 와 slow start — 왜 100KB 가 세 번 왕복하나</summary>
+
+애플리케이션이 `write` 로 100KB 를 넘겨도 그게 곧바로 선로로 나가는 건 아니다. 두 단계가 따로다.
+
+```
+애플리케이션:  write(socket, 데이터)   -> 커널 송신 버퍼에 복사하고 바로 리턴
+커널(TCP):     버퍼에서 꺼내 세그먼트로 쪼개 내보낸다
+               ^ 지금 당장 얼마나 내보낼지는 커널이 정한다
+```
+
+그 "얼마나"가 **congestion window(cwnd)** 다. ACK 를 아직 못 받은 채로 네트워크에 띄워둘 수 있는 최대 바이트 수이고, 송신 측 커널이 혼자 들고 있는 값이다. 중간 경로가 초당 몇 바이트를 버티는지는 아무도 알려주지 않는다. 처음부터 전속력으로 쏘면 라우터 큐가 넘쳐 패킷이 버려지고 그 재전송이 혼잡을 더 키우니, 작게 시작해서 올려본다.
+
+수신 측이 헤더로 통보하는 receive window 와는 다른 값이다.
+
+| | 누가 정하나 | 무엇을 막나 |
+| --- | --- | --- |
+| receive window (rwnd) | 수신 측이 TCP 헤더로 통보 | 받는 쪽 버퍼 넘침 |
+| **congestion window (cwnd)** | 송신 측이 스스로 추정 | 중간 네트워크 혼잡 |
+
+지금 나갈 수 있는 양은 `min(cwnd, rwnd)` 다.
+
+**slow start** 는 커넥션이 새로 섰을 때 cwnd 를 ACK 가 돌아올 때마다 두 배로 키우는 구간이다. 이름은 slow 지만 증가는 지수적이다. 리눅스 초기값은 10 MSS 고, 임계치(`ssthresh`)에 닿거나 손실이 보이면 그 뒤로는 선형으로 천천히 올린다. 실제 소켓에서 둘 다 보인다.
+
+```bash
+# 컨테이너의 네트워크 네임스페이스를 공유해서 소켓을 본다 (caller 이미지에는 ss 가 없다)
+docker run --rm --network container:docker_caller_1 pool-lab-net \
+  ss -tin state established "( dport = :8080 )"
+```
+
+```
+# caller 쪽 소켓 — 작은 요청만 보내니 초기값 그대로다
+mss:1448 pmtu:1500 cwnd:10 bytes_sent:633 ... snd_wnd:64768
+
+# upstream 쪽 소켓 — 본문을 2MB 쯤 보낸 뒤. 10 에서 올라가 ssthresh 에 닿았다
+mss:1448 pmtu:1500 cwnd:16 ssthresh:16 bytes_sent:2038433 ...
+```
+
+MSS 1448 로 100KB 를 나눠 보내면 이렇게 된다.
+
+| 왕복 | 그 번에 나갈 수 있는 양 | 누적 |
+| --- | --- | --- |
+| 1 | 10 × 1448 = 14.5KB | 14.5KB |
+| 2 | 20 × 1448 = 29.0KB | 43.4KB |
+| 3 | 40 × 1448 = 57.9KB | **101.3KB** |
+
+세 번 나눠 보내고 사이사이 ACK 를 기다리니 위의 59.4ms 가 나온다. **그 시간은 데이터가 느려서가 아니라 커널이 "더 보내도 되나"를 세 번 확인한 시간이다.**
+
+cwnd 는 소켓에 붙은 상태라서 같은 커넥션을 계속 쓰면 커진 값이 남아 있다. 그래서 같은 100KB 가 0.2ms 다. 다만 영원하지는 않다.
+
+```
+net.ipv4.tcp_slow_start_after_idle = 1
+net.ipv4.tcp_congestion_control = cubic
+rto:201     # 소켓의 재전송 타이머. ss -i 출력에 찍힌다
+```
+
+이 값이 1 이면 **유휴가 RTO(여기선 약 200ms)를 넘긴 커넥션은 cwnd 가 초기값으로 되돌려진다.** 소켓은 `ESTABLISHED` 로 멀쩡한데 cwnd 만 리셋된다. 풀 입장에서는, 재사용이 핸드셰이크는 확실히 아껴주지만 **띄엄띄엄 쓰이는 커넥션에서는 slow start 비용은 다시 낼 수 있다**는 뜻이다. (이 리셋 동작은 sysctl 과 커널 동작 기준이고 재보지는 않았다. 위 `ss` 출력도 netem 을 뗀 상태에서 본 것이라, 20ms 조건의 재현이 아니라 cwnd 가 어떤 값인지 보려고 붙였다.)
+
+</details>
 
 ### 5·6번 — 재사용이 꺼져도 풀은 동시성 상한으로 남는다
 
@@ -907,11 +1072,15 @@ for n in 5 25 50; do
 done
 ```
 
-| 풀 | 재사용 O | 재사용 X | 부하 중 |
+앞 숫자는 k6 가 잰 평균 응답시간(`http_req_duration` 의 `avg`)이고 뒤가 TPS 다. 3번 표의 `평균` 열과 같은 값이다.
+
+| 풀 | 재사용 O (평균/TPS) | 재사용 X (평균/TPS) | 부하 중 |
 | --- | --- | --- | --- |
 | 5 | 732.5ms / 67 TPS | 965.1ms / 51 TPS | leased=5 pending=45 **callerThreads=51** |
 | 25 | 146.2ms / 340 TPS | 187.8ms / 265 TPS | leased=25 pending=25 **callerThreads=51** |
 | 50 | 75.3ms / 662 TPS | 95.2ms / 524 TPS | leased=50 pending=0 **callerThreads=51** |
+
+응답시간을 먼저 읽어야 표가 보인다. **732.5ms 중 일한 시간은 75ms 뿐이다.** 풀 50 일 때의 75.3ms 가 줄을 안 섰을 때의 순수 작업시간(업스트림 `delayMs=50` + RTT 20ms + 나머지)이고, 풀이 5 면 동시 요청 50개가 커넥션 5개를 돌려쓰니 열 배로 직렬화된다 — `75.3 × 10 ≈ 753ms`, 실측 732.5ms. 나머지 657ms 는 lease 를 기다린 시간이고, 그 대기자 수가 오른쪽의 `pending=45` 다. 재사용 X 열도 같은 식이다 — 4번에서 핸드셰이크를 매번 내면 요청당 95.2ms 였으니 `95.2 × 10 ≈ 952ms`, 실측 965.1ms.
 
 **재사용이 꺼져도 TPS 는 풀 사이즈에 정비례한다.** 5:25:50 에 51:265:524 로 거의 정확히 1:5:10 이다. 재사용이라는 기능이 빠져도 **동시성 상한이라는 기능은 그대로 남는다** — 풀이 세마포어로 격하된다는 게 이 뜻이다.
 
@@ -971,20 +1140,20 @@ printf '%-20s | call avg=%-9s p95=%-9s | local avg=%-9s p95=%-9s | 실패=%-7s |
 
 `/call` 과 `/local` 은 별도 `Trend` 로 따로 집계하고, `callerThreads`·`leased`·`ESTABLISHED` 는 18초 시점에 한 번 뜬다.
 
-| 조건 | `/call` p95 | **`/local` p95** | 실패율 | callerThreads | leased | ESTABLISHED |
-| --- | --- | --- | --- | --- | --- | --- |
-| CRT 60초 (사실상 무한) | 30.0s | **20.36s** | 0% | **200** | 50 | 50 |
-| CRT 200ms | 3.09s | **2.28ms** | 83% | 71 | 50 | 50 |
-| CRT 0 (`Timeout.DISABLED`) | 3.0s | 2.55ms | 83% | 50 | 49 | 50 |
-| **풀 10000**, CRT 0 | 7.89s | **4.89s** | 0% | **200** | 198 | **200** |
+| # | 조건 | `/call` p95 | **`/local` p95** | 실패율 | callerThreads | leased | ESTABLISHED |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | CRT 60초 (사실상 무한) | 30.0s | **20.36s** | 0% | **200** | 50 | 50 |
+| 2 | CRT 200ms | 3.09s | **2.28ms** | 83% | 71 | 50 | 50 |
+| 3 | CRT 0 (`Timeout.DISABLED`) | 3.0s | 2.55ms | 83% | 50 | 49 | 50 |
+| 4 | **풀 10000**, CRT 0 | 7.89s | **4.89s** | 0% | **200** | 198 | **200** |
 
-**풀 상한이 있어도 포기가 없으면 소용없다.** 첫 줄에서 caller 톰캣 스레드 200개가 전부 먹히고, **업스트림을 전혀 안 부르는 `/local` 의 p95 가 20.36초**가 됐다. 풀이 막아준 건 소켓 50개뿐이고, 막지 못한 건 스레드 200개다. 소켓 점유가 스레드 점유로 자리를 옮겼을 뿐이다.
+**풀 상한이 있어도 포기가 없으면 소용없다.** 1 에서 caller 톰캣 스레드 200개가 전부 먹히고, **업스트림을 전혀 안 부르는 `/local` 의 p95 가 20.36초**가 됐다. 풀이 막아준 건 소켓 50개뿐이고, 막지 못한 건 스레드 200개다. 소켓 점유가 스레드 점유로 자리를 옮겼을 뿐이다.
 
 `connectionRequestTimeout` 을 200ms 로 주면 `/local` p95 가 **2.28ms** 다. 약 9,000배 차이다. `/call` 은 83% 가 실패하지만, 그게 격리가 하는 일이다 — 살릴 수 없는 요청을 빨리 포기해서 나머지를 살린다. 흔히 bulkhead 라 부르는 것이 이 동작이다.
 
-마지막 줄이 8번이다. 상한을 사실상 없애면(10000) ESTABLISHED 가 **200개**까지 늘고 `/local` p95 도 4.89초로 무너진다. 200 에서 멈춘 건 caller 톰캣 스레드가 200개라서지 풀이 막은 게 아니다.
+4 가 8번이다. 상한을 사실상 없애면(10000) ESTABLISHED 가 **200개**까지 늘고 `/local` p95 도 4.89초로 무너진다. 200 에서 멈춘 건 caller 톰캣 스레드가 200개라서지 풀이 막은 게 아니다.
 
-세 번째 줄은 덤으로 알게 된 것이다. `connectionRequestTimeout` 을 0(`Timeout.DISABLED`)으로 두면 **무한 대기가 아니라 즉시 실패**다. 스레드가 50에 머물고 83% 가 곧바로 떨어졌다. "무한"을 표현하려면 0 이 아니라 충분히 큰 값을 줘야 한다.
+3 은 `connectionRequestTimeout` 을 0(`Timeout.DISABLED`)으로 둔 경우다. **무한 대기가 아니라 즉시 실패**다. 스레드가 50에 머물고 83% 가 곧바로 떨어졌다. "무한"을 표현하려면 0 이 아니라 충분히 큰 값을 줘야 한다.
 
 ### 9~12번 — stale connection
 
@@ -1009,7 +1178,94 @@ $ curl -D - http://upstream:8080/echo
 
 HttpClient5 는 명시해서 보내므로 힌트를 받는다.
 
-그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 알려주게 두고(기본값), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
+**이 `timeout=N` 의 출처는 톰캣 커넥터의 `keepAliveTimeout` 이고, 스프링 부트에서는 `server.tomcat.keep-alive-timeout` 이다.** 여기서 upstream 쪽 서버 설정은 이것뿐이다.
+
+```yaml
+# upstream/src/main/resources/application.yml
+server:
+  tomcat:
+    keep-alive-timeout: ${KEEP_ALIVE_TIMEOUT:60000}          # 9번은 1000, 13번은 5000 으로 띄운다
+    max-keep-alive-requests: ${MAX_KEEP_ALIVE_REQUESTS:100}
+```
+
+부트가 하는 일은 이 값을 커넥터의 프로토콜 핸들러에 꽂는 것뿐이다.
+
+```java
+// org.springframework.boot.autoconfigure.web.embedded.TomcatWebServerFactoryCustomizer.java
+map.from(properties::getKeepAliveTimeout).whenNonNull()
+        .to(keepAliveTimeout -> customizeKeepAliveTimeout(factory, keepAliveTimeout));
+
+private void customizeKeepAliveTimeout(ConfigurableTomcatWebServerFactory factory, Duration keepAliveTimeout) {
+    factory.addConnectorCustomizers(connector -> {
+        ProtocolHandler handler = connector.getProtocolHandler();
+        // ... HTTP/2 업그레이드 프로토콜에도 같이 꽂는다
+        if (handler instanceof AbstractProtocol<?> protocol) {
+            protocol.setKeepAliveTimeout((int) keepAliveTimeout.toMillis());
+        }
+    });
+}
+```
+
+헤더를 실제로 쓰는 자리는 톰캣에 한 군데다. 위 curl 결과가 여기서 나온다.
+
+```java
+// org.apache.coyote.http11.Http11Processor.java — prepareResponse()
+if (protocol.getUseKeepAliveResponseHeader()) {
+    boolean connectionKeepAlivePresent = isConnectionToken(
+            request.getMimeHeaders(), Constants.KEEP_ALIVE_HEADER_VALUE_TOKEN);   // 요청에 keep-alive 가 있나
+    if (connectionKeepAlivePresent) {
+        int keepAliveTimeout = protocol.getKeepAliveTimeout();
+        if (keepAliveTimeout > 0) {
+            String value = "timeout=" + keepAliveTimeout / 1000L;                 // ms -> 초, 정수 나눗셈
+            headers.setValue(Constants.KEEP_ALIVE_HEADER_NAME).setString(value);
+            // ... Connection: keep-alive 도 같이 붙인다
+```
+
+**안 설정하면 `connectionTimeout` 이 쓰인다.** 필드가 `Integer` 라서 null 이면 커넥션 타임아웃으로 떨어지고, 부트는 `server.tomcat.connection-timeout` 에도 기본값을 주지 않으니 톰캣의 `soTimeout` 기본값 20초가 남는다. **아무것도 설정하지 않은 부트 서버는 `Keep-Alive: timeout=20` 을 알려준다**는 뜻이다. `-1` 로 주면 타임아웃이 없고, `max-keep-alive-requests` 를 0 이나 1 로 주면 keep-alive 자체가 꺼진다(응답에 `Connection: close` 가 붙는 12번의 모양이 된다).
+
+```java
+// org.apache.tomcat.util.net.AbstractEndpoint.java
+public int getKeepAliveTimeout() {
+    if (keepAliveTimeout == null) {
+        return getConnectionTimeout();     // = soTimeout, 기본 20000
+    }
+    return keepAliveTimeout.intValue();
+}
+```
+
+**1초 미만으로 주면 거꾸로 사각지대가 생긴다.** 헤더 단위가 초이고 정수 나눗셈이라 `keep-alive-timeout: 500ms` 는 `timeout=0` 으로 나간다. 클라이언트는 그 값을 `TimeValue.ofSeconds(0)` 으로 읽고, 양수가 아닌 값은 `Deadline.calculate` 가 `MAX_VALUE` 로 바꾼다 — **`timeToLive` 외에 만료가 없는 엔트리**가 된다. 톰캣은 0.5초에 끊는데 풀은 무기한 들고 있는 셈이고, 디버그 로그도 `can be kept alive for 1 SECONDS` 가 아니라 `indefinitely` 로 찍힌다. 소스를 따라간 결론이고 실측은 안 했다 — 9번은 `timeout=1` 이 나오는 1000ms 로 돌렸다.
+
+그래서 진짜 stale 은 **말없이 끊는 무언가**로 만들어야 한다. 여기서는 중간 장비를 쓴다(클라이언트 쪽에서 그 말을 무시하게 만들어도 된다 — 13번). 톰캣은 `timeout=60` 을 알려주게 두고(위 `keep-alive-timeout: 60000`), 경로 중간의 toxiproxy 가 그보다 먼저 아무 통보 없이 커넥션을 끊는다. LB·프록시가 idle timeout 으로 끊는 상황과 같은 모양이다.
+
+```
+ caller (풀)              toxiproxy              upstream (톰캣)
+     │                        │                        │
+ 1)  ├─── GET /call ─────────►├───────────────────────►│
+     │◄─── 200 + Keep-Alive: timeout=60 ───────────────┤
+     │   풀: available=1  "60초는 재사용해도 된다"
+     │                        │                        │
+ 2)  │                 disable → enable                │  ← 톰캣은 아무 말도 안 했다
+     │◄─── FIN ───────────────┤                        │
+     │   풀: available=1 (그대로)  /  커널: CLOSE_WAIT=1
+     │                        │                        │
+ 3)  ├─── GET /call ─────────►✗   쓰기는 성공 (half-close)
+     │                            읽기에서 EOF
+     │   → NoHttpResponseException
+```
+
+**2)에서 FIN 을 받았는데 왜 풀에서 안 닫히나.** 커널에서 소켓은 `CLOSE_WAIT` 으로 가지만 `PoolEntry` 는 `available` 에 그대로 남는다. blocking 클라이언트라 **유휴 소켓을 읽고 있는 스레드가 없어서** EOF 가 도착한 걸 아무도 못 본다. 비동기 클라이언트라면 I/O 리액터가 그 fd 를 selector 에 올려둔 채라 즉시 안다. `conn.isOpen()` 도 도움이 안 된다 — 하는 일이 `socketHolderRef.get() != null`, 즉 **"내가 닫았나"** 뿐이다.
+
+그래서 죽은 걸 알아채는 지점은 세 군데고, 전부 누군가 건드려야 돌아간다.
+
+| 언제 | 무엇이 | 하는 일 |
+| --- | --- | --- |
+| lease 직전 | `timeToLive` 만료 | `discardConnection(GRACEFUL)` |
+| lease 직전 | `validateAfterInactivity`(기본 2초) 경과 | `conn.isStale()` → `discardConnection(IMMEDIATE)` |
+| 백그라운드 | `evictIdleConnections` | 기본 꺼짐. 안 켜면 아무도 안 돈다 |
+
+`isStale()` 이 FIN 을 실제로 확인하는 유일한 코드다. **1ms 타임아웃으로 소켓을 한 번 읽어보고** EOF(`bytesRead < 0`)면 죽은 것으로 본다.
+
+끊은 건 2)의 중간 장비인데 풀이 들고 있는 유효기간은 1)에서 받은 60초다. 그 사이를 메우는 건 클라이언트 쪽 검증뿐이고, 그게 언제 도는지가 9번과 11번을 가른다.
 
 부하가 아니라 **커넥션 1개로 딱 2번** 쏜다. 첫 요청으로 풀에 커넥션을 만들고, 그걸 죽인 뒤, 두 번째 요청이 그 커넥션을 집게 한다.
 
@@ -1066,19 +1322,82 @@ printf '검증=%-8s 재시도=%-5s idle=%-5s | 요청 전: %-44s | HTTP %-3s | %
 
 예외 이름은 4)와 5) 사이에 새로 찍힌 caller 로그에서 뽑는다.
 
-| 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
-| --- | --- | --- | --- | --- | --- |
-| 2초(기본) | off | 0.3초 | available=1, ESTABLISHED=0, **CLOSE_WAIT=1** | **HTTP 500** | `NoHttpResponseException` |
-| 2초(기본) | on | 0.3초 | 〃 | HTTP 200 | (로그에만 남는다) |
-| 2초(기본) | off | 3초 | 〃 | HTTP 200 | 없음 |
+| # | 클라 검증 | 재시도 | idle | 요청 전 상태 | 결과 | 예외 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2초(기본) | off | 0.3초 | available=1, ESTABLISHED=0, **CLOSE_WAIT=1** | **HTTP 500** | `NoHttpResponseException` |
+| 2 | 2초(기본) | on | 0.3초 | 〃 | HTTP 200 | (로그에만 남는다) |
+| 3 | 2초(기본) | off | 3초 | 〃 | HTTP 200 | 없음 |
 
 **9번** — idle 0.3초는 검증 주기 2초 안쪽이라 검증을 건너뛴다. 죽은 커넥션에 요청이 실리고, 쓰기는 half-close 라 성공한 뒤 읽기에서 터진다.
 
 **10번** — 같은 조건에 재시도만 켜면 HTTP 200 이다. 예외는 로그에만 남고 호출자는 아무것도 모른다. `DefaultHttpRequestRetryStrategy` 의 비재시도 예외 목록에 `NoHttpResponseException` 이 없어서 멱등 요청이 조용히 한 번 더 나간다. **"우리는 이 문제 없는데요" 의 정체가 대개 이것이다.**
 
-**11번** — 세 줄 모두 `available=1` 인데 `ESTABLISHED=0`, `CLOSE_WAIT=1` 이다. 풀이 "빌려줄 수 있다"고 세는 그 1개가 시체다. 0번의 `leased` 와 같은 얘기가 `available` 쪽에서도 성립한다.
+`DefaultHttpRequestRetryStrategy` 가 기본 생성자에서 넘기는 비재시도 예외는 여섯 개다.
 
-세 번째 줄은 방어선이 어디인지 보여준다. idle 3초는 검증 주기 2초를 넘겨서 lease 직전에 stale 체크가 돌고, 죽은 커넥션을 버리고 새로 맺는다. **클라이언트 검증 주기 < 상대가 끊는 주기**가 지켜지면 막힌다.
+```java
+// org.apache.hc.client5.http.impl.DefaultHttpRequestRetryStrategy.java
+public DefaultHttpRequestRetryStrategy(int maxRetries, TimeValue defaultRetryInterval) {
+    this(maxRetries, defaultRetryInterval,
+            Arrays.asList(                            // 재시도하지 않을 예외
+                    InterruptedIOException.class,
+                    UnknownHostException.class,
+                    ConnectException.class,
+                    ConnectionClosedException.class,
+                    NoRouteToHostException.class,
+                    SSLException.class),
+            Arrays.asList(                            // 재시도할 상태 코드
+                    HttpStatus.SC_TOO_MANY_REQUESTS,      // 429
+                    HttpStatus.SC_SERVICE_UNAVAILABLE));  // 503
+}
+
+public DefaultHttpRequestRetryStrategy() {
+    this(1, TimeValue.ofSeconds(1L));   // INSTANCE 가 쓰는 기본값
+}
+```
+
+| 예외 | 왜 재시도하지 않나 |
+| --- | --- |
+| `InterruptedIOException` | 타임아웃·인터럽트 (`SocketTimeoutException` 이 여기 포함된다) |
+| `UnknownHostException` | DNS 가 안 되면 다시 해도 안 된다 |
+| `ConnectException` | 상대가 연결을 거부했다 |
+| `ConnectionClosedException` | 응답 도중 끊김 — 서버가 요청을 받았을 수 있다 |
+| `NoRouteToHostException` | 경로 자체가 없다 |
+| `SSLException` | 핸드셰이크·인증서 문제 |
+
+판정은 이 순서로 내려간다.
+
+```java
+// org.apache.hc.client5.http.impl.DefaultHttpRequestRetryStrategy.java — retryRequest()
+@Override
+public boolean retryRequest(HttpRequest request, IOException exception, int execCount, HttpContext context) {
+    if (execCount > this.maxRetries) {
+        return false;                       // 횟수 초과
+    }
+    if (this.nonRetriableIOExceptionClasses.contains(exception.getClass())) {
+        return false;                       // 목록에 정확히 일치
+    }
+    for (Class<? extends IOException> rejectException : this.nonRetriableIOExceptionClasses) {
+        if (rejectException.isInstance(exception)) {
+            return false;                   // 목록의 하위 타입
+        }
+    }
+    if (request instanceof CancellableDependency && ((CancellableDependency) request).isCancelled()) {
+        return false;                       // 취소된 요청
+    }
+    // Retry if the request is considered idempotent
+    return handleAsIdempotent(request);     // 여기까지 오면 메서드가 결정한다
+}
+```
+
+`NoHttpResponseException` 은 이 목록에 없으므로 판정이 마지막 줄의 `Method.isIdempotent()` 로 내려간다. **비멱등은 POST·CONNECT 뿐**이고 GET·HEAD·PUT·DELETE·TRACE·OPTIONS 는 전부 재시도 대상이다. 멱등은 **HTTP 명세상 메서드의 성질**일 뿐이라, `GET /orders/pay?id=1` 처럼 GET 으로 상태를 바꾸는 API 도 라이브러리는 모르고 한 번 더 보낸다.
+
+**기다리지도 않는다.** 생성자의 `defaultRetryInterval`(기본 1초)은 429·503 **응답** 경로에만 쓰인다. 예외 경로의 `getRetryInterval` 은 `DefaultHttpRequestRetryStrategy` 가 오버라이드하지 않아 인터페이스의 `default` 구현(`TimeValue.ZERO_MILLISECONDS`)이 그대로 남고, 실패한 그 자리에서 곧바로 다시 나간다.
+
+전략과 무관하게 막히는 경우도 하나 있다. `HttpRequestRetryExec` 는 전략에 묻기 **전에** 요청 본문을 다시 읽을 수 있는지 보고, `InputStreamEntity` 처럼 `isRepeatable()` 이 false 면 어떤 전략을 줘도 재시도하지 않는다. 전략을 갈아끼우는 자리는 요청 단위인 `RequestConfig` 가 아니라 `HttpClientBuilder.setRetryStrategy(...)` 다.
+
+**11번** — 1~3 모두 `available=1` 인데 `ESTABLISHED=0`, `CLOSE_WAIT=1` 이다. 풀이 "빌려줄 수 있다"고 세는 그 1개가 시체다. 0번의 `leased` 와 같은 얘기가 `available` 쪽에서도 성립한다.
+
+3 은 방어선이 어디인지 보여준다. idle 3초는 검증 주기 2초를 넘겨서 lease 직전에 stale 체크가 돌고, 죽은 커넥션을 버리고 새로 맺는다. **클라이언트 검증 주기 < 상대가 끊는 주기**가 지켜지면 막힌다.
 
 **12번** — 요청 수 상한은 성격이 다르다. 업스트림을 `maxKeepAliveRequests=5` 로 띄우고, **한 커넥션 위에서** 6번 연속으로 보내며 응답 헤더만 본다.
 
@@ -1157,19 +1476,25 @@ echo "  ($ADV)"
 
 </details>
 
-| 클라 전략 | 검증 | idle | 클라가 잡은 수명 | 결과 |
-| --- | --- | --- | --- | --- |
-| 기본 | 끔 | 2초 | `for 5 SECONDS` | 재사용 (48938 → 48938) |
-| 기본 | 끔 | 8초 | `for 5 SECONDS` | 새 커넥션 (49032 → 49034), 에러 없음 |
-| 60초 고정 | 끔 | 3초 | `60000 MILLISECONDS` | 재사용 (49324 → 49324) |
-| **60초 고정** | **끔** | **8초** | `60000 MILLISECONDS` | **`NoHttpResponseException`** |
-| 60초 고정 | 2초(기본) | 8초 | `60000 MILLISECONDS` | 새 커넥션, 에러 없음 |
+열 이름이 가리키는 건 각각 이렇다. 톰캣은 다섯 경우 모두 `timeout=5` 로 알려준다.
 
-1·2행이 기본 동작이다. 클라이언트는 서버가 말한 5초를 그대로 풀 엔트리의 수명으로 잡고, 8초 뒤에 빌리려 하면 만료된 엔트리를 버리고 새로 맺는다. **검증을 꺼놨는데도 에러가 안 난다** — 여기서 stale 을 막은 건 `validateAfterInactivity` 가 아니라 서버가 보낸 헤더다.
+- **클라 전략** — `setKeepAliveStrategy`. `기본` 은 서버가 보낸 `timeout=5` 를 따르고, `60초 고정` 은 서버 헤더를 무시하고 응답마다 60초로 답하는 전략을 심은 것이다.
+- **검증** — `validateAfterInactivity`. `끔` 은 빌려줄 때 확인 없이 그냥 주고, `2초(기본)` 은 2초 넘게 쉰 커넥션만 찔러보고 준다.
+- **클라가 잡은 수명** — caller 의 HttpClient 로그에서 뽑은, 클라이언트가 그 커넥션에 실제로 매긴 유효기간이다. `for 5 SECONDS` 면 서버 말을 들었다는 증거고 `60000 MILLISECONDS` 면 무시했다는 증거다.
 
-4행이 9번에서 못 만들었던 그 사각지대다. 전략을 고정하면 서버 말이 무시된다. 톰캣은 5초에 끊었는데 풀은 60초까지 들고 있고, 검증도 없으니 죽은 커넥션에 요청이 실린다. **toxiproxy 없이, 톰캣만으로 재현된다.** 9번에서 중간 장비를 끌어와야 했던 건 톰캣이 정직해서였지 톰캣이라 안 되는 게 아니었다.
+| # | 클라 전략 | 검증 | idle | 클라가 잡은 수명 | 결과 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 기본 | 끔 | 2초 | `for 5 SECONDS` | 재사용 (48938 → 48938) |
+| 2 | 기본 | 끔 | 8초 | `for 5 SECONDS` | 새 커넥션 (49032 → 49034), 에러 없음 |
+| 3 | 60초 고정 | 끔 | 3초 | `60000 MILLISECONDS` | 재사용 (49324 → 49324) |
+| 4 | **60초 고정** | **끔** | **8초** | `60000 MILLISECONDS` | **`NoHttpResponseException`** |
+| 5 | 60초 고정 | 2초(기본) | 8초 | `60000 MILLISECONDS` | 새 커넥션, 에러 없음 |
 
-3행은 같은 60초 고정인데 멀쩡하다. 서버가 아직 안 끊은 3초 안쪽이기 때문이다. 문제는 전략을 고정하는 것 자체가 아니라 **서버가 끊는 시점보다 길게 잡는 것**이다. 5행은 그 상태에서 검증이 남은 방어선으로 작동하는 경우다.
+1·2 가 기본 동작이다. 클라이언트는 서버가 말한 5초를 그대로 풀 엔트리의 수명으로 잡고, 8초 뒤에 빌리려 하면 만료된 엔트리를 버리고 새로 맺는다. **검증을 꺼놨는데도 에러가 안 난다** — 여기서 stale 을 막은 건 `validateAfterInactivity` 가 아니라 서버가 보낸 헤더다.
+
+4 가 9번에서 못 만들었던 그 사각지대다. 전략을 고정하면 서버 말이 무시된다. 톰캣은 5초에 끊었는데 풀은 60초까지 들고 있고, 검증도 없으니 죽은 커넥션에 요청이 실린다. **toxiproxy 없이, 톰캣만으로 재현된다.** 9번에서 중간 장비를 끌어와야 했던 건 톰캣이 정직해서였지 톰캣이라 안 되는 게 아니었다.
+
+3 은 같은 60초 고정인데 멀쩡하다. 서버가 아직 안 끊은 3초 안쪽이기 때문이다. 문제는 전략을 고정하는 것 자체가 아니라 **서버가 끊는 시점보다 길게 잡는 것**이다. 5 는 그 상태에서 검증이 남은 방어선으로 작동하는 경우다.
 
 정리하면 커넥션 수명을 정하는 순서가 이렇다.
 
@@ -1181,9 +1506,44 @@ echo "  ($ADV)"
 
 기본값을 바꿀 이유는 거의 없다. 서버가 말해주면 그게 제일 정확하고, 안 말해주는 상대일 때만 3분이라는 값이 실제로 쓰인다.
 
+**구현체는 하나뿐이다.** jar 에서 `keepalive` 로 걸리는 클래스가 인터페이스 하나와 구현 하나다(5.4.2·5.5.2 동일). 재시도 전략(10번)과 같은 모양으로, 고를 선택지가 있는 게 아니라 다르게 하려면 직접 구현해서 넣는 것이다. 위 표의 "60초 고정"도 람다 한 줄이다.
+
+```java
+.setKeepAliveStrategy((response, context) -> TimeValue.ofMilliseconds(60_000))
+```
+
+**이 람다가 `DefaultConnectionKeepAliveStrategy` 를 대신한다.** 인터페이스에 메서드가 `getKeepAliveDuration` 하나뿐이어서 람다가 곧 그 메서드의 구현이고, 빌더는 설정된 전략이 없을 때만 기본 전략을 끼운다.
+
+```java
+// org.apache.hc.client5.http.impl.classic.HttpClientBuilder.java — build()
+ConnectionKeepAliveStrategy keepAliveStrategyCopy = this.keepAliveStrategy;
+if (keepAliveStrategyCopy == null) {
+    keepAliveStrategyCopy = DefaultConnectionKeepAliveStrategy.INSTANCE;   // 안 넣었을 때만
+}
+```
+
+그래서 람다를 넣으면 기본 전략은 **아예 호출되지 않는다.** `Keep-Alive` 헤더를 읽는 코드가 그 클래스 안에만 있으니, 람다가 `response` 를 안 보는 순간 서버가 보낸 값은 아무도 읽지 않는 헤더가 된다. 전략을 "덮어쓴다"기보다 헤더 파싱을 하는 구현을 빼버리는 것이다.
+
+**이름이 비슷한 이웃이 하나 있다.** 재사용을 할지 말지는 `ConnectionReuseStrategy`(httpcore5)가 정하고, 재사용한다고 치고 얼마나 둘지는 `ConnectionKeepAliveStrategy`(httpclient5)가 정한다. 두 전략이 불리는 자리가 한 군데라 거기서 보는 게 빠르다.
+
+```java
+// org.apache.hc.client5.http.impl.classic.MainClientExec.java
+// The connection is in or can be brought to a re-usable state.
+if (reuseStrategy.keepAlive(request, response, context)) {        // 1. 재사용할 커넥션인가
+    // Set the idle duration of this connection
+    final TimeValue duration = keepAliveStrategy.getKeepAliveDuration(response, context);   // 2. 얼마나 둘까
+    LOG.debug("{} connection can be kept alive {}", exchangeId, s);   // 위 표의 "클라가 잡은 수명"
+    execRuntime.markConnectionReusable(userToken, duration);
+} else {
+    execRuntime.markConnectionNonReusable();                      // 12번의 Connection: close 가 여기로 온다
+}
+```
+
+1 이 false 면 2 는 아예 불리지 않는다. 12번에서 `close=true` 를 줬을 때 재사용이 끊긴 건 keep-alive 전략이 아니라 이 판단이고, 그 커넥션은 반납 대신 `discardEndpoint()` 로 간다(4번의 RST). 이쪽은 구현이 둘인데 상속 관계다. 클래식 빌더의 기본값은 `DefaultClientConnectionReuseStrategy`(httpclient5)이고, `CONNECT` 가 200 으로 끝난 경우만 따로 처리하고 나머지는 부모인 `DefaultConnectionReuseStrategy`(httpcore5)에 넘긴다. 재사용을 포기하는 조건은 그 부모 클래스 주석에 적혀 있다 — 요청이나 응답에 `Connection: close` 가 있을 때, 본문 길이가 모순될 때, HTTP/1.0 인데 `keep-alive` 가 없을 때.
+
 ### 14~16번 — 언제 만들고, 언제 돌려받고, 언제 버리나
 
-여기까지는 풀이 **이미 돌고 있는 상태**를 봤다. 그 앞 단계 — 풀이 커넥션을 어떻게 확보하고 어떻게 돌려받는지 — 는 숫자가 작아서 부하 생성기로는 안 보인다. 동시성을 한 단계씩 내가 정해야 하므로 curl 을 직접 띄운다.
+앞의 실험들은 풀이 **이미 돌고 있는 상태**를 봤다. 마지막으로 그 앞 단계 — 풀이 커넥션을 어떻게 확보하고 어떻게 돌려받는지 — 를 확인한다. 숫자가 작아서 부하 생성기로는 안 보이고, 동시성을 한 단계씩 내가 정해야 하므로 curl 을 직접 띄운다.
 
 ```bash
 ./scripts/run-lifecycle.sh
@@ -1291,14 +1651,14 @@ call;                                             show "그 뒤 요청 1회"
 
 **`maxTotal=50` 을 줬는데 기동 직후 커넥션은 0개다.** 풀 크기는 예약이 아니라 상한이다. 첫 요청이 와야 하나 만든다.
 
-**풀 크기를 정하는 건 설정값이 아니라 동시 요청 수다.** 동시성 1 로 20회를 쏘면 소켓 하나로 다 처리하고(새 소켓 +0), 동시 10 이 되면 10개까지 늘어난다. 3번의 "필요 커넥션 = TPS × 응답시간" 과 같은 얘기를 반대쪽에서 본 것이다.
+**풀 크기를 정하는 건 설정값이 아니라 동시 요청 수다.** 동시성 1 로 20회를 쏘면 소켓 하나로 다 처리하고(새 소켓 +0), 동시 10 이 되면 10개까지 늘어난다. 3번에서 "필요 커넥션 = TPS × 응답시간" 으로 풀 크기를 예측한 것과 같은 얘기다.
 
 **한 번 커진 풀은 스스로 줄지 않는다.** 동시성이 3 으로 내려가도 소켓은 10개 그대로고, 그중 3개만 빌려주고 7개는 `available` 에 남는다. 줄어드는 경로는 `evictIdleConnections` 와 만료뿐이다(아래).
 
 소스에서 보면 엔트리를 만드는 지점은 하나뿐이다. **빌려줄 free 엔트리가 없을 때만** 부른다.
 
 ```java
-// StrictConnPool.PerRoutePool
+// org.apache.hc.core5.pool.StrictConnPool.java — PerRoutePool
 public PoolEntry<T, C> createEntry(final TimeValue timeToLive) {
     final PoolEntry<T, C> entry = new PoolEntry<>(this.route, timeToLive, disposalCallback);
     this.leased.add(entry);     // 태어날 때부터 leased 다
@@ -1320,6 +1680,7 @@ public PoolEntry<T, C> createEntry(final TimeValue timeToLive) {
 그럼 "다 처리한 뒤"가 정확히 언제인가. `MainClientExec` 에서 두 갈래로 갈린다.
 
 ```java
+// org.apache.hc.client5.http.impl.classic.MainClientExec.java
 // 본문이 스트리밍이면 반납 책임을 응답 객체에 넘긴다
 final HttpEntity entity = response.getEntity();
 if (entity == null || !entity.isStreaming()) {
@@ -1331,13 +1692,13 @@ return new CloseableHttpResponse(response, execRuntime);       // 반납은 나�
 
 본문이 있으면 반납 시점은 호출자 코드에 달린다. 트리거는 셋이다.
 
-| 무엇을 하면 | 어떤 경로로 반납되나 |
-| --- | --- |
-| 본문을 EOF 까지 읽는다 | `EofSensorInputStream` → `ResponseEntityProxy.eofDetected` → `releaseEndpoint()` |
-| 본문 스트림을 닫는다 | 〃 `streamClosed` → 〃 |
-| 응답 객체를 닫는다 | `ResponseEntityProxy.close` → 남은 본문 드레인 → `releaseEndpoint()` |
+| # | 무엇을 하면 | 어떤 경로로 반납되나 |
+| --- | --- | --- |
+| 1 | 본문을 EOF 까지 읽는다 | `EofSensorInputStream` → `ResponseEntityProxy.eofDetected` → `releaseEndpoint()` |
+| 2 | 본문 스트림을 닫는다 | 〃 `streamClosed` → 〃 |
+| 3 | 응답 객체를 닫는다 | `ResponseEntityProxy.close` → 남은 본문 드레인 → `releaseEndpoint()` |
 
-**세 번째가 예상과 달랐다.** 본문에 손을 안 대고 `try-with-resources` 로만 닫으면 재사용을 잃을 거라고 봤는데, 100KB 본문으로 20회씩 돌려보면 새 소켓이 하나도 안 늘어난다.
+**3 이 예상과 달랐다.** 본문에 손을 안 대고 `try-with-resources` 로만 닫으면 재사용을 잃을 거라고 봤는데, 100KB 본문으로 20회씩 돌려보면 새 소켓이 하나도 안 늘어난다.
 
 | 순차 20회 (100KB 본문) | available | ESTABLISHED | 새 소켓 |
 | --- | --- | --- | --- |
@@ -1348,7 +1709,7 @@ return new CloseableHttpResponse(response, execRuntime);       // 반납은 나�
 이유가 소스에 주석으로 적혀 있다.
 
 ```java
-// ResponseEntityProxy.close()
+// org.apache.hc.client5.http.impl.classic.ResponseEntityProxy.java — close()
 public void close() throws IOException {
     // HttpEntity.close will close the underlying resource. Closing a reusable request stream results in
     // draining remaining data, allowing for connection reuse.
@@ -1359,31 +1720,31 @@ public void close() throws IOException {
 
 닫기만 해도 되는 대신 **남은 본문을 네트워크로 다 받아내는 값은 치른다.** 큰 응답을 중간에 버리는 코드라면 그게 공짜가 아니다.
 
-그러면 0번은 왜 샜나. leaky 는 **셋 중 아무것도 안 했다.** 에러 경로에서 그냥 `return` 으로 빠져나가 close 도 consume 도 호출되지 않았다. 반납 조건이 "본문 소비"뿐인 게 아니라 세 갈래인데, 그 셋 다 안 타는 코드였던 것이다.
+거꾸로, 반납이 안 되는 코드는 **셋 다 안 타는** 코드다. 0번이 그 경우다 — 에러 경로에서 그냥 `return` 으로 빠져나가 close 도 consume 도 호출되지 않는다.
 
 #### 16번 — 재사용 못 하는 커넥션은 반납이 곧 폐기다
 
 앞 단계에서 풀에 10개가 쌓여 있는 상태에서, 업스트림이 `Connection: close` 를 붙이게 한다.
 
-| 단계 | available | leased | ESTABLISHED | 새 소켓 |
-| --- | --- | --- | --- | --- |
-| close 응답 1회 | **9** | 0 | 9 | +0 |
-| close 순차 20회 | **0** | 0 | **0** | +10 |
-| 다시 keep-alive 1회 | 1 | 0 | 1 | +1 |
+| # | 단계 | available | leased | ESTABLISHED | 새 소켓 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | close 응답 1회 | **9** | 0 | 9 | +0 |
+| 2 | close 순차 20회 | **0** | 0 | **0** | +10 |
+| 3 | 다시 keep-alive 1회 | 1 | 0 | 1 | +1 |
 
-첫 줄이 이 실험의 답이다. 풀에 있던 10개 중 하나를 꺼내 썼는데 **되돌아온 게 없다.** `leased` 가 0 이니 반납은 됐고, 그런데 `available` 은 9 로 줄었다. 반납받자마자 버린 것이다. 둘째 줄에서 20회를 돌리면 풀에 있던 10개를 다 소진하고 나머지 10회는 새로 맺는다(+10) — **요청 1회당 소켓 1개**다. 셋째 줄처럼 keep-alive 응답 하나가 오면 다시 1개가 쌓인다.
+1 이 이 실험의 답이다. 풀에 있던 10개 중 하나를 꺼내 썼는데 **되돌아온 게 없다.** `leased` 가 0 이니 반납은 됐고, 그런데 `available` 은 9 로 줄었다. 반납받자마자 버린 것이다. 2 에서 20회를 돌리면 풀에 있던 10개를 다 소진하고 나머지 10회는 새로 맺는다(+10) — **요청 1회당 소켓 1개**다. 3 처럼 keep-alive 응답 하나가 오면 다시 1개가 쌓인다.
 
 경로는 두 군데로 나뉜다.
 
 ```java
-// InternalExecRuntime.releaseEndpoint() — 재사용 불가면 discard 로 빠진다
+// org.apache.hc.client5.http.impl.classic.InternalExecRuntime.java — releaseEndpoint(), 재사용 불가면 discard 로 빠진다
 if (reusable) {
     manager.release(endpoint, state, validDuration);
 } else {
     discardEndpoint(endpoint);   // endpoint.close(IMMEDIATE) 하고 나서 manager.release(endpoint, null, ZERO)
 }
 
-// StrictConnPool.release(entry, reusable)
+// org.apache.hc.core5.pool.StrictConnPool.java — release(entry, reusable)
 final boolean keepAlive = entry.hasConnection() && reusable;
 pool.free(entry, keepAlive);
 if (keepAlive) {
@@ -1393,24 +1754,24 @@ if (keepAlive) {
 }
 ```
 
-소켓을 먼저 죽이고(`CloseMode.IMMEDIATE` — 1번에서 본 RST 가 이것이다) 그 다음에 엔트리를 반납하므로, 매니저가 볼 때는 이미 `conn.isOpen()` 이 false 다. `reusable=false` 로 판정돼 `available` 에 들어가지 못한다. "반납된 뒤에 풀에서 사라진다"기보다 **반납과 폐기가 같은 동작**이다.
+소켓을 먼저 죽이고(`CloseMode.IMMEDIATE` — 1번에서 TIME_WAIT 이 하나도 안 쌓이는 이유가 이것이다) 그 다음에 엔트리를 반납하므로, 매니저가 볼 때는 이미 `conn.isOpen()` 이 false 다. `reusable=false` 로 판정돼 `available` 에 들어가지 못한다. "반납된 뒤에 풀에서 사라진다"기보다 **반납과 폐기가 같은 동작**이다.
 
 #### 만료된 엔트리는 다음 lease 때 치운다
 
 16번은 서버가 `Connection: close` 로 **알려준** 경우였다. 아무 말 없이 keep-alive 시간만 지난 경우는 다르다. 업스트림을 `timeout=5` 로 띄워 커넥션 10개를 만들고 8초 쉬었다.
 
-| 단계 | available | leased | ESTABLISHED | CLOSE_WAIT | 새 소켓 |
-| --- | --- | --- | --- | --- | --- |
-| 동시 10 — 끝난 뒤 | 10 | 0 | 10 | 0 | +10 |
-| 8초 유휴 (서버 `timeout=5`) | **10** | 0 | **0** | **10** | +0 |
-| 그 뒤 요청 1회 | **1** | 0 | 1 | 0 | +1 |
+| # | 단계 | available | leased | ESTABLISHED | CLOSE_WAIT | 새 소켓 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 동시 10 — 끝난 뒤 | 10 | 0 | 10 | 0 | +10 |
+| 2 | 8초 유휴 (서버 `timeout=5`) | **10** | 0 | **0** | **10** | +0 |
+| 3 | 그 뒤 요청 1회 | **1** | 0 | 1 | 0 | +1 |
 
-둘째 줄에서 풀은 여전히 10개를 들고 있다고 말하는데 **그 10개가 전부 시체다.** 서버가 FIN 을 보내서 소켓은 전부 `CLOSE_WAIT` 이다. 0번의 `leased=50`, 11번의 `available=1` 과 같은 종류의 어긋남이다.
+2 에서 풀은 여전히 10개를 들고 있다고 말하는데 **그 10개가 전부 시체다.** 서버가 FIN 을 보내서 소켓은 전부 `CLOSE_WAIT` 이다. 풀 게이지가 커널이 본 소켓 상태와 어긋나는 경우고, 0번의 `leased=50` 과 11번의 `available=1` 이 같은 어긋남이었다.
 
 치우는 시점은 **다음 lease** 다. 요청 한 번에 `available` 이 10 → 1 로 떨어졌다. 만료된 엔트리를 하나씩 버리며 쓸 만한 걸 찾고, 없으니 새로 맺고, 그게 반납되어 1개가 남았다.
 
 ```java
-// StrictConnPool.processPendingRequest — 빌려줄 엔트리를 찾는 루프
+// org.apache.hc.core5.pool.StrictConnPool.java — processPendingRequest(), 빌려줄 엔트리를 찾는 루프
 for (;;) {
     entry = pool.getFree(state);
     if (entry == null) {
@@ -1426,7 +1787,7 @@ for (;;) {
 }
 ```
 
-그래서 `evictIdleConnections` 를 안 켜면 풀은 **유휴 커넥션을 스스로 줄이지 않는다.** 피크에 50개까지 커진 풀은 트래픽이 없는 새벽에도 50개로 남아 있고, 그 엔트리들이 이미 죽었는지는 다음 요청이 와야 알게 된다. 들고 있는 fd 자체가 큰 비용은 아니지만, **풀 게이지만 보고 "지금 쓸 수 있는 커넥션이 N개"라고 읽으면 안 되는 이유**가 하나 더 늘어난 셈이다.
+그래서 `evictIdleConnections` 를 안 켜면 풀은 **유휴 커넥션을 스스로 줄이지 않는다.** 피크에 50개까지 커진 풀은 트래픽이 없는 새벽에도 50개로 남아 있고, 그 엔트리들이 이미 죽었는지는 다음 요청이 와야 알게 된다. 들고 있는 fd 자체가 큰 비용은 아니지만, **풀 게이지만 보고 "지금 쓸 수 있는 커넥션이 N개"라고 읽으면 안 된다.**
 
 ## 정리
 ---
@@ -1480,13 +1841,13 @@ for (;;) {
 ## 재보고 나서 고친 것
 ---
 
-> 실험 설계에서 틀렸던 것들. 재보기 전에는 전부 그럴듯해 보였다.
+> 실험 설계에서 틀렸던 것들.
 
 **toxiproxy 로는 핸드셰이크 RTT 를 못 만든다.** TCP 프록시라 클라이언트는 toxiproxy 와 핸드셰이크를 마치고, toxiproxy 가 그 뒤에 업스트림으로 연결한다. latency toxic 은 오가는 데이터만 늦춘다. netem 5ms 를 걸고 재보면 직접 경로는 `connect` 6.0ms, toxiproxy 경유는 0.9ms 다. 그래서 RTT 는 `tc netem` 으로 걸고 toxiproxy 는 기본 경로에서 뺐다. 대신 9번의 "말없이 끊는 중간 장비" 역할로 제대로 쓰였다.
 
 **호스트에서 재도 안 된다.** macOS 의 published port 로 재면 Docker 포트 포워더가 먼저 연결을 받아버려서, netem 을 걸어둬도 `connect` 가 0.2ms 로 나온다. 포워더도 프록시라 똑같이 가린다. 측정은 전부 네트워크 안에서 해야 한다.
 
-**netem 은 조용히 사라진다.** qdisc 는 컨테이너 netns 에 붙어 있어서 컨테이너가 재생성되면 없어진다. 2번을 한 번 RTT 0 에서 돌리고 나서야 알았다. 더 고약한 건 compose 가 **매번 현재 셸 환경으로 서비스 정의를 다시 계산**한다는 것이다. `docker-compose up -d caller` 한 번에 의존 서비스인 upstream 까지 기본값으로 되돌려 만든다. 그래서 실험 스크립트가 매번 netem 을 다시 걸고 `connect` 시간으로 검증하게 했다. **실험 조건은 설정하는 게 아니라 매 회차 검증하는 것**이라는 교훈이 남았다.
+**netem 은 조용히 사라진다.** qdisc 는 컨테이너 netns 에 붙어 있어서 컨테이너가 재생성되면 없어진다. 2번을 한 번 RTT 0 에서 돌리고 나서야 알았다. 더 고약한 건 compose 가 **매번 현재 셸 환경으로 서비스 정의를 다시 계산**한다는 것이다. `docker-compose up -d caller` 한 번에 의존 서비스인 upstream 까지 기본값으로 되돌려 만든다. 그래서 실험 스크립트가 매번 netem 을 다시 걸고 `connect` 시간으로 검증하게 했다. **실험 조건은 설정하는 게 아니라 매 회차 검증해야 하는 것**이다.
 
 **`Timeout.DISABLED`(0) 은 무한이 아니다.** 즉시 실패다. "상한은 있는데 포기가 없는" 조건을 만들려면 충분히 큰 값(60초)을 줘야 한다.
 
