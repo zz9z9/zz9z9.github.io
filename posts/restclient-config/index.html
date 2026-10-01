@@ -1,0 +1,639 @@
+<!DOCTYPE html><html lang="en-US" mode="light" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="generator" content="Jekyll v4.4.1" /><meta property="og:title" content="WEB - RestTemplate·HttpClient5 설정과 타임아웃" /><meta property="og:locale" content="en_US" /><meta name="description" content="RestTemplate으로 HTTP를 호출할 때 타임아웃 설정 입구는 네 곳에 흩어져 있다 — 커넥션 매니저, HttpClient, 요청 팩토리, 요청 컨텍스트. 같은 이름의 값이 여러 곳에 걸려 있을 때 실제로 무엇이 적용되는지를 Apache HttpClient 5.5.2 / Spring Framework 6.2.19 소스와 실행 결과로 확인했다." /><meta name="twitter:description" property="og:description" content="RestTemplate으로 HTTP를 호출할 때 타임아웃 설정 입구는 네 곳에 흩어져 있다 — 커넥션 매니저, HttpClient, 요청 팩토리, 요청 컨텍스트. 같은 이름의 값이 여러 곳에 걸려 있을 때 실제로 무엇이 적용되는지를 Apache HttpClient 5.5.2 / Spring Framework 6.2.19 소스와 실행 결과로 확인했다." /><link rel="canonical" href="https://zz9z9.github.io/posts/restclient-config/" /><meta property="og:url" content="https://zz9z9.github.io/posts/restclient-config/" /><meta property="og:site_name" content="zz9z9" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2026-08-22T21:25:00+09:00" /><meta property="article:modified_time" content="2026-08-22T21:25:00+09:00" /><meta name="twitter:card" content="summary" /><meta name="twitter:title" content="WEB - RestTemplate·HttpClient5 설정과 타임아웃" /><meta name="twitter:site" content="@twitter_username" /> <script type="application/ld+json"> {"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2026-08-22T21:25:00+09:00","datePublished":"2026-08-22T21:25:00+09:00","description":"RestTemplate으로 HTTP를 호출할 때 타임아웃 설정 입구는 네 곳에 흩어져 있다 — 커넥션 매니저, HttpClient, 요청 팩토리, 요청 컨텍스트. 같은 이름의 값이 여러 곳에 걸려 있을 때 실제로 무엇이 적용되는지를 Apache HttpClient 5.5.2 / Spring Framework 6.2.19 소스와 실행 결과로 확인했다.","headline":"WEB - RestTemplate·HttpClient5 설정과 타임아웃","mainEntityOfPage":{"@type":"WebPage","@id":"https://zz9z9.github.io/posts/restclient-config/"},"url":"https://zz9z9.github.io/posts/restclient-config/"}</script><title>WEB - RestTemplate·HttpClient5 설정과 타임아웃 | zz9z9</title><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/site.webmanifest"><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico"><meta name="apple-mobile-web-app-title" content="zz9z9"><meta name="application-name" content="zz9z9"><meta name="msapplication-TileColor" content="#da532c"><meta name="msapplication-config" content="/assets/img/favicons/browserconfig.xml"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="https://cdn.jsdelivr.net"><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css"><link rel="stylesheet" href="/assets/css/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/magnific-popup@1.1.0/dist/magnific-popup.min.css"> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script src="https://cdn.jsdelivr.net/combine/npm/lozad/dist/lozad.min.js,npm/magnific-popup@1/dist/jquery.magnific-popup.min.js"></script> <script defer src="/assets/js/dist/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id=G-Q7PWLG5WYT"></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-Q7PWLG5WYT'); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Soccerball.svg/1000px-Soccerball.svg.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">zz9z9</a></div><div class="site-subtitle font-italic">거창한 계획보다는, 꾸준한 실행을</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/zz9z9" aria-label="github" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/twitter_username" aria-label="twitter" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['example','doamin.com'].join('@')" aria-label="email" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" > <i class="fas fa-rss"></i> </a></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>WEB - RestTemplate·HttpClient5 설정과 타임아웃</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" autocomplete="off" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>WEB - RestTemplate·HttpClient5 설정과 타임아웃</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="semi-bold"> Lee JaeYoon </span> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sat, Aug 22, 2026, 9:25 PM +0900" prep="on" > Aug 22 <i class="unloaded">2026-08-22T21:25:00+09:00</i> </span></div><div> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="8229 words">45 min</span></div></div><div class="post-content"><blockquote><p><code class="language-plaintext highlighter-rouge">RestTemplate</code>으로 HTTP를 호출할 때 타임아웃 설정 입구는 네 곳에 흩어져 있다 — 커넥션 매니저, <code class="language-plaintext highlighter-rouge">HttpClient</code>, 요청 팩토리, 요청 컨텍스트. 같은 이름의 값이 여러 곳에 걸려 있을 때 실제로 무엇이 적용되는지를 Apache HttpClient 5.5.2 / Spring Framework 6.2.19 소스와 실행 결과로 확인했다.</p></blockquote><h2 id="실무에서-보는-설정">실무에서 보는 설정</h2><hr /><blockquote><p>계층별 설정이 다 등장하는 형태의 <code class="language-plaintext highlighter-rouge">HttpClientConfig</code>. 이 글은 이 설정을 아래(커넥션 매니저)에서부터 따라 올라간다.</p></blockquote><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+</pre><td class="rouge-code"><pre><span class="nd">@Configuration</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">HttpClientConfig</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">RequestConfig</span> <span class="no">BASE_REQUEST_CONFIG</span> <span class="o">=</span> <span class="nc">RequestConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="mi">3</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setConnectionKeepAlive</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">30</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="nc">PoolingHttpClientConnectionManager</span> <span class="nf">connectionManager</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="nc">PoolingHttpClientConnectionManagerBuilder</span><span class="o">.</span><span class="na">create</span><span class="o">()</span>
+                <span class="o">.</span><span class="na">setMaxConnTotal</span><span class="o">(</span><span class="mi">200</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setMaxConnPerRoute</span><span class="o">(</span><span class="mi">50</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setDefaultSocketConfig</span><span class="o">(</span><span class="nc">SocketConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                        <span class="o">.</span><span class="na">setSoTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">2</span><span class="o">))</span>
+                        <span class="o">.</span><span class="na">setTcpNoDelay</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span>
+                        <span class="o">.</span><span class="na">build</span><span class="o">())</span>
+                <span class="o">.</span><span class="na">setDefaultConnectionConfig</span><span class="o">(</span><span class="nc">ConnectionConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                        <span class="o">.</span><span class="na">setConnectTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofMilliseconds</span><span class="o">(</span><span class="mi">1000</span><span class="o">))</span>
+                        <span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">3</span><span class="o">))</span>
+                        <span class="o">.</span><span class="na">setTimeToLive</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+                        <span class="o">.</span><span class="na">setValidateAfterInactivity</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">2</span><span class="o">))</span>
+                        <span class="o">.</span><span class="na">build</span><span class="o">())</span>
+                <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="nc">CloseableHttpClient</span> <span class="nf">httpClient</span><span class="o">(</span><span class="nc">PoolingHttpClientConnectionManager</span> <span class="n">cm</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="nc">HttpClients</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                <span class="o">.</span><span class="na">setConnectionManager</span><span class="o">(</span><span class="n">cm</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setDefaultRequestConfig</span><span class="o">(</span><span class="no">BASE_REQUEST_CONFIG</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">evictIdleConnections</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">30</span><span class="o">))</span>
+                <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="c1">// 경로별 응답 상한. 여기 없는 요청은 BASE_REQUEST_CONFIG 의 5s 를 그대로 쓴다</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">Map</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">,</span> <span class="nc">Timeout</span><span class="o">&gt;</span> <span class="no">RESPONSE_TIMEOUTS</span> <span class="o">=</span> <span class="nc">Map</span><span class="o">.</span><span class="na">of</span><span class="o">(</span>
+            <span class="s">"/balance"</span><span class="o">,</span>           <span class="nc">Timeout</span><span class="o">.</span><span class="na">ofMilliseconds</span><span class="o">(</span><span class="mi">300</span><span class="o">),</span>   <span class="c1">// 잔액 조회 — 빨리 포기해야 한다</span>
+            <span class="s">"/settlement/report"</span><span class="o">,</span> <span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">10</span><span class="o">)</span>          <span class="c1">// 정산 리포트 — 오래 걸리는 게 정상이다</span>
+    <span class="o">);</span>
+
+    <span class="nd">@Bean</span>
+    <span class="kd">public</span> <span class="nc">RestTemplate</span> <span class="nf">restTemplate</span><span class="o">(</span><span class="nc">CloseableHttpClient</span> <span class="n">httpClient</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">HttpComponentsClientHttpRequestFactory</span> <span class="n">factory</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HttpComponentsClientHttpRequestFactory</span><span class="o">(</span><span class="n">httpClient</span><span class="o">);</span>
+        <span class="n">factory</span><span class="o">.</span><span class="na">setConnectTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">3</span><span class="o">));</span>   <span class="c1">// 6.2.13 부터 deprecated — 아래에서 다룬다</span>
+        <span class="n">factory</span><span class="o">.</span><span class="na">setReadTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
+        <span class="n">factory</span><span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
+
+        <span class="c1">// 팩토리 setter 는 전역값이라 경로별로 못 가른다. 요청별 상한은 컨텍스트로 준다</span>
+        <span class="n">factory</span><span class="o">.</span><span class="na">setHttpContextFactory</span><span class="o">((</span><span class="n">method</span><span class="o">,</span> <span class="n">uri</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+            <span class="nc">HttpClientContext</span> <span class="n">ctx</span> <span class="o">=</span> <span class="nc">HttpClientContext</span><span class="o">.</span><span class="na">create</span><span class="o">();</span>
+            <span class="nc">Timeout</span> <span class="n">responseTimeout</span> <span class="o">=</span> <span class="no">RESPONSE_TIMEOUTS</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">uri</span><span class="o">.</span><span class="na">getPath</span><span class="o">());</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">responseTimeout</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="na">setRequestConfig</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">copy</span><span class="o">(</span><span class="no">BASE_REQUEST_CONFIG</span><span class="o">)</span>
+                        <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="n">responseTimeout</span><span class="o">)</span>
+                        <span class="o">.</span><span class="na">build</span><span class="o">());</span>
+            <span class="o">}</span>
+            <span class="k">return</span> <span class="n">ctx</span><span class="o">;</span>   <span class="c1">// config 를 안 넣으면 createRequest 가 클라이언트 기본값(BASE)을 채운다</span>
+        <span class="o">});</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="nf">RestTemplate</span><span class="o">(</span><span class="n">factory</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">responseTimeout</code>만 해도 세 곳에 걸려 있다 — <code class="language-plaintext highlighter-rouge">BASE_REQUEST_CONFIG</code>, <code class="language-plaintext highlighter-rouge">factory.setReadTimeout</code>, 경로별 컨텍스트. <code class="language-plaintext highlighter-rouge">/balance</code> 요청의 read 상한이 300ms인지 5s인지가 바로 답이 나오지 않는다.</p><h2 id="흐름">흐름</h2><hr /><blockquote><p>요청 하나가 커널까지 내려가는 경로와, 그 경로를 실제로 실행하는 <code class="language-plaintext highlighter-rouge">HttpClient</code> 내부 체인.</p></blockquote><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>RestTemplate
+ㄴ HttpComponentsClientHttpRequestFactory
+     요청 객체 + HttpContext 를 만든다. 타임아웃(RequestConfig)은 컨텍스트에 심는다
+  ㄴ HttpClient (CloseableHttpClient)
+       route 를 정하고 요청 처리를 시작한다
+    ㄴ PoolingHttpClientConnectionManager
+         풀에서 커넥션을 내어주고(lease), 없으면 새로 수립한다(connect)
+      ㄴ ManagedHttpClientConnection
+           HTTP 메시지 ↔ 바이트로 바꿔 소켓에 쓴다
+        ㄴ Socket
+          ㄴ Kernel
+</pre></table></code></div></div><p>각 단계를 실제로 실행하는 건 <code class="language-plaintext highlighter-rouge">HttpClient</code> 안의 요청 처리 체인(exec chain)에 등록된 핸들러들이다. <code class="language-plaintext highlighter-rouge">HttpClientBuilder</code>가 <code class="language-plaintext highlighter-rouge">addFirst</code>로 쌓으므로 바깥에서 안쪽 순서는 이렇게 된다.</p><div class="table-wrapper"><table><thead><tr><th>순서 (바깥 → 안쪽)<th>핸들러<th>하는 일<tbody><tr><td>1<td><code class="language-plaintext highlighter-rouge">RedirectExec</code><td>3xx면 새 route를 정해 안쪽 체인을 다시 돈다<tr><td>2<td><code class="language-plaintext highlighter-rouge">HttpRequestRetryExec</code><td>재시도 대상이면 안쪽 체인을 다시 돈다<tr><td>3<td><code class="language-plaintext highlighter-rouge">ProtocolExec</code><td>Host 헤더·인증 등 프로토콜 처리<tr><td>4<td><code class="language-plaintext highlighter-rouge">ConnectExec</code><td>커넥션 매니저에서 커넥션 확보 (lease → connect)<tr><td>5<td><code class="language-plaintext highlighter-rouge">MainClientExec</code><td>확보한 커넥션으로 요청 전달·응답 수신</table></div><p>재시도와 리다이렉트가 커넥션 확보보다 <strong>바깥</strong>에 있다. 다시 돌면 lease부터 전부 반복되고, 타임아웃도 처음부터 다시 센다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="c1">// org.apache.hc.client5.http.impl.classic.InternalHttpClient</span>
+<span class="nd">@Contract</span><span class="o">(</span><span class="n">threading</span> <span class="o">=</span> <span class="nc">ThreadingBehavior</span><span class="o">.</span><span class="na">SAFE_CONDITIONAL</span><span class="o">)</span>
+<span class="nd">@Internal</span>
+<span class="kd">class</span> <span class="nc">InternalHttpClient</span> <span class="kd">extends</span> <span class="nc">CloseableHttpClient</span> <span class="kd">implements</span> <span class="nc">Configurable</span> <span class="o">{</span>
+
+  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">Logger</span> <span class="no">LOG</span> <span class="o">=</span> <span class="nc">LoggerFactory</span><span class="o">.</span><span class="na">getLogger</span><span class="o">(</span><span class="nc">InternalHttpClient</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+
+  <span class="kd">private</span> <span class="kd">final</span> <span class="nc">HttpClientConnectionManager</span> <span class="n">connManager</span><span class="o">;</span>
+  <span class="kd">private</span> <span class="kd">final</span> <span class="nc">HttpRequestExecutor</span> <span class="n">requestExecutor</span><span class="o">;</span>
+  <span class="kd">private</span> <span class="kd">final</span> <span class="nc">ExecChainElement</span> <span class="n">execChain</span><span class="o">;</span>
+  <span class="kd">private</span> <span class="kd">final</span> <span class="nc">HttpRoutePlanner</span> <span class="n">routePlanner</span><span class="o">;</span>
+
+  <span class="o">...</span>
+
+<span class="o">}</span>
+</pre></table></code></div></div><h2 id="구성-요소">구성 요소</h2><hr /><blockquote><p>계층마다 이름이 비슷한 타임아웃 설정이 또 나오는 게 이 스택의 혼란 지점이다. 아래 계층부터 올라가면서 각 컴포넌트가 무엇을 책임지는지 본다.</p></blockquote><h3 id="apache-httpclient-5">Apache HttpClient 5</h3><p>HTTP 표준의 <strong>클라이언트 쪽</strong>을 구현한 자바 라이브러리다. 공식 문서가 잡는 대상은 “웹 브라우저, 웹 서비스 클라이언트처럼 HTTP 프로토콜을 활용하거나 확장하는 애플리케이션”이고, 스스로 브라우저는 아니라고 못박는다 — 콘텐츠를 렌더링하거나 자바스크립트를 실행하지 않는다.</p><ul><li>HTTP/1.0 · 1.1 · 2.0 구현. HTTPS 지원<li>Basic · Digest · Bearer · SCRAM-SHA-256 인증, 쿠키를 포함한 상태 관리<li>gzip · deflate 투명 압축 해제 (zstd · brotli는 선택)<li>커넥션 풀링과 리다이렉트·재시도 처리<li>동기(classic) API와 별개로 async · reactive API 제공</ul><p>API가 두 갈래인 게 이 글과 관계가 있다. <code class="language-plaintext highlighter-rouge">RestTemplate</code>이 쓰는 건 <strong>classic(동기)</strong> 쪽이고, 패키지부터 갈린다.</p><div class="table-wrapper"><table><thead><tr><th> <th>진입점<th>패키지<tbody><tr><td>classic (동기)<td><code class="language-plaintext highlighter-rouge">HttpClients</code> → <code class="language-plaintext highlighter-rouge">CloseableHttpClient</code><td><code class="language-plaintext highlighter-rouge">...http.impl.classic</code><tr><td>async<td><code class="language-plaintext highlighter-rouge">HttpAsyncClients</code> → <code class="language-plaintext highlighter-rouge">CloseableHttpAsyncClient</code><td><code class="language-plaintext highlighter-rouge">...http.impl.async</code> · <code class="language-plaintext highlighter-rouge">...impl.nio</code></table></div><p>이 글의 내용은 classic 기준이다. async 쪽은 커넥션 오퍼레이터부터 별도 클래스라서 타임아웃이 걸리는 지점도 다르다.</p><div class="language-gradle highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="n">implementation</span> <span class="s1">'org.apache.httpcomponents.client5:httpclient5'</span>
+</pre></table></code></div></div><h3 id="poolinghttpclientconnectionmanager">PoolingHttpClientConnectionManager</h3><p><code class="language-plaintext highlighter-rouge">org.apache.hc.client5.http.io.HttpClientConnectionManager</code>의 구현체다. 인터페이스가 규정하는 역할은 세 가지다.</p><ul><li>새 HTTP 커넥션을 만드는 팩토리<li>keep-alive로 살아 있는 커넥션을 관리<li>한 커넥션에 한 번에 한 스레드만 접근하도록 동기화</ul><p>요청을 실행하는 일은 여기 없다. 커넥션을 만들고 ‘관리’만 한다.</p><p><code class="language-plaintext highlighter-rouge">Pooling</code> 구현체는 여기에 풀을 얹고, <strong>route 단위로</strong> 풀링한다.</p><ul><li>route = (스키마, 호스트, 포트). 프록시를 거치면 프록시 정보까지 포함된다<li>같은 route로 가는 요청은 풀에 놀고 있는 커넥션이 있으면 새로 만들지 않고 빌려 쓴다(lease)<li>커넥션 수 상한은 route별(<code class="language-plaintext highlighter-rouge">maxConnPerRoute</code>)과 전체(<code class="language-plaintext highlighter-rouge">maxConnTotal</code>) 두 축이다<li>TTL이 지난 커넥션은 아직 연결돼 있어도 재사용하지 않는다</ul><p>route 단위라는 점이 뒤에서 반복해 걸린다. <code class="language-plaintext highlighter-rouge">ConnectionConfig</code>와 <code class="language-plaintext highlighter-rouge">SocketConfig</code>도 요청이 아니라 route를 키로 해석되고(<code class="language-plaintext highlighter-rouge">resolveConnectionConfig(route)</code>), <code class="language-plaintext highlighter-rouge">RequestConfig.connectTimeout</code>이 deprecated된 이유도 여기에 있다.</p><h3 id="커넥션-매니저-설정">커넥션 매니저 설정</h3><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre><td class="rouge-code"><pre><span class="nd">@Bean</span>
+<span class="kd">public</span> <span class="nc">PoolingHttpClientConnectionManager</span> <span class="nf">connectionManager</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="nc">PoolingHttpClientConnectionManagerBuilder</span><span class="o">.</span><span class="na">create</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">setMaxConnTotal</span><span class="o">(</span><span class="mi">200</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setMaxConnPerRoute</span><span class="o">(</span><span class="mi">50</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setDefaultSocketConfig</span><span class="o">(</span><span class="nc">SocketConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                    <span class="o">.</span><span class="na">setSoTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">2</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">setTcpNoDelay</span><span class="o">(</span><span class="kc">true</span><span class="o">)</span>
+                    <span class="o">.</span><span class="na">build</span><span class="o">())</span>
+            <span class="o">.</span><span class="na">setDefaultConnectionConfig</span><span class="o">(</span><span class="nc">ConnectionConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                    <span class="o">.</span><span class="na">setConnectTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofMilliseconds</span><span class="o">(</span><span class="mi">1000</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">3</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">setTimeToLive</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">setValidateAfterInactivity</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">2</span><span class="o">))</span>
+                    <span class="o">.</span><span class="na">build</span><span class="o">())</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="table-wrapper"><table><thead><tr><th>설정<th>기본값<th>무엇을 정하나<tbody><tr><td><code class="language-plaintext highlighter-rouge">maxConnTotal</code><td>25<td>풀 전체 커넥션 수 상한<tr><td><code class="language-plaintext highlighter-rouge">maxConnPerRoute</code><td>5<td>route 하나당 커넥션 수 상한<tr><td><code class="language-plaintext highlighter-rouge">SocketConfig.soTimeout</code><td>3분<td>소켓 생성 직후 깔리는 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code> 바닥값<tr><td><code class="language-plaintext highlighter-rouge">SocketConfig.tcpNoDelay</code><td>true<td>Nagle 알고리즘 비활성화<tr><td><code class="language-plaintext highlighter-rouge">ConnectionConfig.connectTimeout</code><td>3분<td>TCP connect 상한. <code class="language-plaintext highlighter-rouge">RequestConfig.connectTimeout</code>이 null일 때 쓰인다<tr><td><code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code><td>null (안 덮음)<td>커넥션의 기준 read 상한. 수립 직후와 lease마다 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code>에 다시 걸린다<tr><td><code class="language-plaintext highlighter-rouge">ConnectionConfig.timeToLive</code><td>null (무제한)<td>커넥션 최대 수명. 넘으면 재사용하지 않고 버린다<tr><td><code class="language-plaintext highlighter-rouge">ConnectionConfig.validateAfterInactivity</code><td>null (검사 안 함)<td>이 시간 이상 놀았던 커넥션은 빌려주기 전에 stale 여부를 확인한다</table></div><p><code class="language-plaintext highlighter-rouge">SocketConfig.soTimeout</code>과 <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>은 이름도 비슷하고 둘 다 read 상한(<code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code>)을 건드리는데, 거는 시점이 다르다. <a href="#3-readtimeout은-fallback이-아니라-덮어쓰기">3. readTimeout은 fallback이 아니라 덮어쓰기</a>에서 정리한다.</p><h3 id="httpclient--closeablehttpclient">HttpClient / CloseableHttpClient</h3><p><code class="language-plaintext highlighter-rouge">HttpClient</code>는 요청 실행 계약만 정의하는 인터페이스다. 상태 관리·인증·리다이렉트를 어떻게 처리할지는 구현체에 맡긴다. 커넥션 매니저가 ‘관리’라면 여기는 ‘실행’이다 — 매니저에서 커넥션을 빌려와 그 위로 요청을 흘려보낸다.</p><p><code class="language-plaintext highlighter-rouge">HttpClients.custom()</code> → <code class="language-plaintext highlighter-rouge">HttpClientBuilder#build()</code>가 돌려주는 게 <code class="language-plaintext highlighter-rouge">CloseableHttpClient</code>(실제 타입은 <code class="language-plaintext highlighter-rouge">InternalHttpClient</code>)다. 소켓과 풀을 쥐고 있으므로 닫아야 하고, 그래서 <code class="language-plaintext highlighter-rouge">Closeable</code>이다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre><td class="rouge-code"><pre><span class="nd">@Bean</span>
+<span class="kd">public</span> <span class="nc">CloseableHttpClient</span> <span class="nf">httpClient</span><span class="o">(</span><span class="nc">PoolingHttpClientConnectionManager</span> <span class="n">cm</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="nc">HttpClients</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">setConnectionManager</span><span class="o">(</span><span class="n">cm</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setDefaultRequestConfig</span><span class="o">(</span>
+                    <span class="nc">RequestConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                            <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">)</span>
+                            <span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="mi">3</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">)</span>
+                            <span class="o">.</span><span class="na">setConnectionKeepAlive</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">30</span><span class="o">))</span>
+                            <span class="o">.</span><span class="na">build</span><span class="o">()</span>
+            <span class="o">)</span>
+            <span class="o">.</span><span class="na">evictIdleConnections</span><span class="o">(</span><span class="nc">TimeValue</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">30</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>여기에도 타임아웃이 있지만 매니저 쪽과 성격이 다르다. 매니저 설정은 커넥션에 딸린 속성이고, <code class="language-plaintext highlighter-rouge">setDefaultRequestConfig</code>은 <strong>요청에 실려 다니는</strong> 기본값이다. 요청마다 다른 값을 줄 수 있는 건 이쪽뿐이다.</p><h3 id="httpcomponentsclienthttprequestfactory-spring-컴포넌트">HttpComponentsClientHttpRequestFactory (Spring 컴포넌트)</h3><p>Spring의 <code class="language-plaintext highlighter-rouge">ClientHttpRequestFactory</code> 구현체로, <code class="language-plaintext highlighter-rouge">RestTemplate</code>이 쓰는 추상화와 Apache <code class="language-plaintext highlighter-rouge">HttpClient</code> 사이를 잇는다. <code class="language-plaintext highlighter-rouge">RestTemplate</code>은 JDK <code class="language-plaintext highlighter-rouge">HttpURLConnection</code>이나 Jetty 클라이언트로도 갈아끼울 수 있어야 해서 Apache HttpClient를 직접 알지 못하고, 그래서 이 층이 하나 더 필요하다.</p><p>요청 하나당 이 팩토리가 두 가지를 만든다.</p><ul><li><code class="language-plaintext highlighter-rouge">ClassicHttpRequest</code> — 실제로 보낼 요청 객체<li><code class="language-plaintext highlighter-rouge">HttpContext</code> — 그 요청의 실행 컨텍스트. <strong>타임아웃(<code class="language-plaintext highlighter-rouge">RequestConfig</code>)이 여기 실린다</strong></ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre><span class="nc">HttpComponentsClientHttpRequestFactory</span> <span class="n">factory</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HttpComponentsClientHttpRequestFactory</span><span class="o">(</span><span class="n">httpClient</span><span class="o">);</span>
+<span class="n">factory</span><span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
+<span class="n">factory</span><span class="o">.</span><span class="na">setReadTimeout</span><span class="o">(</span><span class="nc">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
+<span class="n">factory</span><span class="o">.</span><span class="na">setHttpContextFactory</span><span class="o">((</span><span class="n">method</span><span class="o">,</span> <span class="n">uri</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+    <span class="nc">HttpClientContext</span> <span class="n">ctx</span> <span class="o">=</span> <span class="nc">HttpClientContext</span><span class="o">.</span><span class="na">create</span><span class="o">();</span>
+    <span class="nc">Timeout</span> <span class="n">responseTimeout</span> <span class="o">=</span> <span class="no">RESPONSE_TIMEOUTS</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">uri</span><span class="o">.</span><span class="na">getPath</span><span class="o">());</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">responseTimeout</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="na">setRequestConfig</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">copy</span><span class="o">(</span><span class="no">BASE_REQUEST_CONFIG</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="n">responseTimeout</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">build</span><span class="o">());</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">;</span>
+<span class="o">});</span>
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">setHttpContextFactory</code>는 요청마다 컨텍스트를 만드는 훅이다. <code class="language-plaintext highlighter-rouge">(HttpMethod, URI)</code>를 받으므로 경로별로 다른 <code class="language-plaintext highlighter-rouge">RequestConfig</code>를 실을 수 있다. 팩토리 setter가 전역값인 것과 달리, <strong>요청별로 타임아웃을 갈라야 할 때 쓸 수 있는 유일한 입구</strong>다.</p><h3 id="connecttimeout은-deprecated">ConnectTimeout은 deprecated</h3><p><code class="language-plaintext highlighter-rouge">HttpComponentsClientHttpRequestFactory#setConnectTimeout</code>은 Spring 6.2.13부터 deprecated이고 <code class="language-plaintext highlighter-rouge">forRemoval</code>이 붙어 있다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nd">@Deprecated</span><span class="o">(</span><span class="n">since</span> <span class="o">=</span> <span class="s">"6.2.13"</span><span class="o">,</span> <span class="n">forRemoval</span> <span class="o">=</span> <span class="kc">true</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">setConnectTimeout</span><span class="o">(</span><span class="kt">int</span> <span class="n">connectTimeout</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">Assert</span><span class="o">.</span><span class="na">isTrue</span><span class="o">(</span><span class="n">connectTimeout</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">,</span> <span class="s">"Timeout must be a non-negative value"</span><span class="o">);</span>
+    <span class="k">this</span><span class="o">.</span><span class="na">connectTimeout</span> <span class="o">=</span> <span class="n">connectTimeout</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>javadoc이 지목하는 대안은 커넥션 매니저의 <code class="language-plaintext highlighter-rouge">ConnectionConfig</code>다. 같은 값이 httpclient5 쪽 <code class="language-plaintext highlighter-rouge">RequestConfig</code>에서도 deprecated인데, 이유는 <code class="language-plaintext highlighter-rouge">connectTimeout</code>이 요청이 아니라 <strong>커넥션</strong>의 속성이기 때문이다. keep-alive로 재사용되는 요청은 connect를 아예 하지 않고, 커넥션 매니저는 이 값을 route 단위로 해석한다.</p><p>deprecated지만 코드 경로는 살아 있어서 세팅하면 여전히 <code class="language-plaintext highlighter-rouge">ConnectionConfig.connectTimeout</code>을 이긴다 (<a href="#2-설정값별-최종-적용-경로">2. 설정값별 최종 적용 경로</a>). 예전 코드에 남은 <code class="language-plaintext highlighter-rouge">factory.setConnectTimeout(30s)</code> 한 줄이 매니저에 새로 넣은 값을 조용히 덮는 형태가 되므로, 옮길 때 지우는 것까지 해야 한다.</p><p>이 setter의 javadoc에는 “SSL handshake나 CONNECT 요청의 타임아웃에는 영향을 주지 않는다, 그건 <code class="language-plaintext highlighter-rouge">SocketConfig</code>를 써야 한다”고 적혀 있다. httpclient5 5.5까지는 맞는 설명이고 5.5.1부터 달라졌다 (<a href="#tls-handshake는-어느-타임아웃에-걸리나">TLS handshake는 어느 타임아웃에 걸리나</a>).</p><p>Spring 7.0에는 이 setter가 아예 없다. <code class="language-plaintext highlighter-rouge">mergeRequestConfig</code>도 <code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code>과 <code class="language-plaintext highlighter-rouge">readTimeout</code> 두 필드만 병합한다.</p><h3 id="resttemplate">RestTemplate</h3><p><code class="language-plaintext highlighter-rouge">org.springframework.web.client.RestTemplate</code>. HTTP 메서드별 템플릿 메서드와 범용 <code class="language-plaintext highlighter-rouge">exchange</code>·<code class="language-plaintext highlighter-rouge">execute</code>를 노출하는 동기 클라이언트다. 실제 통신은 전부 <code class="language-plaintext highlighter-rouge">ClientHttpRequestFactory</code>에 위임하므로, 타임아웃 관점에서 <code class="language-plaintext highlighter-rouge">RestTemplate</code> 자체가 하는 일은 없다.</p><p>공유 컴포넌트로 쓰도록 만들어졌지만 설정 변경이 동시성에 안전하지 않아서, 설정은 기동 시점에 끝내야 한다. 설정이 다른 인스턴스가 여럿 필요하면 <code class="language-plaintext highlighter-rouge">ClientHttpRequestFactory</code>는 공유하면서 <code class="language-plaintext highlighter-rouge">RestTemplate</code>만 여러 개 만들면 된다.</p><h3 id="restclient">RestClient</h3><p><code class="language-plaintext highlighter-rouge">org.springframework.web.client.RestClient</code>. 6.1부터 들어온 동기 클라이언트로, 같은 <code class="language-plaintext highlighter-rouge">ClientHttpRequestFactory</code> 위에 fluent API를 얹은 것이다. <code class="language-plaintext highlighter-rouge">RestClient.create(restTemplate)</code> / <code class="language-plaintext highlighter-rouge">builder(restTemplate)</code>로 기존 <code class="language-plaintext highlighter-rouge">RestTemplate</code> 설정을 그대로 물려받을 수 있다.</p><p><strong>타임아웃 설정 계층은 <code class="language-plaintext highlighter-rouge">RestTemplate</code>과 완전히 같다.</strong> 이 글의 내용은 둘 다에 그대로 적용된다.</p><h2 id="타임아웃-정리">타임아웃 정리</h2><hr /><blockquote><p><code class="language-plaintext highlighter-rouge">connectTimeout</code>, <code class="language-plaintext highlighter-rouge">readTimeout</code>, <code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code>이 각각 어디서 정해지는지 정리한다. 설정 입구 네 곳(커넥션 매니저의 <code class="language-plaintext highlighter-rouge">SocketConfig</code>·<code class="language-plaintext highlighter-rouge">ConnectionConfig</code>, RequestFactory, RequestFactory의 <code class="language-plaintext highlighter-rouge">HttpContext</code>)이 하나의 fallback 체인을 이루는 게 아니라, 설정값마다 경로가 다르다.</p></blockquote><p>Apache HttpClient 5.5.2 / httpcore5 5.3.6 / Spring Framework 6.2.19 소스와 실행 결과 기준이다.</p><h3 id="1-requestconfig-덩어리가-정해지는-순서">1. RequestConfig 덩어리가 정해지는 순서</h3><p><code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code>, <code class="language-plaintext highlighter-rouge">connectTimeout</code>, <code class="language-plaintext highlighter-rouge">responseTimeout</code>, <code class="language-plaintext highlighter-rouge">connectionKeepAlive</code>는 전부 <code class="language-plaintext highlighter-rouge">RequestConfig</code> 하나에 담겨 요청에 실려 다닌다. 그 <code class="language-plaintext highlighter-rouge">RequestConfig</code>가 어디서 오는지가 먼저다.</p><div class="table-wrapper"><table><thead><tr><th>순위<th>출처<th>적용 방식<tbody><tr><td>1<td>RequestFactory의 <code class="language-plaintext highlighter-rouge">HttpContext</code> — <code class="language-plaintext highlighter-rouge">httpContextFactory</code>가 만든 컨텍스트에 <code class="language-plaintext highlighter-rouge">RequestConfig</code>가 들어 있고, 그게 <code class="language-plaintext highlighter-rouge">RequestConfig.DEFAULT</code>와 <code class="language-plaintext highlighter-rouge">equals</code>가 아닐 때<td><strong>통째로</strong> 채택. Client·Factory 설정은 전부 무시된다 (all-or-nothing)<tr><td>2<td>요청 객체 자체 — <code class="language-plaintext highlighter-rouge">HttpGet.setConfig</code> 등 <code class="language-plaintext highlighter-rouge">Configurable</code> 구현<td><code class="language-plaintext highlighter-rouge">InternalHttpClient.doExecute</code>가 실행 직전 컨텍스트를 덮는다<tr><td>3<td>Client default ⊕ Factory setter<td>Client의 <code class="language-plaintext highlighter-rouge">setDefaultRequestConfig</code> 값을 복사본 베이스로 두고, Factory에 세팅된 필드만 그 위에 덮는다 — <strong>필드 단위 병합, Factory 우선</strong></table></div><p>1번이 all-or-nothing이라는 게 함정이다. 컨텍스트에 <code class="language-plaintext highlighter-rouge">RequestConfig</code>를 하나 꽂으면 거기 안 담긴 항목까지 그 객체의 값(대개 <code class="language-plaintext highlighter-rouge">RequestConfig.DEFAULT</code>)으로 떨어진다. <code class="language-plaintext highlighter-rouge">RestTemplate</code> 경로에서는 Spring이 요청 객체에 <code class="language-plaintext highlighter-rouge">RequestConfig</code>를 넣지 않으므로 2번은 쓰이지 않는다. 실질적으로 1번 아니면 3번이다.</p><h3 id="3순위-병합은-구체적으로-어떤-값이-남나">3순위 병합은 구체적으로 어떤 값이 남나</h3><p><code class="language-plaintext highlighter-rouge">mergeRequestConfig</code>의 조건은 필드별 <code class="language-plaintext highlighter-rouge">&gt;= 0</code>이다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="c1">// HttpComponentsClientHttpRequestFactory.java:325-341 (spring-web 6.2.19)</span>
+<span class="kd">protected</span> <span class="nc">RequestConfig</span> <span class="nf">mergeRequestConfig</span><span class="o">(</span><span class="nc">RequestConfig</span> <span class="n">clientConfig</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">connectTimeout</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="k">this</span><span class="o">.</span><span class="na">connectionRequestTimeout</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="k">this</span><span class="o">.</span><span class="na">readTimeout</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="o">)</span> <span class="o">{</span>  <span class="c1">// nothing to merge</span>
+        <span class="k">return</span> <span class="n">clientConfig</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nc">RequestConfig</span><span class="o">.</span><span class="na">Builder</span> <span class="n">builder</span> <span class="o">=</span> <span class="nc">RequestConfig</span><span class="o">.</span><span class="na">copy</span><span class="o">(</span><span class="n">clientConfig</span><span class="o">);</span>
+    <span class="k">if</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">connectTimeout</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">builder</span><span class="o">.</span><span class="na">setConnectTimeout</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">connectTimeout</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="k">if</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">connectionRequestTimeout</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">builder</span><span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">connectionRequestTimeout</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="k">if</span> <span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">readTimeout</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">builder</span><span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">readTimeout</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>세 필드의 초기값이 <code class="language-plaintext highlighter-rouge">-1</code>이므로, setter를 호출하지 않은 항목은 병합 대상에서 빠지고 Client 값이 그대로 살아남는다. Client에 세 값을 모두 1000ms로 걸어 두고 Factory 쪽을 바꿔 가며 <code class="language-plaintext highlighter-rouge">mergeRequestConfig</code>의 결과를 찍어 봤다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="nc">RequestConfig</span> <span class="n">clientConfig</span> <span class="o">=</span> <span class="nc">RequestConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="mi">1000</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">setConnectTimeout</span><span class="o">(</span><span class="mi">1000</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="mi">1000</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="nc">HttpClient</span> <span class="n">client</span> <span class="o">=</span> <span class="nc">HttpClients</span><span class="o">.</span><span class="na">custom</span><span class="o">().</span><span class="na">setDefaultRequestConfig</span><span class="o">(</span><span class="n">clientConfig</span><span class="o">).</span><span class="na">build</span><span class="o">();</span>
+
+<span class="c1">// mergeRequestConfig 가 protected 라 노출용 서브클래스로 감싸 호출</span>
+<span class="n">factory</span><span class="o">.</span><span class="na">setReadTimeout</span><span class="o">(</span><span class="mi">2000</span><span class="o">);</span>
+<span class="n">factory</span><span class="o">.</span><span class="na">merge</span><span class="o">(</span><span class="n">clientConfig</span><span class="o">);</span>
+</pre></table></code></div></div><div class="table-wrapper"><table><thead><tr><th>케이스<th>Factory 설정<th>connectionRequestTimeout<th>connectTimeout<th>responseTimeout<tbody><tr><td>A<td>없음<td>1000ms<td>1000ms<td>1000ms<tr><td>B<td><code class="language-plaintext highlighter-rouge">setReadTimeout(2000)</code><td>1000ms<td>1000ms<td><strong>2000ms</strong><tr><td>C<td>셋 다 3000<td><strong>3000ms</strong><td><strong>3000ms</strong><td><strong>3000ms</strong><tr><td>D<td><code class="language-plaintext highlighter-rouge">setReadTimeout(2000)</code> (Client 설정 없음)<td>3분<td>null<td>2000ms<tr><td>E<td><code class="language-plaintext highlighter-rouge">setReadTimeout(0)</code><td>1000ms<td>1000ms<td><strong>0ms = 무한</strong></table></div><p>B가 이 병합의 성격을 보여준다. Factory에서 <code class="language-plaintext highlighter-rouge">readTimeout</code> 하나만 건드렸는데 나머지 두 값은 Client 것이 그대로 남는다. “Factory에 설정하면 Client 설정이 통째로 무시된다”도, “Client가 우선이다”도 아니고 <strong>필드 단위로 Factory가 이긴다.</strong></p><p>D는 Client 쪽 <code class="language-plaintext highlighter-rouge">RequestConfig</code>에 아무것도 안 넣은 경우다. 병합되지 않은 자리는 <code class="language-plaintext highlighter-rouge">RequestConfig</code> 자체의 기본값(<code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code> 3분, <code class="language-plaintext highlighter-rouge">connectTimeout</code> null)으로 떨어진다.</p><p>E는 조건이 <code class="language-plaintext highlighter-rouge">&gt; 0</code>이 아니라 <code class="language-plaintext highlighter-rouge">&gt;= 0</code>이라서 생긴다. <code class="language-plaintext highlighter-rouge">0</code>은 “설정 안 함”이 아니라 <strong>무한 대기</strong>로 해석되므로, 계산 결과가 0이 될 수 있는 변수를 setter에 그대로 넘기면 타임아웃이 사라진다.</p><h3 id="2-설정값별-최종-적용-경로">2. 설정값별 최종 적용 경로</h3><div class="table-wrapper"><table><thead><tr><th>설정<th>소비 지점<th>적용 순서<th>아무것도 설정 안 하면<tbody><tr><td><code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code><td>풀에서 커넥션 대여(lease) 대기<td><code class="language-plaintext highlighter-rouge">RequestConfig</code> 하나뿐 (위 1번 표)<td>3분<tr><td><code class="language-plaintext highlighter-rouge">connectTimeout</code><td>TCP connect (+TLS handshake)<td><code class="language-plaintext highlighter-rouge">RequestConfig.connectTimeout</code>(deprecated) → <strong>null이면</strong> <code class="language-plaintext highlighter-rouge">ConnectionConfig.connectTimeout</code><td>3분<tr><td><code class="language-plaintext highlighter-rouge">readTimeout</code>(=<code class="language-plaintext highlighter-rouge">responseTimeout</code>)<td>응답 read = 소켓 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code><td>덮어쓰기 스택 (아래 3번)<td>3분<tr><td><code class="language-plaintext highlighter-rouge">connectionKeepAlive</code><td>재사용 커넥션 유지 상한<td><code class="language-plaintext highlighter-rouge">RequestConfig</code> 하나뿐<td>3분</table></div><p><code class="language-plaintext highlighter-rouge">connectTimeout</code>만 진짜 fallback이다. <code class="language-plaintext highlighter-rouge">InternalExecRuntime</code>이 <code class="language-plaintext highlighter-rouge">requestConfig.getConnectTimeout()</code>을 매니저에 넘기고, 매니저가 그게 null일 때만 자기 <code class="language-plaintext highlighter-rouge">ConnectionConfig</code>를 쓴다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="c1">// PoolingHttpClientConnectionManager.java:492</span>
+<span class="kd">final</span> <span class="nc">Timeout</span> <span class="n">connectTimeout</span> <span class="o">=</span> <span class="n">timeout</span> <span class="o">!=</span> <span class="kc">null</span>
+        <span class="o">?</span> <span class="nc">Timeout</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">timeout</span><span class="o">.</span><span class="na">getDuration</span><span class="o">(),</span> <span class="n">timeout</span><span class="o">.</span><span class="na">getTimeUnit</span><span class="o">())</span>
+        <span class="o">:</span> <span class="n">connectionConfig</span><span class="o">.</span><span class="na">getConnectTimeout</span><span class="o">();</span>
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">SocketConfig</code>·<code class="language-plaintext highlighter-rouge">ConnectionConfig</code> 어디에도 <code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code>에 대응하는 값은 없다. <code class="language-plaintext highlighter-rouge">soTimeout</code>/<code class="language-plaintext highlighter-rouge">socketTimeout</code>은 read 전용이고 풀 대기와는 무관하다.</p><p>반대 방향도 마찬가지다. <code class="language-plaintext highlighter-rouge">validateAfterInactivity</code> · <code class="language-plaintext highlighter-rouge">timeToLive</code> · <code class="language-plaintext highlighter-rouge">soTimeout</code> 바닥값은 요청이 아니라 커넥션에 딸린 속성이라 <code class="language-plaintext highlighter-rouge">RequestConfig</code>로는 건드릴 수 없고, 어떤 요청이든 항상 매니저 설정만 쓰인다.</p><h3 id="3-readtimeout은-fallback이-아니라-덮어쓰기">3. readTimeout은 fallback이 아니라 덮어쓰기</h3><p>read 상한의 실체는 소켓 옵션 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code> 하나다. <strong>블로킹 read 한 번이 데이터를 기다릴 수 있는 최대 시간</strong>으로, 스레드가 <code class="language-plaintext highlighter-rouge">socket.read()</code>를 호출하면 커널 버퍼에 데이터가 도착할 때까지 그 자리에서 멈춰 기다리다가(블로킹) 그 시간 안에 한 바이트도 안 오면 <code class="language-plaintext highlighter-rouge">SocketTimeoutException</code>이 난다. 성질이 두 가지다.</p><ul><li><strong>read 호출 1회당</strong> 적용된다. 응답 전체 시간의 상한이 아니다. 서버가 바이트를 조금씩 흘려주면 read가 성공할 때마다 대기가 새로 시작되므로, 응답 전체는 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code>보다 훨씬 오래 걸릴 수 있다.<li>소켓 위에서 일어나는 <strong>모든 블로킹 read</strong>에 적용된다 — TLS handshake 중의 read, 상태줄·헤더 read, 바디 read 전부. 어느 단계냐가 아니라, 그 read가 일어나는 순간 소켓에 어떤 값이 깔려 있느냐만 문제다.</ul><p>read 계열 설정 3개는 우선순위 로직이 따로 있는 게 아니라, 이 한 자리를 서로 다른 시점에 덮어쓴다.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre>SO_TIMEOUT 한 자리 — 나중에 덮은 값이 이긴다
+
+소켓 생성 시   SocketConfig.soTimeout          기본 3분   → 항상 깔린다 (바닥)
+     ↓
+connect 직후   ConnectionConfig.socketTimeout  기본 null  → null이면 안 덮음
+lease 직후     ConnectionConfig.socketTimeout  풀에서 꺼낼 때마다 다시 걸림
+     ↓
+요청 직전      RequestConfig.responseTimeout   기본 null  → null이면 안 덮음
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">soTimeout</code>을 “바닥값”이라 부르는 이유가 여기 있다. 시간 축에서는 세 값 모두 대기 시간의 상한(천장)이고, “바닥”은 이 덮어쓰기 스택에서의 위치를 말한다 — 제일 먼저 깔려서 위에 아무것도 안 덮인 구간에서만 드러나는 층이다.</p><p><code class="language-plaintext highlighter-rouge">SocketConfig</code>와 <code class="language-plaintext highlighter-rouge">ConnectionConfig.connectTimeout</code>은 커넥션이 <strong>새로 만들어질 때만</strong> 적용된다. 풀에서 재사용되는 커넥션은 소켓 생성과 connect를 통째로 건너뛴다. <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>만 예외로, 수립 직후뿐 아니라 <strong>풀에서 커넥션을 꺼낼 때(lease)마다</strong> 다시 걸린다.</p><p>정리하면 “앞이 없으면 뒤를 쓴다”가 아니라 <strong>“뒤가 있으면 앞을 덮는다”</strong> 이고, 덮은 값은 요청이 끝나도 복원되지 않은 채 커넥션과 함께 풀로 돌아간다. <code class="language-plaintext highlighter-rouge">responseTimeout</code>을 일부 요청에만 주면 다음 요청이 그 값을 물려받는 이유다. 이걸 되돌리는 게 lease마다 다시 걸리는 <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>이고, 설정하지 않으면(기본 null) 리셋이 없어 read 상한이 그 커넥션을 직전에 쓴 요청에 따라 달라진다. (실측은 <a href="#재사용-커넥션에서-read-상한이-섞이는-걸-확인해보기">재사용 커넥션에서 read 상한이 섞이는 걸 확인해보기</a>)</p><p>그래도 무한 대기가 나지는 않는데, 특정 설정 덕이 아니라 스택 구조 자체 덕이다 — <code class="language-plaintext highlighter-rouge">SocketConfig.DEFAULT.soTimeout</code>이 null이 아니라 3분이라 <code class="language-plaintext highlighter-rouge">SO_TIMEOUT</code> 자리는 항상 유한한 값으로 채워져 있다.</p><h3 id="그래서-설정할-곳">그래서 설정할 곳</h3><div class="table-wrapper"><table><thead><tr><th>어디에<th>무엇을<tbody><tr><td><code class="language-plaintext highlighter-rouge">HttpClient.setDefaultRequestConfig</code><td><code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code>, <code class="language-plaintext highlighter-rouge">responseTimeout</code>, <code class="language-plaintext highlighter-rouge">connectionKeepAlive</code><tr><td>커넥션 매니저의 <code class="language-plaintext highlighter-rouge">ConnectionConfig</code><td><code class="language-plaintext highlighter-rouge">connectTimeout</code>, <code class="language-plaintext highlighter-rouge">socketTimeout</code></table></div><p>RequestFactory setter는 위 1번 표의 3순위 경로에서 Client 설정 위에 필드 단위로 덮이므로, 둘 다 쓰면 어느 값이 이겼는지 코드만 봐서는 추적이 어려워진다. 한 곳으로 몰아두는 편이 낫다.</p><h2 id="근거-소스와-실측">근거: 소스와 실측</h2><hr /><blockquote><p>위 정리를 확인한 코드와 실행 결과. 설정 입구는 4곳(팩토리, 컨텍스트, HttpClient, 커넥션 매니저)에 흩어져 있지만, 요청이 실행될 때 실제로 타임아웃을 소비하는 주체는 둘뿐이다 — 요청에 실려 다니는 <code class="language-plaintext highlighter-rouge">RequestConfig</code>와, 커넥션 매니저가 커넥션에 발라두는 <code class="language-plaintext highlighter-rouge">ConnectionConfig</code>/<code class="language-plaintext highlighter-rouge">SocketConfig</code>.</p></blockquote><p>Apache HttpClient 5.5.2 / Spring Framework 6.2.19 소스 기준으로 확인한 내용이다. 버전에 따라 갈리는 항목(TLS handshake)은 5.0.4~5.6.4 릴리스 태그 소스를 비교했다.</p><h3 id="설정-입구-라벨">설정 입구 라벨</h3><div class="table-wrapper"><table><thead><tr><th>라벨<th>설정 위치<th>타임아웃 항목<tbody><tr><td><strong>Context</strong><td><code class="language-plaintext highlighter-rouge">httpContextFactory</code>에서 <code class="language-plaintext highlighter-rouge">HttpClientContext</code>에 실은 <code class="language-plaintext highlighter-rouge">RequestConfig</code><td><code class="language-plaintext highlighter-rouge">RequestConfig</code> 전체<tr><td><strong>Factory</strong><td><code class="language-plaintext highlighter-rouge">HttpComponentsClientHttpRequestFactory</code> setter<td><code class="language-plaintext highlighter-rouge">setReadTimeout</code>(→ <code class="language-plaintext highlighter-rouge">responseTimeout</code>으로 병합), <code class="language-plaintext highlighter-rouge">setConnectionRequestTimeout</code>, <code class="language-plaintext highlighter-rouge">setConnectTimeout</code>(6.2.13부터 deprecated)<tr><td><strong>Client</strong><td><code class="language-plaintext highlighter-rouge">HttpClient</code>의 <code class="language-plaintext highlighter-rouge">setDefaultRequestConfig(...)</code><td><code class="language-plaintext highlighter-rouge">RequestConfig</code> 전체<tr><td><strong>Manager</strong><td><code class="language-plaintext highlighter-rouge">PoolingHttpClientConnectionManager</code>의 <code class="language-plaintext highlighter-rouge">ConnectionConfig</code> / <code class="language-plaintext highlighter-rouge">SocketConfig</code><td><code class="language-plaintext highlighter-rouge">connectTimeout</code> · <code class="language-plaintext highlighter-rouge">socketTimeout</code> · <code class="language-plaintext highlighter-rouge">timeToLive</code> · <code class="language-plaintext highlighter-rouge">validateAfterInactivity</code> / <code class="language-plaintext highlighter-rouge">soTimeout</code></table></div><p>Context, Factory, Client는 입구는 셋이지만 결국 전부 <code class="language-plaintext highlighter-rouge">RequestConfig</code>라는 같은 그릇으로 모인다. 어느 입구가 이기는지는 <a href="#1-requestconfig-덩어리가-정해지는-순서">위</a>에서 정리했고, 그 판정과 병합을 실제로 하는 코드가 <code class="language-plaintext highlighter-rouge">HttpComponentsClientHttpRequestFactory#createRequest</code>다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre><td class="rouge-code"><pre><span class="c1">// createRequest — context 에 RequestConfig 가 이미 있으면(Context) 이 블록 전체가 스킵된다</span>
+<span class="k">if</span> <span class="o">(!</span><span class="n">hasCustomRequestConfig</span><span class="o">(</span><span class="n">context</span><span class="o">))</span> <span class="o">{</span>
+    <span class="nc">RequestConfig</span> <span class="n">config</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="c1">// 요청 객체 자체에 config 가 실려 있으면 그대로 사용 (RestTemplate 경로에서는 사실상 항상 null)</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">httpRequest</span> <span class="k">instanceof</span> <span class="nc">Configurable</span> <span class="n">configurable</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">configurable</span><span class="o">.</span><span class="na">getConfig</span><span class="o">();</span>
+    <span class="o">}</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">config</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">createRequestConfig</span><span class="o">(</span><span class="n">client</span><span class="o">);</span>   <span class="c1">// Client ⊕ Factory</span>
+    <span class="o">}</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">config</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">context</span> <span class="k">instanceof</span> <span class="nc">HttpClientContext</span> <span class="n">clientContext</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">clientContext</span><span class="o">.</span><span class="na">setRequestConfig</span><span class="o">(</span><span class="n">config</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="n">context</span><span class="o">.</span><span class="na">setAttribute</span><span class="o">(</span><span class="nc">HttpClientContext</span><span class="o">.</span><span class="na">REQUEST_CONFIG</span><span class="o">,</span> <span class="n">config</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="c1">// Context 판정</span>
+<span class="kd">private</span> <span class="kd">static</span> <span class="kt">boolean</span> <span class="nf">hasCustomRequestConfig</span><span class="o">(</span><span class="nc">HttpContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">context</span> <span class="k">instanceof</span> <span class="nc">HttpClientContext</span> <span class="n">clientContext</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">RequestConfig</span> <span class="n">requestConfig</span> <span class="o">=</span> <span class="n">clientContext</span><span class="o">.</span><span class="na">getRequestConfig</span><span class="o">();</span>
+        <span class="k">return</span> <span class="n">requestConfig</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">requestConfig</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">DEFAULT</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="n">context</span><span class="o">.</span><span class="na">getAttribute</span><span class="o">(</span><span class="nc">HttpClientContext</span><span class="o">.</span><span class="na">REQUEST_CONFIG</span><span class="o">)</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="c1">// Client ⊕ Factory 의 실체 — mergeRequestConfig 본문과 실측 결과는 위 절 참고</span>
+<span class="kd">private</span> <span class="nc">RequestConfig</span> <span class="nf">createRequestConfig</span><span class="o">(</span><span class="nc">Object</span> <span class="n">client</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">client</span> <span class="k">instanceof</span> <span class="nc">Configurable</span> <span class="n">configurableClient</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="nf">mergeRequestConfig</span><span class="o">(</span><span class="n">configurableClient</span><span class="o">.</span><span class="na">getConfig</span><span class="o">());</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="nf">mergeRequestConfig</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">DEFAULT</span><span class="o">);</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">hasCustomRequestConfig</code>는 context의 config가 <code class="language-plaintext highlighter-rouge">RequestConfig.DEFAULT</code>와 <code class="language-plaintext highlighter-rouge">equals</code>로 같으면 custom이 아닌 것으로 판정한다. 아무 값 없이 <code class="language-plaintext highlighter-rouge">RequestConfig.custom().build()</code>를 context에 실으면 Context로 인정되지 않는다.</p><h3 id="요청-한-번의-타임라인">요청 한 번의 타임라인</h3><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+</pre><td class="rouge-code"><pre>restTemplate.getForObject(...)
+│
+├─ ① 요청 생성 (HttpComponentsClientHttpRequestFactory.createRequest)
+│     context 에 RequestConfig 있는가?
+│       있으면(Context) → 이 요청의 RequestConfig = Context   (Factory, Client 는 완전 무시)
+│       없으면          → 이 요청의 RequestConfig = Client ⊕ Factory
+│     ▶ 이후 단계에서 "RequestConfig" 는 여기서 확정된 것 하나를 말한다
+│
+└─ ② httpClient.execute(request, context)
+   │
+   ├─ [풀 대기]  connectionRequestTimeout
+   │      ◀ RequestConfig             = Context 또는 (Factory, 없으면 Client)
+   │    놀던 커넥션 stale 체크 기준 (validateAfterInactivity)
+   │      ◀ Manager (ConnectionConfig)                     ← 항상 Manager
+   │    lease 직후: socketTimeout 설정돼 있으면 SO_TIMEOUT 리셋
+   │      ◀ Manager (ConnectionConfig)                     ← 항상 Manager
+   │
+   ├─ [커넥션 수립]  ※ 새 커넥션일 때만. 재사용이면 통째로 스킵
+   │    소켓 생성: SO_TIMEOUT 바닥값 (soTimeout)
+   │      ◀ Manager (SocketConfig)                         ← 항상 Manager
+   │    TCP connect (connectTimeout, DNS 결과 주소마다 반복)
+   │      ◀ RequestConfig.connectTimeout 이 있으면 그것    = Context 또는 Factory
+   │        null 이면 Manager (ConnectionConfig.connectTimeout)
+   │    TLS handshake — 5.5.1+: connectTimeout, 5.5 이하: soTimeout (하단 절 참고)
+   │    수립 직후: SO_TIMEOUT = socketTimeout, TTL 스탬프
+   │      ◀ Manager (ConnectionConfig)                     ← 항상 Manager
+   │
+   ├─ [요청 실행 직전]  responseTimeout 있으면 SO_TIMEOUT 덮어씀
+   │      ◀ RequestConfig             = Context 또는 (Factory, 없으면 Client)
+   │
+   ├─ [응답 대기·읽기]  현재 SO_TIMEOUT = read 상한
+   │      = 위에서 마지막으로 덮은 값 (안 덮었으면 Manager 의 socketTimeout → soTimeout 순으로 남은 값)
+   │
+   └─ [반납] 풀로 release — SO_TIMEOUT 은 마지막 값 그대로 남는다
+</pre></table></code></div></div><h3 id="재사용-커넥션에서-read-상한이-섞이는-걸-확인해보기">재사용 커넥션에서 read 상한이 섞이는 걸 확인해보기</h3><p><a href="#3-readtimeout은-fallback이-아니라-덮어쓰기">readTimeout은 fallback이 아니라 덮어쓰기</a>의 두 가지 — <code class="language-plaintext highlighter-rouge">responseTimeout</code>이 커넥션에 남는다는 것, <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>이 그걸 되돌린다는 것 — 을 실제로 돌려서 확인했다. httpclient5 5.5.2 / httpcore5 5.3.6 / JDK 21 기준이다.</p><p>커넥션을 강제로 재사용시키기 위해 풀 크기를 1로 두고 두 요청을 순서대로 보낸다.</p><ul><li><strong>A</strong>: <code class="language-plaintext highlighter-rouge">responseTimeout</code> 300ms, 즉시 응답하는 엔드포인트 → 성공하고 커넥션이 풀로 반납된다<li><strong>B</strong>: <code class="language-plaintext highlighter-rouge">responseTimeout</code> <strong>미설정</strong>, 800ms 걸리는 엔드포인트</ul><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre><td class="rouge-code"><pre><span class="nc">PoolingHttpClientConnectionManager</span> <span class="n">cm</span> <span class="o">=</span> <span class="nc">PoolingHttpClientConnectionManagerBuilder</span><span class="o">.</span><span class="na">create</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">setDefaultConnectionConfig</span><span class="o">(</span><span class="n">cc</span><span class="o">.</span><span class="na">build</span><span class="o">())</span>   <span class="c1">// CASE 1: socketTimeout 미설정 / CASE 2: 5s</span>
+        <span class="o">.</span><span class="na">setMaxConnPerRoute</span><span class="o">(</span><span class="mi">1</span><span class="o">).</span><span class="na">setMaxConnTotal</span><span class="o">(</span><span class="mi">1</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+
+<span class="nc">CloseableHttpClient</span> <span class="n">client</span> <span class="o">=</span> <span class="nc">HttpClients</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">setConnectionManager</span><span class="o">(</span><span class="n">cm</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">setDefaultRequestConfig</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+                <span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+                <span class="o">.</span><span class="na">build</span><span class="o">())</span>              <span class="c1">// responseTimeout = null</span>
+        <span class="o">.</span><span class="na">disableAutomaticRetries</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+
+<span class="c1">// A — 요청 객체에 config 를 실어 responseTimeout 300ms 적용</span>
+<span class="nc">HttpGet</span> <span class="n">a</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HttpGet</span><span class="o">(</span><span class="s">"http://localhost:"</span> <span class="o">+</span> <span class="n">port</span> <span class="o">+</span> <span class="s">"/fast"</span><span class="o">);</span>
+<span class="n">a</span><span class="o">.</span><span class="na">setConfig</span><span class="o">(</span><span class="nc">RequestConfig</span><span class="o">.</span><span class="na">custom</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">setConnectionRequestTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+        <span class="o">.</span><span class="na">setResponseTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ofMilliseconds</span><span class="o">(</span><span class="mi">300</span><span class="o">)).</span><span class="na">build</span><span class="o">());</span>
+<span class="n">exec</span><span class="o">(</span><span class="n">client</span><span class="o">,</span> <span class="n">a</span><span class="o">);</span>
+
+<span class="c1">// B — 아무 설정도 주지 않는다</span>
+<span class="nc">HttpGet</span> <span class="n">b</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">HttpGet</span><span class="o">(</span><span class="s">"http://localhost:"</span> <span class="o">+</span> <span class="n">port</span> <span class="o">+</span> <span class="s">"/slow"</span><span class="o">);</span>
+<span class="n">exec</span><span class="o">(</span><span class="n">client</span><span class="o">,</span> <span class="n">b</span><span class="o">);</span>
+</pre></table></code></div></div><p>결과.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre>===== CASE 1: ConnectionConfig.socketTimeout 미설정 (기본 null) =====
+A (responseTimeout=300ms, /fast) -&gt; OK 200  (90ms)
+   pool: [leased: 0; pending: 0; available: 1; max: 1]
+B (responseTimeout 미설정, /slow 800ms) -&gt; SocketTimeoutException: Read timed out  (303ms)
+
+===== CASE 2: ConnectionConfig.socketTimeout = 5s =====
+A (responseTimeout=300ms, /fast) -&gt; OK 200  (2ms)
+   pool: [leased: 0; pending: 0; available: 1; max: 1]
+B (responseTimeout 미설정, /slow 800ms) -&gt; OK 200  (802ms)
+</pre></table></code></div></div><p>CASE 1의 B는 자기 설정이 아니라 A가 남긴 300ms에 걸려 303ms에 죽는다. CASE 2는 lease 시점에 5s로 리셋되어 802ms에 정상 응답한다. 두 CASE 모두 A 직후 풀 상태가 <code class="language-plaintext highlighter-rouge">available: 1</code>이므로 B가 같은 커넥션을 재사용한 것이 맞다.</p><p>값이 남는 쪽은 커넥션이다. 마지막으로 세팅된 SO_TIMEOUT을 필드에 기억해 두고, 풀에 반납될 때 소켓만 0으로 내렸다가 꺼낼 때 그 필드를 복원한다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="c1">// DefaultManagedHttpClientConnection</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">setSocketTimeout</span><span class="o">(</span><span class="kd">final</span> <span class="nc">Timeout</span> <span class="n">timeout</span><span class="o">)</span> <span class="o">{</span>
+    <span class="kd">super</span><span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="n">timeout</span><span class="o">);</span>
+    <span class="n">socketTimeout</span> <span class="o">=</span> <span class="n">timeout</span><span class="o">;</span>          <span class="c1">// 마지막 값을 필드에 기억</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">passivate</span><span class="o">()</span> <span class="o">{</span> <span class="kd">super</span><span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="nc">Timeout</span><span class="o">.</span><span class="na">ZERO_MILLISECONDS</span><span class="o">);</span> <span class="o">}</span>  <span class="c1">// 반납: 소켓만 0, 필드는 유지</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">activate</span><span class="o">()</span>  <span class="o">{</span> <span class="kd">super</span><span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="n">socketTimeout</span><span class="o">);</span> <span class="o">}</span>              <span class="c1">// lease: 기억한 값 복원</span>
+</pre></table></code></div></div><p>되돌리는 쪽은 매니저인데, <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>이 설정돼 있을 때만 동작한다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="c1">// PoolingHttpClientConnectionManager</span>
+<span class="n">conn</span><span class="o">.</span><span class="na">activate</span><span class="o">();</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">connectionConfig</span><span class="o">.</span><span class="na">getSocketTimeout</span><span class="o">()</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>   <span class="c1">// 기본 null → 리셋이 일어나지 않는다</span>
+    <span class="n">conn</span><span class="o">.</span><span class="na">setSocketTimeout</span><span class="o">(</span><span class="n">connectionConfig</span><span class="o">.</span><span class="na">getSocketTimeout</span><span class="o">());</span>
+<span class="o">}</span>
+</pre></table></code></div></div><blockquote><p><code class="language-plaintext highlighter-rouge">responseTimeout</code>을 일부 요청에만 주는 구성이라면 <code class="language-plaintext highlighter-rouge">ConnectionConfig.socketTimeout</code>을 함께 설정한다. 없으면 read 상한이 그 커넥션을 직전에 쓴 요청에 따라 달라진다.</p></blockquote><h3 id="tls-handshake는-어느-타임아웃에-걸리나">TLS handshake는 어느 타임아웃에 걸리나</h3><p>TLS handshake에는 별도 타이머가 없다. handshake 자체가 소켓 위 read/write의 연속이라, ServerHello 등을 기다리는 것도 결국 블로킹 read이고 그 순간 소켓에 깔린 SO_TIMEOUT이 handshake를 지배한다. 그래서 질문은 “handshake 시점에 SO_TIMEOUT에 뭐가 들어있냐”로 환원되는데, 이게 버전에 따라 다르다 (릴리스 태그별 소스로 확인).</p><div class="table-wrapper"><table><thead><tr><th>HttpClient 버전<th>handshake를 지배하는 값<tbody><tr><td>~5.1<td><code class="language-plaintext highlighter-rouge">SocketConfig.soTimeout</code> (기본 3분). <code class="language-plaintext highlighter-rouge">TlsConfig</code>가 아직 없다<tr><td>5.2 ~ 5.5<td><code class="language-plaintext highlighter-rouge">TlsConfig.handshakeTimeout</code>을 명시했으면 그것, 아니면 <code class="language-plaintext highlighter-rouge">SocketConfig.soTimeout</code><tr><td>5.5.1~<td>handshake 직전에 SO_TIMEOUT을 <code class="language-plaintext highlighter-rouge">handshakeTimeout ?? connectTimeout</code>으로 교체했다가 handshake 후 복원 → 사실상 <code class="language-plaintext highlighter-rouge">connectTimeout</code></table></div><p>경계는 5.6이 아니라 <strong>5.5.1</strong>이다. 5.5까지는 handshake 직전 SO_TIMEOUT 조정이 TLS 전략 쪽(<code class="language-plaintext highlighter-rouge">AbstractClientTlsStrategy#executeHandshake</code>)에 있었고, <code class="language-plaintext highlighter-rouge">handshakeTimeout</code>을 명시하지 않으면 아무것도 하지 않았다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="c1">// 5.5 — AbstractClientTlsStrategy#executeHandshake</span>
+<span class="kd">final</span> <span class="nc">Timeout</span> <span class="n">handshakeTimeout</span> <span class="o">=</span> <span class="n">tlsConfig</span><span class="o">.</span><span class="na">getHandshakeTimeout</span><span class="o">();</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">handshakeTimeout</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">upgradedSocket</span><span class="o">.</span><span class="na">setSoTimeout</span><span class="o">(</span><span class="n">handshakeTimeout</span><span class="o">.</span><span class="na">toMillisecondsIntBound</span><span class="o">());</span>
+<span class="o">}</span>
+<span class="n">initializeSocket</span><span class="o">(</span><span class="n">upgradedSocket</span><span class="o">);</span>
+<span class="n">upgradedSocket</span><span class="o">.</span><span class="na">startHandshake</span><span class="o">();</span>
+</pre></table></code></div></div><p>5.5.1에서 이 코드가 커넥션 오퍼레이터로 옮겨가면서 <code class="language-plaintext highlighter-rouge">?: connectTimeout</code> 폴백과 원복이 붙었다. 5.6.4까지 동일하다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="c1">// 5.5.1~ — DefaultHttpClientConnectionOperator#connect</span>
+<span class="kd">final</span> <span class="kt">int</span> <span class="n">soTimeout</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="na">getSoTimeout</span><span class="o">();</span>
+<span class="kd">final</span> <span class="nc">Timeout</span> <span class="n">handshakeTimeout</span> <span class="o">=</span> <span class="n">tlsConfig</span><span class="o">.</span><span class="na">getHandshakeTimeout</span><span class="o">()</span> <span class="o">!=</span> <span class="kc">null</span>
+        <span class="o">?</span> <span class="n">tlsConfig</span><span class="o">.</span><span class="na">getHandshakeTimeout</span><span class="o">()</span> <span class="o">:</span> <span class="n">connectTimeout</span><span class="o">;</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">handshakeTimeout</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">socket</span><span class="o">.</span><span class="na">setSoTimeout</span><span class="o">(</span><span class="n">handshakeTimeout</span><span class="o">.</span><span class="na">toMillisecondsIntBound</span><span class="o">());</span>
+<span class="o">}</span>
+<span class="kd">final</span> <span class="nc">SSLSocket</span> <span class="n">sslSocket</span> <span class="o">=</span> <span class="n">tlsSocketStrategy</span><span class="o">.</span><span class="na">upgrade</span><span class="o">(</span><span class="n">socket</span><span class="o">,</span> <span class="n">tlsName</span><span class="o">.</span><span class="na">getHostName</span><span class="o">(),</span> <span class="n">tlsName</span><span class="o">.</span><span class="na">getPort</span><span class="o">(),</span> <span class="n">attachment</span><span class="o">,</span> <span class="n">context</span><span class="o">);</span>
+<span class="n">conn</span><span class="o">.</span><span class="na">bind</span><span class="o">(</span><span class="n">sslSocket</span><span class="o">,</span> <span class="n">socket</span><span class="o">);</span>
+<span class="n">socket</span><span class="o">.</span><span class="na">setSoTimeout</span><span class="o">(</span><span class="n">soTimeout</span><span class="o">);</span>   <span class="c1">// 복원</span>
+</pre></table></code></div></div><p>“TLS handshake는 connectTimeout이 아니라 read(so) 타임아웃에 걸린다”는 설명은 5.5까지 기준으로는 맞는 말이고, 5.5.1부터는 <code class="language-plaintext highlighter-rouge">connectTimeout</code>이 handshake까지 커버한다. 이 경계가 Spring Boot 3.5.x 패치 사이에 걸쳐 있어서 마이너 버전만 보고는 판단할 수 없다.</p><div class="table-wrapper"><table><thead><tr><th>Spring Boot<th>관리하는 httpclient5<tbody><tr><td>3.3.13<td>5.3.1<tr><td>3.4.10 · 3.5.0<td>5.4.4<tr><td>3.5.5 · 3.5.6<td>5.5<tr><td>3.5.7 이상<td>5.5.1</table></div><p>프록시 CONNECT 터널 위에서 TLS로 올라가는 경로(<code class="language-plaintext highlighter-rouge">DefaultHttpClientConnectionOperator#upgrade</code>)에는 5.6.4까지도 이 처리가 없다. 그쪽은 여전히 소켓에 깔려 있는 값, 즉 <code class="language-plaintext highlighter-rouge">soTimeout</code>(또는 그 시점의 SO_TIMEOUT)이 handshake를 지배한다.</p><h3 id="타임아웃별-예외">타임아웃별 예외</h3><p>어느 타임아웃이 터졌는지는 예외 타입으로 역추적할 수 있다.</p><div class="table-wrapper"><table><thead><tr><th>초과한 타임아웃<th>예외<tbody><tr><td><code class="language-plaintext highlighter-rouge">connectionRequestTimeout</code> (풀 대기)<td><code class="language-plaintext highlighter-rouge">ConnectionRequestTimeoutException</code><tr><td><code class="language-plaintext highlighter-rouge">connectTimeout</code> (TCP connect)<td><code class="language-plaintext highlighter-rouge">ConnectTimeoutException</code><tr><td>SO_TIMEOUT (<code class="language-plaintext highlighter-rouge">responseTimeout</code> / <code class="language-plaintext highlighter-rouge">socketTimeout</code> / <code class="language-plaintext highlighter-rouge">soTimeout</code>)<td><code class="language-plaintext highlighter-rouge">SocketTimeoutException</code></table></div><h2 id="실무에서-생각해볼-것">실무에서 생각해볼 것</h2><hr /><blockquote><p><code class="language-plaintext highlighter-rouge">connectTimeout</code>/<code class="language-plaintext highlighter-rouge">readTimeout</code> 두 개만 잡고 끝내기 쉬운데, 실무 장애는 그 옆 — 풀 대기, 풀 사이즈, 커넥션 수명 — 에서 더 자주 난다.</p></blockquote><p>요청별로 상한을 달리해야 하면 Context(<code class="language-plaintext highlighter-rouge">httpContextFactory</code>)를 한 층 더 쓴다. 그 외에 아래 항목들은 타임아웃 값 자체와는 별개로 봐야 한다.</p><h3 id="풀-대기-connectionrequesttimeout">풀 대기: connectionRequestTimeout</h3><p>기본값이 3분이다. 다운스트림이 느려지면 커넥션이 점유되고 다음 요청들이 풀 lease 대기에 들어가는데, 이 값이 길면 호출 스레드가 줄줄이 묶여 장애가 호출자 쪽으로 전파된다. read 타임아웃보다 짧게 잡는다. <code class="language-plaintext highlighter-rouge">ConnectionRequestTimeoutException</code>은 “상대가 느리다”가 아니라 “내 풀이 모자라다”는 신호라서 모니터링을 분리할 가치가 있다.</p><h3 id="풀-사이즈와-타임아웃은-세트">풀 사이즈와 타임아웃은 세트</h3><p><code class="language-plaintext highlighter-rouge">maxConnPerRoute</code> 기본값은 5다. 필요한 커넥션 수는 대략 TPS × 평균 응답시간이고, 최악의 응답시간은 read 타임아웃이므로 read 타임아웃을 늘리면 같은 TPS에서도 풀이 더 커야 한다. 타임아웃만 조정하고 풀을 안 보면 위의 풀 대기 문제로 되돌아간다.</p><h3 id="요청-전체-시간의-상한은-어디에도-없다">“요청 전체 시간”의 상한은 어디에도 없다</h3><p><code class="language-plaintext highlighter-rouge">responseTimeout</code>은 블로킹 read 1회당 상한이라, 서버가 바이트를 조금씩 흘려주는 응답은 read가 성공할 때마다 대기가 새로 시작되어 전체 시간이 상한 없이 늘어진다. 요청 전체 데드라인이 필요하면 HttpClient 설정만으로는 안 되고 상위 수단(Resilience4j <code class="language-plaintext highlighter-rouge">TimeLimiter</code>, 비동기 호출 + <code class="language-plaintext highlighter-rouge">Future.get(timeout)</code> 등)이 필요하다.</p><h3 id="keep-alive-커넥션의-반대편-수명">keep-alive 커넥션의 반대편 수명</h3><p>풀에 물고 있던 커넥션을 서버나 LB가 먼저 끊으면 타임아웃이 아니라 <code class="language-plaintext highlighter-rouge">NoHttpResponseException</code>이나 connection reset으로 나타난다. <code class="language-plaintext highlighter-rouge">setConnectionKeepAlive</code> · <code class="language-plaintext highlighter-rouge">timeToLive</code> · <code class="language-plaintext highlighter-rouge">evictIdleConnections</code> · <code class="language-plaintext highlighter-rouge">validateAfterInactivity</code>를 상대(서버·LB)의 idle timeout보다 짧게 맞추는 게 핵심이다. 본문 설정의 keepalive 30s / evict 30s / TTL 5m / validate 2s가 이 층이다.</p><h3 id="재시도가-붙는-조건">재시도가 붙는 조건</h3><p><code class="language-plaintext highlighter-rouge">HttpClientBuilder</code>는 <code class="language-plaintext highlighter-rouge">disableAutomaticRetries()</code>를 부르지 않는 한 <code class="language-plaintext highlighter-rouge">DefaultHttpRequestRetryStrategy</code>를 체인에 끼워 넣는다. 기본값은 <strong>최대 1회 재시도, 간격 1초</strong>다. 다만 무엇이 재시도되는지는 통념과 다르다.</p><div class="table-wrapper"><table><thead><tr><th>실패<th>재시도되나<tbody><tr><td><code class="language-plaintext highlighter-rouge">SocketTimeoutException</code> (read 상한 초과)<td>✗<tr><td><code class="language-plaintext highlighter-rouge">ConnectTimeoutException</code> (connect 상한 초과)<td>✗<tr><td><code class="language-plaintext highlighter-rouge">ConnectionRequestTimeoutException</code> (풀 대기 초과)<td>✗<tr><td><code class="language-plaintext highlighter-rouge">NoHttpResponseException</code>, connection reset 등 그 밖의 <code class="language-plaintext highlighter-rouge">IOException</code><td>멱등 메서드만 ○ (GET·HEAD·PUT·DELETE·OPTIONS·TRACE)<tr><td>429 · 503 응답<td>○ — <strong>멱등성을 따지지 않는다</strong></table></div><p>타임아웃 예외 셋이 전부 <code class="language-plaintext highlighter-rouge">InterruptedIOException</code>을 상속하고, 이 클래스가 non-retriable 목록에 들어 있어서 그렇다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="c1">// DefaultHttpRequestRetryStrategy — 재시도하지 않는 IOException 목록</span>
+<span class="nc">InterruptedIOException</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>   <span class="c1">// ← SocketTimeoutException, ConnectTimeoutException,</span>
+                                <span class="c1">//    ConnectionRequestTimeoutException 이 모두 여기 해당</span>
+<span class="nc">UnknownHostException</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+<span class="nc">ConnectException</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+<span class="nc">ConnectionClosedException</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+<span class="nc">NoRouteToHostException</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+<span class="nc">SSLException</span><span class="o">.</span><span class="na">class</span>
+</pre></table></code></div></div><p>그래서 “타임아웃 × (1 + 재시도 횟수)”로 시간이 곱해지는 일은 기본 전략에서 일어나지 않는다. 예산이 늘어나는 건 다른 경로다.</p><ul><li>멱등 요청이 커넥션 끊김(<code class="language-plaintext highlighter-rouge">NoHttpResponseException</code> 등)으로 실패하면 재시도가 붙어 connect와 응답 대기가 한 번 더 돌아간다<li>429/503 응답에는 <code class="language-plaintext highlighter-rouge">Retry-After</code> 헤더값 또는 기본 간격 1초의 대기가 더해진다</ul><p>429/503 경로에 멱등성 검사가 없다는 게 주의할 점이다. 결제 POST가 503을 받으면 기본 설정에서 그대로 한 번 더 나간다. 이 경로가 스스로 물러나는 조건은 하나뿐인데, 재시도 간격이 <code class="language-plaintext highlighter-rouge">responseTimeout</code>보다 길 때다.</p><div class="language-java highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="kd">final</span> <span class="nc">Timeout</span> <span class="n">responseTimeout</span> <span class="o">=</span> <span class="n">requestConfig</span><span class="o">.</span><span class="na">getResponseTimeout</span><span class="o">();</span>
+<span class="k">if</span> <span class="o">(</span><span class="n">responseTimeout</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">&amp;&amp;</span> <span class="n">defaultRetryInterval</span><span class="o">.</span><span class="na">compareTo</span><span class="o">(</span><span class="n">responseTimeout</span><span class="o">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="kc">false</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></table></code></div></div><p>비멱등 요청에 재시도가 붙는 게 곤란하면 <code class="language-plaintext highlighter-rouge">disableAutomaticRetries()</code>로 끄거나, <code class="language-plaintext highlighter-rouge">retryRequest(HttpResponse, ...)</code>를 오버라이드해 멱등 메서드만 통과시키는 전략을 넣는다.</p><h2 id="참고-자료">참고 자료</h2><hr /><blockquote><p>타임아웃 병합·소비 흐름은 아래 소스에서 직접 확인했다.</p></blockquote><ul><li><a href="https://github.com/spring-projects/spring-framework/blob/6.2.x/spring-web/src/main/java/org/springframework/http/client/HttpComponentsClientHttpRequestFactory.java">HttpComponentsClientHttpRequestFactory.java (github.com/spring-projects/spring-framework)</a><li><a href="https://github.com/apache/httpcomponents-client/blob/master/httpclient5/src/main/java/org/apache/hc/client5/http/impl/classic/InternalExecRuntime.java">InternalExecRuntime.java (github.com/apache/httpcomponents-client)</a><li><a href="https://github.com/apache/httpcomponents-client/blob/master/httpclient5/src/main/java/org/apache/hc/client5/http/impl/io/PoolingHttpClientConnectionManager.java">PoolingHttpClientConnectionManager.java (github.com/apache/httpcomponents-client)</a><li><a href="https://github.com/apache/httpcomponents-client/blob/rel/v5.5.1/httpclient5/src/main/java/org/apache/hc/client5/http/impl/io/DefaultHttpClientConnectionOperator.java">DefaultHttpClientConnectionOperator.java (github.com/apache/httpcomponents-client, rel/v5.5.1 — handshake 처리가 여기로 옮겨온 버전)</a><li><a href="https://github.com/apache/httpcomponents-client/blob/rel/v5.5/httpclient5/src/main/java/org/apache/hc/client5/http/ssl/AbstractClientTlsStrategy.java">AbstractClientTlsStrategy.java (github.com/apache/httpcomponents-client, rel/v5.5 — 5.5 이하 handshake 동작)</a><li><a href="https://github.com/apache/httpcomponents-client/blob/master/httpclient5/src/main/java/org/apache/hc/client5/http/impl/DefaultHttpRequestRetryStrategy.java">DefaultHttpRequestRetryStrategy.java (github.com/apache/httpcomponents-client)</a><li><a href="https://hc.apache.org/httpcomponents-client-5.5.x/">HttpClient 5 공식 문서 (hc.apache.org)</a><li><a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/client/RestTemplate.html">RestTemplate javadoc (docs.spring.io)</a><li><a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/client/RestClient.html">RestClient javadoc (docs.spring.io)</a></ul></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/%EC%A7%80%EC%8B%9D-%EB%8D%94%ED%95%98%EA%B8%B0/'>지식 더하기</a>, <a href='/categories/%EC%9D%B4%EB%A1%A0/'>이론</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/web/" class="post-tag no-text-decoration" >WEB</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=WEB - RestTemplate·HttpClient5 설정과 타임아웃 - zz9z9&url=https://zz9z9.github.io/posts/restclient-config/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=WEB - RestTemplate·HttpClient5 설정과 타임아웃 - zz9z9&u=https://zz9z9.github.io/posts/restclient-config/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=WEB - RestTemplate·HttpClient5 설정과 타임아웃 - zz9z9&url=https://zz9z9.github.io/posts/restclient-config/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/prepared-statement/">Java - PreparedStatement는 어떻게 SQL Injection을 방어할까 (feat. MySQL)</a><li><a href="/posts/kafka-partition-offsets/">카프카 파티션 로그의 오프셋들 — LEO, HW, LSO</a><li><a href="/posts/connect-readtimeout/">WEB - connectTimeout / readTimeout 은 어디서 세팅되고, 어디서 적용되는가</a><li><a href="/posts/hello-mybatis/">JDBC / MyBatis / MyBatis-Spring 훑어보기</a><li><a href="/posts/load-testing-method/">부하 테스트, 어떻게 주고 어떻게 읽을 것인가</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/spring/">Spring</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/aws/">AWS</a> <a class="post-tag" href="/tags/jpa/">JPA</a> <a class="post-tag" href="/tags/kafka/">Kafka</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/infra/">Infra</a> <a class="post-tag" href="/tags/spring-batch/">Spring Batch</a></div></div></div><script src="https://cdn.jsdelivr.net/gh/afeld/bootstrap-toc@1.0.1/dist/bootstrap-toc.min.js"></script><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/content-security-policy/"><div class="card-body"> <span class="timeago small" > Mar 15, 2025 <i class="unloaded">2025-03-15T22:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>WEB - Content-Security-Policy(CSP) 살펴보기</h3><div class="text-muted small"><p> Content-Security-Policy ? 콘텐츠 보안 정책(CSP)은 특정 유형의 보안 위협의 위험을 방지하거나 최소화하는 데 도움이 되는 기능으로 웹사이트에서 브라우저로 보내는 일련의 지침으로 구성되어 있으며, 브라우저에서 코드가 수행할 수 있는 작업에 제한을 두도록 지시 CSP 전달 방식 HTTP 응답 헤더 ...</p></div></div></a></div><div class="card"> <a href="/posts/nginx-architecture/"><div class="card-body"> <span class="timeago small" > May 18, 2025 <i class="unloaded">2025-05-18T21:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>WEB - nginx 구조 알아보기</h3><div class="text-muted small"><p> https://aosabook.org/en/v2/nginx.html 고성능, 높은 동시성, 낮은 메모리 사용 Apache같은 기존 웹 서버는 요청마다 새로운 스레드나 프로세스를 생성해서 처리했기 때문에, 동시 연결 수가 많아질수록 리소스 소비가 급격히 증가하고 성능이 떨어졌습니다. 따라서, nginx는 C10K(10,000...</p></div></div></a></div><div class="card"> <a href="/posts/nginx-rate-limiting/"><div class="card-body"> <span class="timeago small" > May 20, 2025 <i class="unloaded">2025-05-20T21:25:00+09:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>WEB - nginx 처리율 제한 살펴보기</h3><div class="text-muted small"><p> nginx는 처리율 제한을 위해 ‘leaky bucket algorithm’ 사용 leaky bucket algorithm 물 : 사용자 요청 버킷 : 요청이 대기하는 큐 넘치는 물 : 큐가 다 차서 거절되는 요청 새는 물 : 서버에 의해 처리되는 요청 limit_req_z...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/connect-readtimeout/" class="btn btn-outline-primary" prompt="Older"><p>WEB - connectTimeout / readTimeout 은 어디서 세팅되고, 어디서 적용되는가</p></a> <a href="/posts/kafka-topic-partition/" class="btn btn-outline-primary" prompt="Newer"><p>Kafka - 토픽과 파티션</p></a></div></div></div></div><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2026 <a href="https://twitter.com/username">Lee JaeYoon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-sm-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/mysql/">MySQL</a> <a class="post-tag" href="/tags/java/">Java</a> <a class="post-tag" href="/tags/spring/">Spring</a> <a class="post-tag" href="/tags/web/">WEB</a> <a class="post-tag" href="/tags/aws/">AWS</a> <a class="post-tag" href="/tags/jpa/">JPA</a> <a class="post-tag" href="/tags/kafka/">Kafka</a> <a class="post-tag" href="/tags/http/">HTTP</a> <a class="post-tag" href="/tags/infra/">Infra</a> <a class="post-tag" href="/tags/spring-batch/">Spring Batch</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://zz9z9.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"> {categories} {tags}</div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>', templateMiddleware: function(prop, value, template) { if (prop === 'categories') { if (value === '') { return `${value}`; } else { return `<div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>${value}</div>`; } } if (prop === 'tags') { if (value === '') { return `${value}`; } else { return `<div><i class="fa fa-tag fa-fw"></i>${value}</div>`; } } } }); </script>
