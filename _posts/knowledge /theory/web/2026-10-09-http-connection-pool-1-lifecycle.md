@@ -1,5 +1,5 @@
 ---
-title: WEB - HTTP 커넥션 풀 직접 재보기 (1) 풀은 커넥션을 언제 만들고, 돌려받고, 버리나
+title: WEB - HTTP 커넥션 풀 살펴보기
 date: 2026-10-09 01:00:00 +0900
 categories: [지식 더하기, 이론]
 tags: [WEB]
@@ -89,7 +89,7 @@ private volatile int maxTotal;
 - 아래 그림은 업스트림 하나에 커넥션 5개를 들고, 그중 2개를 빌려준 상태다.
 - `pendingRequests` 는 비어 있다. 빌려줄 엔트리가 `available` 에 남아 있으면 기다릴 일이 없다. 상한에 막혀 기다리는 모습은 아래 "설정별 영향도" 에 있다.
 
-![커넥션 풀 구조 — 따로 묶인 leased 엔트리 2개는 스레드가 빌려 업스트림과 요청·응답을 주고받는 중이고, available 엔트리 3개는 연결만 유지한 채 쉬고 있으며, pendingRequests 는 비어 있다](/assets/img/http-connection-pool-img1.png)
+![커넥션 풀 구조 — 따로 묶인 leased 엔트리 2개는 스레드가 빌려 업스트림과 요청·응답을 주고받는 중이고, available 엔트리 3개는 연결만 유지한 채 쉬고 있으며, pendingRequests 는 비어 있다](/assets/img/http-connection-pool-img6.png)
 
 - `leased`·`available` 에 들어 있는 `PoolEntry` 는 풀에 등록된 커넥션 한 건의 항목(엔트리)이다.
 - `Map.Entry` 가 키와 값을 묶듯 **목적지와 커넥션**을 묶고, 생성·반납·만료 시각 같은 **메타데이터**를 붙인다.
