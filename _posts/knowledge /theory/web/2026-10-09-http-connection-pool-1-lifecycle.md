@@ -407,7 +407,7 @@ while (!Thread.currentThread().isInterrupted()) {
 > HttpClient5 의 풀 관련 설정은 엔트리 생애의 한 지점에 걸려서, 그 지점에서 생길 수 있는 문제 하나를 막는다. <br>
 > 기본값은 httpclient5 5.4.2 / httpcore5 5.3.3 소스 기준이다.
 
-![설정별 영향도 — caller·풀·upstream 사이에서, lease 요청 때는 maxConnTotal·maxConnPerRoute 와 connectionRequestTimeout 이 상한과 대기를, 연결·요청 때는 connectTimeout 과 responseTimeout 이 매달림을, 반납 때는 upstream 의 Keep-Alive 로 keep-alive 전략이 만료 시각을, available 에서 쉬는 동안은 evict 스레드가 upstream 에 먼저 FIN 을 보내 정리를, 다음 lease 때는 validateAfterInactivity 와 timeToLive 가 소켓을 새로 연결하게 한다](/assets/img/http-connection-pool-img4.png)
+![설정별 영향도 — caller·풀·upstream 사이에서, lease 요청 때는 maxConnTotal·maxConnPerRoute 와 connectionRequestTimeout 이 상한과 대기를, 연결·요청 때는 connectTimeout 과 responseTimeout 이 매달림을, 반납 때는 upstream 의 Keep-Alive 로 keep-alive 전략이 만료 시각을, available 에서 쉬는 동안은 evict 스레드가 upstream 에 먼저 FIN 을 보내 정리를, 다음 lease 때는 validateAfterInactivity 와 timeToLive 가 소켓을 새로 연결하게 한다](/assets/img/http-connection-pool-img7.png)
 
 - ### maxPerRoute — 목적지마다 몫이 나뉜다
 
