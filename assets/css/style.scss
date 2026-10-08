@@ -5,3 +5,103 @@
 $tab-count: {{ site.tabs | size | plus: 1 }}; // plus 1 for home tab
 
 @import "jekyll-theme-chirpy";
+
+/* --- 글 페이지: 왼쪽 사이드바를 접어 두고 버튼으로 펼친다 (데스크톱) --- */
+
+#sidebar-toggle {
+  display: none;
+}
+
+@media all and (min-width: 850px) {
+  $folded-content-max-width: 1100px;
+
+  body.sidebar-collapsible {
+    #sidebar,
+    #sidebar-toggle {
+      transition: transform 0.3s ease, left 0.3s ease;
+    }
+
+    #main-wrapper,
+    #topbar-wrapper {
+      transition: margin-left 0.3s ease, left 0.3s ease;
+    }
+
+    #sidebar-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      top: 50%;
+      left: 210px;
+      z-index: 100;
+      width: 1.6rem;
+      height: 3.2rem;
+      margin-top: -1.6rem;
+      padding: 0;
+      border: 0;
+      border-radius: 0 0.5rem 0.5rem 0;
+      background: var(--sidebar-bg);
+      color: #fff;
+      opacity: 0.85;
+      box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
+
+      &:hover {
+        opacity: 1;
+      }
+
+      i {
+        transform: rotate(180deg);
+        transition: transform 0.3s ease;
+      }
+    }
+  }
+
+  body.sidebar-folded {
+    #sidebar {
+      transform: translateX(-100%);
+    }
+
+    #sidebar-toggle {
+      left: 0;
+
+      i {
+        transform: none;
+      }
+    }
+
+    #main-wrapper {
+      margin-left: 0;
+    }
+
+    #topbar-wrapper {
+      left: 0;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    body.sidebar-collapsible:not(.sidebar-folded) #sidebar-toggle {
+      left: 260px;
+    }
+  }
+
+  @media (min-width: 1400px) {
+    body.sidebar-folded #main > div.row {
+      padding-left: calc((100% - #{$folded-content-max-width} - 300px) / 2);
+
+      > div.col-xl-8 {
+        max-width: $folded-content-max-width;
+      }
+    }
+
+    body.sidebar-folded #topbar {
+      max-width: calc(#{$folded-content-max-width} + 300px);
+      margin: 0 auto;
+    }
+  }
+
+  @media (min-width: 1650px) {
+    body.sidebar-collapsible:not(.sidebar-folded) #sidebar-toggle {
+      left: 350px;
+    }
+  }
+}

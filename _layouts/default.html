@@ -15,9 +15,16 @@ layout: compress
 
   {% include head.html %}
 
-  <body data-spy="scroll" data-target="#toc">
+  <body data-spy="scroll" data-target="#toc"{% if page.layout == 'post' %} class="sidebar-collapsible sidebar-folded"{% endif %}>
 
     {% include sidebar.html %}
+
+    {% if page.layout == 'post' %}
+      <button id="sidebar-toggle" type="button" aria-label="사이드바 열기/닫기"
+        onclick="document.body.classList.toggle('sidebar-folded')">
+        <i class="fas fa-angle-right"></i>
+      </button>
+    {% endif %}
 
     {% include topbar.html %}
 
