@@ -127,7 +127,9 @@ public final class PoolEntry<T, C extends ModalCloseable> {
 }
 ```
 
-엔트리 안은 세 겹이다.
+- 엔트리 안은 세 겹이다.
+  - `connRef` 는 `null` 일 수 있다. 커넥션 객체는 있는데 소켓은 아직 없는 때도 있다.
+  - 풀이 세는 `leased`·`available` 은 엔트리의 개수다. 엔트리 안의 소켓이 살아 있는지는 세지 않는다.
 
 ```
 PoolEntry                                   ← leased / available 에 들어가는 것
@@ -135,18 +137,24 @@ PoolEntry                                   ← leased / available 에 들어가
                 └ socket → java.net.Socket   ← 커널의 TCP 소켓
 ```
 
-- `connRef` 는 `null` 일 수 있다. 커넥션 객체는 있는데 소켓은 아직 없는 때도 있다.
-- 풀이 세는 `leased`·`available` 은 엔트리의 개수다. 엔트리 안의 소켓이 살아 있는지는 세지 않는다.
-
-재사용 기한도 엔트리에 기록된다.
+- **재사용 기한**도 엔트리에 기록된다.
 
 | 필드 | 언제 정해지나 |
 | --- | --- |
-| `validityDeadline` | 커넥션을 할당할 때 `created + timeToLive` 로 한 번. 빌더로 만든 매니저에서는 무한이다 (아래) |
+| `validityDeadline` | 커넥션을 할당할 때 `created + 풀의 timeToLive` 로 한 번. `ConnectionConfig.setTimeToLive` 와는 다른 값이고, 빌더로 만든 매니저에서는 무한이다 (아래) |
 | `expiryDeadline` | 반납할 때마다 `min(now + keepAlive, validityDeadline)` |
 | `updated` | 반납 시각. `validateAfterInactivity` 가 이 값을 기준으로 stale 체크를 돌린다 |
 
-이 `timeToLive` 는 `ConnectionConfig.setTimeToLive` 로 준 값이 아니다. `PoolingHttpClientConnectionManagerBuilder` 는 풀을 만들 때 그 자리에 `null` 을 넘긴다.
+| | 풀의 `timeToLive` | `ConnectionConfig` 의 `timeToLive` |
+| --- | --- | --- |
+| 설정 코드 | `new PoolingHttpClientConnectionManager(registry, PoolConcurrencyPolicy.STRICT, PoolReusePolicy.LIFO, TimeValue.ofMinutes(5))` — `@Deprecated` 생성자 | `ConnectionConfig.custom().setTimeToLive(TimeValue.ofMinutes(5))` |
+| 만드는 값 | 커넥션을 할당할 때 `validityDeadline = created + timeToLive` | 엔트리에 저장하지 않는다. lease 때(⑥ 검사 2)와 `closeExpired()` 때 그 자리에서 `created + timeToLive` 를 계산해 지금 시각과 비교한다 |
+| 검사하는 쪽 | 풀. `expiryDeadline` 에 `min` 으로 들어가 lease 때 만료 검사(⑥ 검사 1)와 `closeExpired()` 에 걸린다 | 매니저 |
+| lease 때 걸리면 | 엔트리를 버린다 → 다음 엔트리, 없으면 ① | 소켓만 버린다 → 같은 엔트리로 ② |
+| 빌더로 만들면 | `null` 이 넘어가 무한이다 (아래) | 준 대로 동작한다 |
+
+- `PoolingHttpClientConnectionManagerBuilder` 는 풀을 만들 때 풀의 `timeToLive` 자리에 `null` 을 넘긴다.
+- 이 값을 받는 생성자는 `@Deprecated` 이거나 `@Internal` 이다.
 
 ```java
 // org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder.java — build() (httpclient5 5.4.2)
@@ -159,11 +167,11 @@ final PoolingHttpClientConnectionManager poolingmgr = new PoolingHttpClientConne
 ```
 
 - 그래서 빌더로 만든 매니저에서는 `validityDeadline` 이 무한이고, `expiryDeadline` 은 keep-alive 로만 정해진다.
-- `ConnectionConfig` 의 `timeToLive` 는 `expiryDeadline` 에 반영되지 않는다. 매니저가 lease 때(⑥ 검사 2)와 evict 스레드의 `closeExpired()` 때 `created` 와 비교해 따로 본다("설정별 영향도").
+- 실제로 쓰는 수명 설정은 `ConnectionConfig` 쪽 하나다.
 
 ### createEntry 에서 버려지기까지
 
-![PoolEntry 의 생애 — caller 스레드의 lease 로 빈 엔트리가 생기고, 커넥션 객체가 할당되고, upstream 과 TCP 핸드셰이크를 하고, 요청·응답을 주고받은 뒤 반납되어 available 로 갔다가 다음 요청 때 핸드셰이크 없이 다시 쓰인다. 재사용 불가·만료·stale 이면 소켓을 닫아 upstream 에 FIN 이 간다](/assets/img/http-connection-pool-img2.png)
+![PoolEntry 의 생애 — caller 스레드의 lease 로 빈 엔트리가 생기고, 커넥션 객체가 할당되고, upstream 과 TCP 핸드셰이크를 하고, 요청·응답을 주고받은 뒤 반납되어 available 로 갔다가 다음 요청 때 핸드셰이크 없이 다시 쓰인다. 재사용 불가·만료·stale 이면 소켓을 닫아 upstream 에 FIN 이 간다](/assets/img/http-connection-pool-img8.png)
 
 **① 엔트리를 만든다.** 빈 엔트리를 만들어 바로 `leased` 에 넣는다. `connRef` 는 비어 있다.
 
@@ -246,6 +254,27 @@ if (reuseStrategy.keepAlive(request, response, context)) {          // Connectio
 }
 ```
 
+서버가 `Keep-Alive: timeout=N` 을 내려주지 않으면 `RequestConfig` 의 `connectionKeepAlive` 를 쓴다. 기본값은 3분이다.
+
+```java
+// org.apache.hc.client5.http.impl.DefaultConnectionKeepAliveStrategy — getKeepAliveDuration() (httpclient5 5.4.2, 일부)
+while (it.hasNext()) {                        // Keep-Alive 헤더에서 timeout=N 을 찾는다
+    ...
+    if (value != null && param.equalsIgnoreCase("timeout")) {
+        return TimeValue.ofSeconds(Long.parseLong(value));
+    }
+}
+return requestConfig.getConnectionKeepAlive(); // 없으면 RequestConfig 값 (기본 DEFAULT_CONN_KEEP_ALIVE = 3분)
+```
+
+| 서버 응답 | 반납 때 정해지는 `expiryDeadline` |
+| --- | --- |
+| `Keep-Alive: timeout=N` 있음 | min(반납 시각 + N초, `validityDeadline`) |
+| 헤더 없음 | min(반납 시각 + `connectionKeepAlive`(기본 3분), `validityDeadline`) |
+| 헤더 없음, `connectionKeepAlive` ≤ 0 | `validityDeadline`. 빌더로 만든 매니저면 무한이라 기한 없음 |
+
+`connectionKeepAlive` 가 0 이하면 `Deadline.calculate` 가 `Deadline.MAX_VALUE` 를 돌려주기 때문에 마지막 줄처럼 된다. 서버가 헤더 없이 이 기한보다 먼저 연결을 닫으면, 풀은 서버 쪽에서 이미 닫힌 소켓을 `available` 에 들고 있게 된다.
+
 **⑤ 반납한다.** ④ 에서 재사용할 수 있다고 정했으면 기한을 갱신하고 `available` 맨 앞에 넣는다. 재사용할 수 없으면 소켓을 닫고 엔트리를 어디에도 넣지 않는다.
 
 ```java
@@ -273,7 +302,7 @@ if (this.leased.remove(entry)) {
 
 `keepAlive` 가 `false` 면 `leased` 에서만 빠지고 `available` 에 들어가지 않는다. 풀이 엔트리를 더는 참조하지 않으니 엔트리는 GC 된다.
 
-**⑥ 다시 빌린다.** `getFree` 가 `available` 맨 앞부터 엔트리를 꺼내 `leased` 로 옮긴다. 소켓은 그대로라 핸드셰이크가 없다. 꺼낸 엔트리는 두 번 검사받는다.
+**⑥ 다시 빌린다.** `getFree` 가 `available` 맨 앞부터 엔트리를 꺼내 `leased` 로 옮긴다. 소켓은 그대로라 핸드셰이크가 없다. 꺼낸 엔트리는 검사 1 과 검사 2 를 차례로 받는다. 두 검사는 OR 다. 어느 하나에라도 걸리면 그 자리에서 정리된다.
 
 **검사 1 — 풀에서 `expiryDeadline` 을 본다.** 만료됐으면 엔트리째 버리고 다음 엔트리를 꺼낸다. 남은 게 없으면 `createEntry` 로 ① 부터 다시 간다.
 
@@ -357,13 +386,24 @@ if (conn != null) {
 ```
 
 - 검사 1 에 걸리면 그 엔트리를 버리고 `available` 의 다음 엔트리를 꺼낸다. 남은 게 없을 때만 ① 부터 엔트리·커넥션 객체·소켓을 모두 새로 만든다. 검사 2 에 걸리면 엔트리는 그대로 두고 커넥션 객체와 소켓만 새로 만든다.
+- 검사 1 을 통과한 엔트리만 검사 2 로 간다. 그래서 `expiryDeadline` 이 지났으면 `timeToLive` 와 상관없이 엔트리째 버려지고, `expiryDeadline` 이 남아 있어도 `created + timeToLive` 가 지났으면 소켓은 버려진다.
 
 ### 엔트리가 버려지는 때와 소켓만 버려지는 때
 
-> 네 경우 모두 소켓은 `discardConnection` 이 닫는다. <br>
+> 어느 경우든 소켓은 `discardConnection` 이 닫는다. <br>
 > 이 메서드는 소켓을 닫고 `connRef` 를 비울 뿐 엔트리를 지우지 않는다. 엔트리가 같이 사라지는지는 부른 쪽이 엔트리를 풀에서 빼느냐에 달렸다.
 
-![엔트리가 버려지는 때와 소켓만 버려지는 때 — 반납 때 재사용 불가, lease 때 만료, evict 는 엔트리를 버리고, lease 때 timeToLive 초과나 isStale 이면 소켓만 버리고 엔트리는 leased 에 남는다](/assets/img/http-connection-pool-img3.png)
+![엔트리가 버려지는 때와 소켓만 버려지는 때 — 반납 때 재사용할 수 없으면(Connection: close, 요청 중 예외 등) 엔트리를 버리고, available 에 있을 때는 evict 스레드가 엔트리를 버리며, 대여 직전에는 풀의 검사 1(expiryDeadline)에 걸리면 엔트리를, 매니저의 검사 2(timeToLive 초과·isStale)에 걸리면 소켓만 버린다](/assets/img/http-connection-pool-img9.png)
+
+| 시점 | 무엇을 보나 | 옵션 · 값 | 결과 |
+| --- | --- | --- | --- |
+| **반납 때** | 재사용할 수 있나 | 응답 `Connection: close` 등 (`ConnectionReuseStrategy`)<br>요청 중 예외로 소켓이 닫혔는지 (`conn.isOpen()`) | 불가면 엔트리를 버린다 |
+| | 재사용이면 기한을 정한다 | `keepAlive` = 응답 `Keep-Alive: timeout=N`, 없으면 `RequestConfig.setConnectionKeepAlive` (기본 3분)<br>`expiryDeadline = min(updated + keepAlive, validityDeadline)` | `available` 맨 앞에 넣는다. `updated` = 반납 시각.<br>`ConnectionConfig` 의 TTL 은 여기서 보지 않는다 |
+| **available 에 있을 때**<br>(evict 를 켰을 때만) | `closeExpired()` | `expiryDeadline` 지남 **또는**<br>`ConnectionConfig.setTimeToLive` 의 `created + ttl` 지남 | 둘 중 하나라도 지났으면 엔트리를 버린다 |
+| | `closeIdle(t)` | `HttpClientBuilder.evictIdleConnections(t)` 의 `updated + t` 지남 | 엔트리를 버린다 |
+| **대여 직전 (⑥)** | 검사 1 (풀) | `expiryDeadline` 지남 | 엔트리를 버린다 → 다음 엔트리, 없으면 ① |
+| | 검사 2 (매니저) | `ConnectionConfig.setTimeToLive` 의 `created + ttl` 지남 | 소켓만 버린다 → ② |
+| | | **또는** `ConnectionConfig.setValidateAfterInactivity` (기본 2초) 만큼 `updated` 부터 지났으면 `isStale()` | stale 이면 소켓만 버린다 → ② |
 
 ```java
 // org.apache.hc.core5.pool.PoolEntry — discardConnection() (httpcore5 5.3.3)
@@ -381,61 +421,6 @@ public void discardConnection(final CloseMode closeMode) {
             connection.close(closeMode);
         }
     }
-}
-```
-
-- evict 를 켜면 `idle-connection-evictor` 스레드가 `maxIdleTime` 마다 깨어나 만료된 엔트리와 오래 논 엔트리를 치운다.
-
-```java
-// org.apache.hc.client5.http.impl.IdleConnectionEvictor (httpclient5 5.4.2, 일부)
-while (!Thread.currentThread().isInterrupted()) {
-    localSleepTime.sleep();                          // HttpClientBuilder 는 maxIdleTime 을 넘긴다
-    connectionManager.closeExpired();                // expiryDeadline 이나 수명(timeToLive)이 지난 엔트리
-    if (maxIdleTime != null) {
-        connectionManager.closeIdle(maxIdleTime);    // maxIdleTime 넘게 논 엔트리
-    }
-}
-```
-
-- 소켓만 지울지 엔트리까지 지울지는 검사하는 시점에 엔트리를 누가 쥐고 있느냐로 정해지는 것으로 보인다(소스 구조로 본 해석이다).
-  - **풀이 쥐고 있으면(반납·만료·evict) 엔트리를 버린다.** 상한이 세는 건 엔트리 개수라 빈 엔트리는 자리만 차지하고, 풀은 커넥션을 새로 만들 수 없다.
-  - **스레드가 쥐고 있으면(TTL 초과·stale) 소켓만 바꾼다.** 이미 받은 자리를 놓으면 다시 lease 해야 하므로, `connFactory` 를 가진 매니저가 그 엔트리에 새 커넥션을 할당한다.
-
-## 설정별 영향도
----
-
-> HttpClient5 의 풀 관련 설정은 엔트리 생애의 한 지점에 걸려서, 그 지점에서 생길 수 있는 문제 하나를 막는다. <br>
-> 기본값은 httpclient5 5.4.2 / httpcore5 5.3.3 소스 기준이다.
-
-![설정별 영향도 — caller·풀·upstream 사이에서, lease 요청 때는 maxConnTotal·maxConnPerRoute 와 connectionRequestTimeout 이 상한과 대기를, 연결·요청 때는 connectTimeout 과 responseTimeout 이 매달림을, 반납 때는 upstream 의 Keep-Alive 로 keep-alive 전략이 만료 시각을, available 에서 쉬는 동안은 evict 스레드가 upstream 에 먼저 FIN 을 보내 정리를, 다음 lease 때는 validateAfterInactivity 와 timeToLive 가 소켓을 새로 연결하게 한다](/assets/img/http-connection-pool-img7.png)
-
-- ### maxPerRoute — 목적지마다 몫이 나뉜다
-
-`maxTotal` 은 풀 전체, `maxPerRoute` 는 목적지(route) 하나가 가질 수 있는 커넥션 수다. 목적지가 둘 이상일 때 차이가 드러난다.
-
-![maxPerRoute — (가) maxTotal=8, maxPerRoute=4 면 느려진 upstream A 가 자기 몫 4개만 묶고, 5번째 A 요청은 전체에 자리가 남아도 pendingRequests 에서 기다리며, B 요청은 자기 몫으로 새 커넥션을 만든다. (나) maxPerRoute=8 이면 A 가 전체 8개를 다 차지해 B 는 커넥션이 하나도 없는데도 기다린다](/assets/img/http-connection-pool-img5.png)
-
-- 새 엔트리를 만들 수 있는지는 두 번 따진다. route 의 엔트리 수(`leased` + `available`)가 `maxPerRoute` 보다 적고, 풀 전체의 `leased` 가 `maxTotal` 보다 적어야 한다. 위 ① 에 인용한 `processPendingRequest` 의 두 `if` 다.
-- (가) 처럼 `maxPerRoute` 를 `maxTotal` 보다 작게 두면, 한 목적지가 느려져도 그 목적지 몫만 묶이고 나머지 목적지는 계속 커넥션을 얻는다.
-- (나) 처럼 둘을 같게 두면, 느려진 목적지 하나가 전체 상한을 다 차지해 멀쩡한 목적지로 가는 요청까지 `connectionRequestTimeout` 까지 기다린다.
-- 전체 상한이 찼어도 다른 route 의 엔트리가 `available` 에서 놀고 있으면 기다리지 않는다. 풀이 `available` 맨 뒤(가장 오래 논) 엔트리를 닫고 그 자리에 새 엔트리를 만든다. (나) 에서 B 가 기다리는 건 A 의 8개가 모두 `leased` 이기 때문이다.
-
-```java
-// org.apache.hc.core5.pool.StrictConnPool — processPendingRequest() (httpcore5 5.3.3, 일부)
-if (pool.getAllocatedCount() < maxPerRoute) {
-    final int freeCapacity = Math.max(this.maxTotal - this.leased.size(), 0);
-    if (freeCapacity == 0) {
-        return false;                                         // 전체가 다 빌려 나갔다 → 기다린다
-    }
-    final int totalAvailable = this.available.size();
-    if (totalAvailable > freeCapacity - 1) {                  // 놀고 있는 엔트리가 자리를 차지하면
-        final PoolEntry<T, C> lastUsed = this.available.removeLast();
-        lastUsed.discardConnection(CloseMode.GRACEFUL);       // 가장 오래 논 것을 닫고
-        final PerRoutePool<T, C> otherpool = getPool(lastUsed.getRoute());
-        otherpool.remove(lastUsed);
-    }
-    entry = pool.createEntry(this.timeToLive);                // 새로 만든다
-    ...
 }
 ```
 
@@ -481,8 +466,10 @@ while (!Thread.currentThread().isInterrupted()) {
 
 두 메서드는 `available` 의 엔트리만 훑는다. 빌려준 엔트리는 건드리지 않는다.
 
-- `closeExpired()` 는 만료 시각이나 수명이 지난 엔트리를 버린다. 매니저가 풀의 `closeExpired()` 를 덮어써서, `expiryDeadline` 과 함께 `ConnectionConfig` 의 `created + timeToLive` 도 본다.
-- `closeIdle(t)` 는 마지막 반납(`updated`)부터 `t` 넘게 논 엔트리를 버린다. 만료 시각은 보지 않는다.
+- `closeExpired()` 는 `expiryDeadline` 과 `created + timeToLive` 중 하나라도 지난 엔트리를 버린다 (OR).
+  - 매니저가 풀의 `closeExpired()` 를 덮어썼다. `expiryDeadline` 을 먼저 보고, 아직 안 지났으면 `ConnectionConfig` 의 `created + timeToLive` 를 본다.
+- `closeIdle(t)` 는 마지막 반납(`updated`)부터 `t` 넘게 논 엔트리를 버린다.
+  - 만료 시각은 보지 않는다.
 
 ```java
 // org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.java (httpclient5 5.4.2)
@@ -500,7 +487,7 @@ void closeIfExpired(final PoolEntry<HttpRoute, ManagedHttpClientConnection> entr
     } else {
         final ConnectionConfig connectionConfig = resolveConnectionConfig(entry.getRoute());
         final TimeValue timeToLive = connectionConfig.getTimeToLive();
-        if (timeToLive != null && Deadline.calculate(entry.getCreated(), timeToLive).isBefore(now)) { // 수명
+        if (timeToLive != null && Deadline.calculate(entry.getCreated(), timeToLive).isBefore(now)) { // 만료 시각이 남아 있어도 수명이 지났으면
             entry.discardConnection(CloseMode.GRACEFUL);
         }
     }
@@ -535,10 +522,53 @@ public void enumAvailable(final Callback<PoolEntry<T, C>> callback) {
 }
 ```
 
-- **`setConnectionManagerShared(true)` 면 evict 설정은 아무 일도 하지 않는다.** 스레드를 띄우는 코드가 `!this.connManagerShared` 안에 있다.
-- **엔트리는 `maxIdleTime` 의 두 배 가까이 남을 수 있다.** 스레드가 `maxIdleTime` 마다 깨므로, 직전 검사 바로 뒤에 반납된 엔트리는 다음 검사에서 아직 기준을 넘지 않아 그다음 검사에서야 치워진다(소스로 본 해석이다). 중간 장비의 idle timeout 보다 먼저 닫으려면 `maxIdleTime` 을 그 절반 아래로 둔다.
-- **`ConnectionConfig.setTimeToLive` 는 lease 때와 `closeExpired()` 때 본다.** evict 를 끄면 lease 때만 보므로, 수명이 지난 커넥션도 다음 요청이 올 때까지 `available` 에 남는다.
-- **경로 소실을 미리 막는 건 `evictIdleConnections` 뿐이다.** `validateAfterInactivity` 는 FIN 을 받은 소켓만 걸러낸다. 중간 장비가 말없이 지운 커넥션은 그 장비의 idle timeout 전에 풀이 먼저 닫아야 피할 수 있다. 이미 실린 요청은 `responseTimeout` 이 끊어 줄 뿐이다.
+**엔트리는 `maxIdleTime` 의 두 배 가까이 남을 수 있다.**
+- 스레드가 `maxIdleTime` 마다 깨므로, 직전 검사 바로 뒤에 반납된 엔트리는 다음 검사에서 아직 기준을 넘지 않아 그다음 검사에서야 치워진다(소스로 본 해석이다).
+- 중간 장비의 idle timeout 보다 먼저 닫으려면 `maxIdleTime` 을 그 절반 아래로 둔다.
+
+![closeIdle 검사 간격과 쉬는 시간 — evict 스레드가 t1, t1 + t, t1 + 2t 에 검사한다. A 처럼 t1 검사 1초 뒤에 반납된 엔트리는 t1 + t 검사 때 아직 t 를 못 채워 남고 t1 + 2t 에야 버려져 2t − 1초를 쉰다. B 처럼 t1 + t 검사 1초 전에 반납된 엔트리는 t + 1초를 쉬고 버려진다. C 처럼 그 사이 created + timeToLive 가 지났으면 쉰 시간이 t 미만이어도 t1 + t 검사 때 closeExpired() 가 버린다](/assets/img/http-connection-pool-img12.png)
+
+**`ConnectionConfig.setTimeToLive` 는 lease 때와 `closeExpired()` 때 본다.**
+- 반납 때는 보지 않는다. `release()` 는 소켓이 열려 있는지(`isOpen()`, `isConsistent()`)만 보고, 수명이 지난 커넥션도 `available` 맨 앞에 넣는다.
+- evict 를 끄면 lease 때만 보므로, 수명이 지난 커넥션도 다음 요청이 올 때까지 `available` 에 남는다.
+
+## 설정별 영향도
+---
+
+> HttpClient5 의 풀 관련 설정은 엔트리 생애의 한 지점에 걸려서, 그 지점에서 생길 수 있는 문제 하나를 막는다. <br>
+> 기본값은 httpclient5 5.4.2 / httpcore5 5.3.3 소스 기준이다.
+
+![설정별 영향도 — PoolEntry 생애의 단계마다 걸리는 설정. 엔트리를 받기 전 lease 요청 때 maxConnTotal·maxConnPerRoute 상한이 차 있으면 pendingRequests 에서 connectionRequestTimeout 까지 기다리고, 상한 안이면 ① 엔트리를 만들고, ③ 연결 때 connectTimeout(ConnectTimeoutException), ④ 요청·응답 때 responseTimeout(SocketTimeoutException), ⑤ 반납 때 keep-alive 로 expiryDeadline, available 에서 쉬는 동안 evictExpiredConnections·evictIdleConnections, ⑥ 다음 lease 때 검사 1 expiryDeadline 과 검사 2 validateAfterInactivity·timeToLive](/assets/img/http-connection-pool-img11.png)
+
+- ### maxPerRoute — 목적지마다 몫이 나뉜다
+
+`maxTotal` 은 풀 전체, `maxPerRoute` 는 목적지(route) 하나가 가질 수 있는 커넥션 수다. 목적지가 둘 이상일 때 차이가 드러난다.
+
+![maxPerRoute — (가) maxTotal=8, maxPerRoute=4 면 느려진 upstream A 가 자기 몫 4개만 묶고, 5번째 A 요청은 전체에 자리가 남아도 pendingRequests 에서 기다리며, B 요청은 자기 몫으로 새 커넥션을 만든다. (나) maxPerRoute=8 이면 A 가 전체 8개를 다 차지해 B 는 커넥션이 하나도 없는데도 기다린다](/assets/img/http-connection-pool-img5.png)
+
+- 새 엔트리를 만들 수 있는지는 두 번 따진다. route 의 엔트리 수(`leased` + `available`)가 `maxPerRoute` 보다 적고, 풀 전체의 `leased` 가 `maxTotal` 보다 적어야 한다. 위 ① 에 인용한 `processPendingRequest` 의 두 `if` 다.
+- (가) 처럼 `maxPerRoute` 를 `maxTotal` 보다 작게 두면, 한 목적지가 느려져도 그 목적지 몫만 묶이고 나머지 목적지는 계속 커넥션을 얻는다.
+- (나) 처럼 둘을 같게 두면, 느려진 목적지 하나가 전체 상한을 다 차지해 멀쩡한 목적지로 가는 요청까지 `connectionRequestTimeout` 까지 기다린다.
+- 전체 상한이 찼어도 다른 route 의 엔트리가 `available` 에서 놀고 있으면 기다리지 않는다. 풀이 `available` 맨 뒤(가장 오래 논) 엔트리를 닫고 그 자리에 새 엔트리를 만든다. (나) 에서 B 가 기다리는 건 A 의 8개가 모두 `leased` 이기 때문이다.
+
+```java
+// org.apache.hc.core5.pool.StrictConnPool — processPendingRequest() (httpcore5 5.3.3, 일부)
+if (pool.getAllocatedCount() < maxPerRoute) {
+    final int freeCapacity = Math.max(this.maxTotal - this.leased.size(), 0);
+    if (freeCapacity == 0) {
+        return false;                                         // 전체가 다 빌려 나갔다 → 기다린다
+    }
+    final int totalAvailable = this.available.size();
+    if (totalAvailable > freeCapacity - 1) {                  // 놀고 있는 엔트리가 자리를 차지하면
+        final PoolEntry<T, C> lastUsed = this.available.removeLast();
+        lastUsed.discardConnection(CloseMode.GRACEFUL);       // 가장 오래 논 것을 닫고
+        final PerRoutePool<T, C> otherpool = getPool(lastUsed.getRoute());
+        otherpool.remove(lastUsed);
+    }
+    entry = pool.createEntry(this.timeToLive);                // 새로 만든다
+    ...
+}
+```
 
 ## 참고 자료
 ---
