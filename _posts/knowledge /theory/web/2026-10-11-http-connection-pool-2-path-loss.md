@@ -788,6 +788,8 @@ location / {
 
 G·I·K 는 컨테이너가 사라지면서 was1 의 IP 도 함께 사라진다. P 는 IP 가 남는다.
 
+![롤링 배포 실측 요약. ① 쉬던 keepalive 커넥션: 다섯 종료 방법 모두 was1 이 +0.27초에 FIN 을 보내고 nginx 가 같은 시각 FIN 으로 닫아 풀에서 뺀다. 다음 요청은 새 SYN 으로 나간다. ② 새 연결: IP 가 남으면 RST(Connection refused)를 받아 was2 로 넘겨 0.005초에 200, IP 가 사라지면 SYN 이 1·2·4초 간격으로 재전송되며 답이 없어 클라이언트가 10초에 끊는다(499). ③ 처리 중 요청: graceful 은 응답 뒤 FIN, immediate·SIGKILL 은 응답 없이 FIN 이라 nginx 가 502 를 받고 was2 로 다시 보내 3.8초에 200](/assets/img/http-connection-path-loss-img8.png)
+
 ### 서버는 기존 커넥션에 FIN 을 보낸다
 
 | 케이스 | 쉬는 keepalive 커넥션 | 처리 중이던 커넥션 | 처리 중이던 요청의 결과 |
