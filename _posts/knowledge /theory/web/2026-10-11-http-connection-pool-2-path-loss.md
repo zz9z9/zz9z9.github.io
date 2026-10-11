@@ -750,6 +750,164 @@ public class Bench {
 
 </details>
 
+## 롤링 배포: LB 와 WAS 사이 커넥션
+
+---
+
+> LB 뒤 WAS 두 대 중 한 대를 내릴 때, LB 가 그 WAS 와 들고 있던 keepalive 커넥션에 무엇이 오가고 요청이 어떻게 되는지 쟀다.
+
+| 항목 | 값 |
+| --- | --- |
+| LB | nginx 1.27 (alpine). 라운드로빈, `keepalive 8`, `proxy_next_upstream` 기본값(`error timeout`) |
+| WAS | was1·was2. 앞 절과 같은 Spring Boot 3.4.4 / Tomcat 10.1.39. Boot 3.4 부터 `server.shutdown` 기본값이 `graceful` 이다 |
+| 네트워크 | 한 도커 네트워크. LB 10.83.0.2, was1 10.83.0.11, was2 10.83.0.12 |
+
+```nginx
+upstream was {
+  server 10.83.0.11:8080;
+  server 10.83.0.12:8080;
+  keepalive 8;                       # WAS 쪽 쉬는 커넥션을 풀로 둔다
+}
+location / {
+  proxy_pass http://was;
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";    # 비워야 WAS 쪽 커넥션을 다시 쓴다
+}
+```
+
+- 케이스마다 새로 띄우고, LB 가 WAS 마다 쉬는 커넥션을 하나씩 들게 한 뒤 was1 을 내렸다(t0).
+- "처리 중" 케이스는 t0 0.5초 전에 3초 걸리는 요청 두 개를 동시에 보내 WAS 마다 하나씩 들어가 있게 했다.
+- t0 부터 0.5초마다 LB 로 요청을 10번 보냈다(`curl -m 10`). 패킷은 LB 에서 tcpdump 로 잡았다.
+
+| 케이스 | 내리는 방법 |
+| --- | --- |
+| G | `docker stop` (SIGTERM). graceful |
+| I | `docker stop`. `SERVER_SHUTDOWN=immediate` |
+| K | `docker kill` (SIGKILL) |
+| P | 컨테이너는 두고 java 프로세스만 죽인다. 같은 서버에서 프로세스만 재시작하는 배포 |
+
+G·I·K 는 컨테이너가 사라지면서 was1 의 IP 도 함께 사라진다. P 는 IP 가 남는다.
+
+### 서버는 기존 커넥션에 FIN 을 보낸다
+
+| 케이스 | 쉬는 keepalive 커넥션 | 처리 중이던 커넥션 | 처리 중이던 요청의 결과 |
+| --- | --- | --- | --- |
+| G | +0.27초 FIN | 응답(+2.50초)을 보낸 직후 FIN | was1 이 200 |
+| I | +0.27초 FIN | 응답 없이 +0.27초 FIN | was1 502 → was2 로 넘겨 200 (3.78초) |
+| K | +0.28초 FIN | 응답 없이 +0.30초 FIN | was1 502 → was2 로 넘겨 200 (3.79초) |
+| P (SIGTERM) | +0.36초 FIN | 응답을 보낸 직후 FIN | was1 이 200 |
+| P (SIGKILL) | | 응답 없이 +0.33초 FIN | was1 502 → was2 로 넘겨 200 (3.84초) |
+
+- 다섯 방법 모두 기존 커넥션에는 FIN 만 갔다. RST 는 없었다.
+- SIGKILL 로 죽여도 FIN 이 간다. 프로세스가 죽으면 커널이 남은 소켓을 닫는다. 결론의 "재시도에 맡겨도 되나" 에 적은 `docker kill` 실험과 같다.
+- graceful 은 처리 중 요청을 끝까지 처리하고 닫았다. immediate·SIGKILL 은 응답 없이 닫았고, nginx 가 이를 502 로 보고 was2 로 다시 보냈다. GET 이라서 다시 보낸 것이다. nginx 는 POST 같은 비멱등 요청은 기본으로 다음 서버에 넘기지 않는다고 문서에 적혀 있다(돌려 보지 않았다).
+
+### LB 는 FIN 받은 커넥션을 다시 쓰지 않았다
+
+```text
++0.271  was1 > LB  [F.]    was1 이 쉬는 커넥션을 닫는다
++0.271  LB > was1  [F.]    같은 시각 nginx 도 닫는다
++0.271  was1 > LB  [.]
++0.582  LB > was1  [S]     다음 was1 몫 요청은 새 연결로 나간다
+```
+
+- nginx 는 FIN 을 받은 그 시각에 커넥션을 닫았고, 이후 was1 몫 요청은 모두 새 SYN 으로 나갔다.
+- HttpClient 는 다르다. 쉬는 커넥션에 온 FIN 을 바로 보지 않고, 반납 뒤 2초 안이면 그대로 다시 쓴다([반납 뒤 2초 안에 다시 빌릴 때](#반납-뒤-2초-안에-다시-빌릴-때)).
+
+### 실패는 새 연결에서 났다
+
+| 상황 | was1 로 보낸 SYN | 클라이언트가 본 결과 |
+| --- | --- | --- |
+| P. IP 가 남음 | +0.57~0.60초에 RST (`Connection refused`) | nginx 가 was2 로 넘겨 200. 0.005초 |
+| G·I·K. IP 가 사라짐 | 응답 없음. 1·2·4초 간격으로 SYN 재전송 | 요청 3~4건이 10초 타임아웃으로 실패 |
+
+- IP 가 사라진 경우 SYN 에 아무 답이 없었다. nginx 는 `proxy_connect_timeout` 기본 60초까지 기다리는데, 그 전에 클라이언트가 10초에 끊었다. nginx 는 이를 499 로 남기고 was1 의 실패로 세지 않아 계속 was1 에도 요청을 나눴다.
+- t0 에서 33~44초 뒤부터는 `connect() failed (113: Host is unreachable)` 가 3~4초 만에 났다. 그제서야 nginx 는 was1 을 잠시 빼고(`upstream server temporarily disabled`) was2 로 넘겼다. 그 전 30초 남짓 답이 없던 이유는 LB 에 남은 ARP 항목으로 추정한다(확인하지 않았다).
+- graceful 종료 중(G 의 처리 중 케이스)에도 새 연결은 +0.57초에 RST 를 받았다. 처리 중 요청을 마치는 동안 새 연결은 받지 않는다.
+
+> 롤링 배포에서 LB 가 끊긴 커넥션을 다시 쓰지는 않았다. 실패는 내린 서버로 새로 연결할 때와, graceful 이 아닌 종료로 처리 중 요청이 끊길 때 났다. LB 에서 먼저 빼고(drain) graceful 로 내리면 둘 다 피한다.
+
+<details markdown="1">
+<summary>실측 스크립트 (run-rolling.sh)</summary>
+
+```bash
+#!/usr/bin/env bash
+# 사용법: run-rolling.sh
+#
+# LB(nginx) 뒤 WAS 두 대 중 was1 을 내린다. 롤링 배포의 한 단계.
+# LB 가 was1 과 들고 있던 keepalive 커넥션에 무슨 패킷이 오가는지(FIN·RST), 내린 뒤 LB 가 그 커넥션에 요청을 싣는지 본다.
+set -e
+cd "$(dirname "$0")/../docker"
+DC="docker-compose -p rolling -f docker-compose.rolling.yml"
+LB=http://localhost:9190
+
+now() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
+
+boot() {   # <env...>
+  env "$@" $DC up -d --force-recreate >/dev/null 2>&1
+  docker exec rolling_lb_1 sh -c 'apk add --no-cache tcpdump iproute2 >/dev/null'
+  until curl -sf -o /dev/null http://localhost:9190/echo; do sleep 1; done
+  until [ "$(docker exec rolling_lb_1 ss -tnH state established '( dport = :8080 )' | wc -l)" -ge 2 ]; do
+    curl -s -o /dev/null $LB/echo
+  done
+}
+
+down() {   # <stop|kill|proc-term|proc-kill>  stop·kill 은 컨테이너째, proc-* 는 java 프로세스만
+  case $1 in
+    stop|kill) docker "$1" rolling_was1_1 >/dev/null ;;
+    proc-term) docker exec rolling_was1_1 sh -c 'kill -TERM $(pgrep java); while pgrep java >/dev/null; do sleep 0.05; done' ;;
+    proc-kill) docker exec rolling_was1_1 sh -c 'kill -KILL $(pgrep java)' ;;
+  esac
+}
+
+# <name> <stop|kill|proc-term|proc-kill> <inflight 0|1> <env...>
+run() {
+  local name=$1 how=$2 inflight=$3; shift 3
+  [ -n "$ONLY" ] && [[ "$name" != $ONLY* ]] && return 0
+  echo "=== $name"
+  boot "$@"
+  docker exec rolling_lb_1 ss -tnH '( dport = :8080 )' | sed 's/^/  내리기 전 LB 소켓: /'
+  docker exec -d rolling_lb_1 sh -c 'tcpdump -i eth0 -nn -tt -l "tcp port 8080 and host 10.83.0.11" > /tmp/cap 2>/dev/null'
+  sleep 1
+  local n; n=$(docker logs rolling_lb_1 2>&1 | wc -l | tr -d ' ')
+  # 처리 중인 요청: 3초 걸리는 요청 두 개를 동시에 보내 WAS 마다 하나씩 들어가게 한다
+  if [ "$inflight" = 1 ]; then
+    for _ in 1 2; do (curl -s -o /dev/null -w "  처리 중이던 요청: HTTP %{http_code} %{time_total}s\n" "$LB/echo?delayMs=3000") & done
+    sleep 0.5
+  fi
+  local t0; t0=$(now)
+  echo "  t0=$t0 was1 $how"
+  ( s=$(now); down "$how"; echo "  $how 끝: +$(echo "$(now) - $s" | bc)s" ) &
+  # 내리는 동안·내린 뒤 0.5초마다 LB 로 요청
+  for i in $(seq 10); do
+    curl -s -o /dev/null -m 10 -w "  +%{time_starttransfer} 요청 $i: HTTP %{http_code} %{time_total}s\n" $LB/echo | sed "s/+[0-9.]*/+$(echo "$(now) - $t0" | bc)/"
+    sleep 0.5
+  done
+  wait
+  sleep 1
+  docker exec rolling_lb_1 sh -c 'pkill tcpdump; sleep 0.3; cat /tmp/cap' \
+    | awk -v t0="$t0" '/ IP / { $1 = sprintf("+%.3f", $1 - t0); print "  pkt " $0 }' | cut -c1-110
+  docker exec rolling_lb_1 ss -tnH '( dport = :8080 )' | sed 's/^/  내린 뒤 LB 소켓: /'
+  docker logs rolling_lb_1 2>&1 | tail -n +"$((n + 1))" | grep -E '"GET|\[error\]|\[warn\]' | grep -v prematurely \
+    | sed -E 's/^.*\[(error|warn)\] [0-9#*: ]+/[\1] /; s/, client.*upstream: "([^"]*)".*/ (\1)/' \
+    | awk -v t0="$t0" '/^[0-9]+\.[0-9]+ / { $1 = sprintf("+%.3f", $1 - t0) } { print "  lb " $0 }' | cut -c1-160
+  docker logs rolling_was1_1 2>&1 | grep -iE 'graceful|shutdown' | sed 's/^.*INFO [0-9]* --- \[[^]]*\] [^ ]* *: /  was1: /'
+}
+
+run "G1. graceful, 쉬는 커넥션만"      stop 0
+run "G2. graceful, 처리 중 요청 있음"  stop 1
+run "I1. immediate, 쉬는 커넥션만"     stop 0 SERVER_SHUTDOWN=immediate
+run "I2. immediate, 처리 중 요청 있음" stop 1 SERVER_SHUTDOWN=immediate
+run "K1. SIGKILL, 쉬는 커넥션만"       kill 0
+run "K2. SIGKILL, 처리 중 요청 있음"   kill 1
+PROC="WAS_CMD=java -jar /app/app.jar; sleep infinity"
+run "P1. java 만 SIGTERM, 쉬는 커넥션만"  proc-term 0 "$PROC"
+run "P2. java 만 SIGTERM, 처리 중"       proc-term 1 "$PROC"
+run "P3. java 만 SIGKILL, 처리 중"       proc-kill 1 "$PROC"
+```
+
+</details>
+
 ## 결론
 
 ---
@@ -798,6 +956,9 @@ public class Bench {
 - [Troubleshoot NAT gateways — Internet connection drops after 350 seconds (docs.aws.amazon.com/vpc/latest/userguide)](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout)
 - [Azure NAT Gateway resource — TCP idle timeout (learn.microsoft.com/azure/nat-gateway)](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-gateway-resource)
 - [Tune NAT configuration — TCP Established Connection Idle Timeout (docs.cloud.google.com/nat/docs)](https://docs.cloud.google.com/nat/docs/tune-nat-configuration)
+- [Module ngx_http_upstream_module — keepalive (nginx.org/en/docs/http)](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
+- [Module ngx_http_proxy_module — proxy_next_upstream (nginx.org/en/docs/http)](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_next_upstream)
+- [Graceful Shutdown (docs.spring.io/spring-boot/reference/web)](https://docs.spring.io/spring-boot/reference/web/graceful-shutdown.html)
 - [SocketConfig.Builder (hc.apache.org/httpcomponents-core-5.3.x/current/httpcore5/apidocs)](https://hc.apache.org/httpcomponents-core-5.3.x/current/httpcore5/apidocs/org/apache/hc/core5/http/io/SocketConfig.Builder.html)
 - [Apache HttpComponents Client 5.4.2 소스 (github.com/apache/httpcomponents-client)](https://github.com/apache/httpcomponents-client/tree/rel/v5.4.2)
 - [Apache HttpComponents Core 5.3.3 소스 (github.com/apache/httpcomponents-core)](https://github.com/apache/httpcomponents-core/tree/rel/v5.3.3)
