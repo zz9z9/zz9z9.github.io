@@ -308,6 +308,7 @@ public boolean retryRequest(final HttpRequest request, final IOException excepti
 - 멱등 메서드는 `Method` enum 으로 정한다. `GET·HEAD·PUT·DELETE·OPTIONS·TRACE` 는 재시도하고 `POST·PATCH·CONNECT` 는 하지 않는다.
 - 요청 본문을 다시 못 읽으면(`isRepeatable()` 이 false, `InputStreamEntity` 등) 전략에 묻지 않고 예외를 던진다.
 - 재시도가 성공하면 호출한 쪽은 실패를 모른다. `Recoverable I/O exception ... caught` 가 INFO 로 남을 뿐이다.
+- 재시도를 끄려면 빌더에서 `disableAutomaticRetries()` 를 부른다. 위 `build()` 의 분기대로 재시도 단계(`HttpRequestRetryExec`)가 체인에서 빠진다. 단계는 두고 횟수만 0 으로 하려면 `setRetryStrategy(new DefaultHttpRequestRetryStrategy(0, TimeValue.ZERO_MILLISECONDS))` 를 넘긴다. 둘 다 429·503 응답 재시도까지 함께 꺼진다.
 
 재시도도 풀에서 커넥션을 빌린다. `HttpRequestRetryExec` 가 체인을 다시 타면 `ConnectExec` 가 쥔 커넥션이 없으므로 `acquireEndpoint()` 로 빌린다. 직전 커넥션을 어떻게 놓았느냐에 따라 받는 커넥션이 갈린다.
 
