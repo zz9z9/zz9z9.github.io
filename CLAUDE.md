@@ -4,15 +4,16 @@ Jekyll **Chirpy** 테마 기반 블로그. 글은 `_posts/` 아래 카테고리 
 
 ## 이미지 처리
 
-이미지는 **`/assets/img/`** 에 두고 글에서는 **루트 절대경로**로 참조한다.
+이미지는 **`assets/img/`** 에 두고 글에서는 **글 파일 기준 상대경로**로 `assets/img/`를 가리킨다. (IntelliJ 미리보기는 `/assets/...` 루트 절대경로를 못 찾는다)
 
 ```markdown
-![설명 alt 텍스트](/assets/img/<post-slug>-img<N>.png)
+<!-- _posts/knowledge /theory/kafka/xxx.md 처럼 _posts 아래 3단계 깊이인 글 -->
+![설명 alt 텍스트](../../../../assets/img/<post-slug>-img<N>.png)
 ```
 
 - **저장 위치**: 모든 이미지는 `assets/img/` 에 모은다. (글과 같은 디렉터리에 두지 않는다)
 - **파일명**: `<글-주제-slug>-img<번호>.png` 형식. 예) `prepared-statement-img1.png`, `aws-vpc-img2.png`
-- **참조 경로**: 반드시 `/assets/img/...` (루트부터). `_config.yml`의 `img_cdn`(jsdelivr)이 이 경로 앞에 붙어 배포 시 CDN으로 서빙된다.
+- **참조 경로**: `../` 개수는 글 위치에서 저장소 루트까지 올라가는 만큼 (`_posts` 포함). 빌드 시 `_plugins/relative-asset-path-hook.rb`가 `](../…/assets/` 를 `](/assets/` 로 바꾸고, `_config.yml`의 `img_cdn`(jsdelivr)이 그 앞에 붙어 배포 시 CDN으로 서빙된다. 기존 글의 `/assets/img/...` 루트 절대경로도 배포에선 그대로 동작한다(미리보기만 안 보임).
 - **alt 텍스트**: 파일명(`img_2.png`) 말고 내용을 설명하는 문구를 쓴다.
 
 ### ⚠️ 상대경로 `![img.png](img.png)` 는 쓰지 말 것
@@ -23,7 +24,7 @@ Jekyll **Chirpy** 테마 기반 블로그. 글은 `_posts/` 아래 카테고리 
    ```bash
    cp "_posts/.../img_2.png" assets/img/<post-slug>-img1.png
    ```
-2. 본문 참조를 `/assets/img/<post-slug>-img1.png`로 교체한다
+2. 본문 참조를 `../…/assets/img/<post-slug>-img1.png`(위 상대경로 규칙)로 교체한다
 
 ## 마크다운 작성 규칙
 

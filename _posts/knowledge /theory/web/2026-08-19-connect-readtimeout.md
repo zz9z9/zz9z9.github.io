@@ -2,7 +2,7 @@
 title: WEB - connectTimeout / readTimeout 은 어디서 세팅되고, 어디서 적용되는가
 date: 2026-08-19 22:00:00 +0900
 categories: [지식 더하기, 이론]
-tags: [WEB, JAVA]
+tags: [WEB, Java]
 ---
 
 > `setConnectTimeout` / `setReadTimeout` 은 호출하는 순간엔 **필드에 값을 저장할 뿐**이다.

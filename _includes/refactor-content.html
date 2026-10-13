@@ -37,7 +37,8 @@
 
 {% if _content contains '<img src="' %}
 
-  {% if site.img_cdn != '' %}
+  {% comment %} 로컬 serve 에서는 아직 push 안 한 이미지가 CDN 에 없으므로 production 빌드에서만 CDN 을 붙인다 {% endcomment %}
+  {% if site.img_cdn != '' and jekyll.environment == 'production' %}
     {% assign img_path_replacement = '<img src="' | append: site.img_cdn | append: '/' %}
   {% else %}
     {% assign img_path_replacement = '<img src="' | append: site.baseurl | append: '/' %}
