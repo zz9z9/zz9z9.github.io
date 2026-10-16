@@ -19,13 +19,13 @@ tags: [Kafka]
 
 공식 문서는 토픽을 이렇게 설명한다.
 
-> "Events are organized and durably stored in topics. Very simplified, a topic is similar to a folder in a filesystem, and the events are the files in that folder."
+> 이벤트는 토픽 단위로 정리되어 영속적으로 저장된다. 아주 단순화하면, 토픽은 파일 시스템의 폴더와 비슷하고 이벤트는 그 폴더 안의 파일이다.
 
-여기서 "Very simplified"라는 단서가 붙어 있다. 실제 구현은 폴더 구조가 아니고, 그 얘기는 아래 [실제로 디스크에 어떻게 저장되나](#실제로-디스크에-어떻게-저장되나) 절에서 다룬다.
+"아주 단순화하면"이라는 단서가 붙어 있다. 실제 구현은 폴더 구조가 아니고, 그 얘기는 아래 [실제로 디스크에 어떻게 저장되나](#실제로-디스크에-어떻게-저장되나) 절에서 다룬다.
 
 파티션은 다음과 같이 정의된다.
 
-> "Topics are partitioned, meaning a topic is spread over a number of 'buckets' located on different Kafka brokers."
+> 토픽은 파티션으로 나뉜다. 즉 토픽 하나가 서로 다른 카프카 브로커에 놓인 여러 개의 '버킷'에 나뉘어 퍼져 있다.
 
 - **토픽 하나가 여러 브로커에 흩어진 파티션 N개로 쪼개진다.**
 - 이 구조에서 나오는 성질이 카프카의 거의 모든 동작을 결정한다.
@@ -41,8 +41,7 @@ tags: [Kafka]
 | 병렬 처리 단위 | 아님 | **맞음** (컨슈머 그룹 내 분배) |
 | 개수 변경 | 생성/삭제 | 증가만 가능, **감소 불가** |
 
-
-> "Kafka guarantees that any consumer of a given topic-partition will always read **that partition's events in exactly the same order** as they were written."
+> 카프카는 특정 토픽-파티션의 컨슈머가 **그 파티션의 이벤트를 쓰인 순서와 정확히 같은 순서로** 읽는 것을 보장한다.
 
 - 순서 보장은 **topic-partition** 단위라고 명시돼 있다.
 - 토픽 전체의 순서를 보장하지 않는다.
@@ -102,7 +101,7 @@ replication-offset-checkpoint
 - `order-events/` 라는 디렉터리는 없다.
   - 즉, 토픽 이름은 파티션 디렉터리 이름의 **접두어로만** 존재한다.
 
-> "The name of partition directories consists of the topic name, appended by a dash (-) and the partition id."
+> 파티션 디렉터리 이름은 토픽 이름 뒤에 대시(-)와 파티션 ID를 붙인 형태다.
 
 ## 파티션 디렉터리 살펴보기
 
@@ -234,24 +233,54 @@ $ kafka-dump-log.sh --cluster-metadata-decoder --files .../__cluster_metadata-0/
 
 ---
 
-> 파티션 선택은 브로커가 아니라 프로듀서가 한다. 키가 있으면 키 해시, 없으면 배치 단위로 한 파티션에 몰아 보낸다.
+> 파티션 선택은 브로커가 아니라 프로듀서가 한다. <br>
+> 키가 있으면 **키 해시**, 없으면 **배치 단위**로 한 파티션에 몰아 보낸다.
 
-`partitioner.class`를 지정하지 않았을 때의 기본 동작은 다음과 같다.
+- 프로듀서가 보내는 레코드(`org.apache.kafka.clients.producer.ProducerRecord`)는 토픽과 값(value) 외에 키(key)와 파티션 번호를 선택적으로 담는다.
+- 키는 필수가 아니어서 `new ProducerRecord<>("order-events", value)`처럼 값만으로도 발행된다. 이때 키는 `null`이다.
 
-> "1. If no partition is specified but a key is present, choose a partition based on a hash of the key. 2. If no partition or key is present, choose the sticky partition that changes when at least `batch.size` bytes are produced to the partition."
-
-키가 있을 때의 해시는 murmur2다. `BuiltInPartitioner.partitionForKey`를 디컴파일하면 이렇다.
-
-```
-public static int partitionForKey(byte[], int);
-   0: aload_0
-   1: invokestatic  Utils.murmur2:([B)I
-   4: invokestatic  Utils.toPositive:(I)I
-   7: iload_1
-   8: irem                                  // % numPartitions
+```java
+new ProducerRecord<>(topic, value);                 // 키 없음 (key = null)
+new ProducerRecord<>(topic, key, value);            // 키 지정
+new ProducerRecord<>(topic, partition, key, value); // 파티션 직접 지정
 ```
 
-즉 `toPositive(murmur2(keyBytes)) % numPartitions`. 파티션 수가 식에 직접 들어간다는 점이 뒤에 나올 문제의 원인이다.
+> `org.apache.kafka.clients.producer.KafkaProducer#partition`은 레코드마다 다음 순서로 파티션을 고른다.
+
+| 순서 | 조건 | 결정 방식 |
+| --- | --- | --- |
+| 1 | 레코드에 파티션 번호를 직접 넣었다 | 그 번호를 그대로 쓴다 |
+| 2 | `partitioner.class` 설정으로 커스텀 파티셔너를 등록했다 | 그 파티셔너가 정한다 |
+| 3 | 키가 있다 (`partitioner.ignore.keys=false`, 기본값) | 키 해시로 정한다 |
+| 4 | 키가 없다 | sticky 방식으로 정한다 |
+
+- `partitioner.class`는 파티션 결정 로직을 직접 구현한 클래스(`org.apache.kafka.clients.producer.Partitioner` 인터페이스 구현체)를 지정하는 프로듀서 설정이다.
+- 기본값은 비어 있고, 대부분은 지정하지 않으므로 실제로는 3·4번 규칙이 쓰인다.
+
+### 키가 있으면: 키 해시
+
+> 3번 규칙은 카프카 클라이언트 내부 클래스 `org.apache.kafka.clients.producer.internals.BuiltInPartitioner`의 `partitionForKey` 메서드가 처리한다.
+
+```java
+// org.apache.kafka.clients.producer.internals.BuiltInPartitioner
+public static int partitionForKey(final byte[] serializedKey, final int numPartitions) {
+    return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
+}
+```
+
+`murmur2` (`org.apache.kafka.common.utils.Utils#murmur2`)
+- 직렬화된 키 바이트를 32비트 정수로 바꾸는 해시 함수다. 암호용이 아니라 빠르고 값이 고르게 퍼지는 것이 목적인 비암호 해시다.
+- **같은 키 바이트면 항상 같은 값이 나온다.**
+
+`toPositive` (`org.apache.kafka.common.utils.Utils#toPositive`)
+- 해시값의 부호 비트를 지워(`& 0x7fffffff`) 음수가 나오지 않게 한다.
+
+`% numPartitions`
+- 그 값을 토픽의 파티션 수로 나눈 나머지가 파티션 번호다.
+
+같은 키는 항상 같은 파티션으로 가므로, 한 주문의 이벤트들이 한 파티션에 순서대로 쌓인다.
+- 대신 **파티션 수(`numPartitions`)가 식에 직접 들어가 있어서 파티션 수가 바뀌면 같은 키라도 다른 파티션으로 간다.**
+- 이 결과는 아래 [파티션을 늘리면 키의 순서 보장이 깨진다](#파티션을-늘리면-키의-순서-보장이-깨진다)에서 실측한다.
 
 키를 `order-1001` ~ `order-10010`으로 주고 파티션 3개짜리 토픽에 넣으면 이렇게 흩어진다.
 
@@ -261,24 +290,31 @@ Partition:1  order-1003, order-1006, order-1008, order-10010
 Partition:2  order-1009
 ```
 
-균등하지 않다. 해시 분포는 키가 많아질수록 고르게 수렴하지만, 키 종류가 적거나 특정 키에 트래픽이 몰리면 파티션 간 불균형이 그대로 남는다.
+- 해시 분포는 키가 많아질수록 고르게 수렴하지만, 키 종류가 적거나 특정 키에 트래픽이 몰리면 파티션 간 불균형이 그대로 남는다.
 
-키가 없으면 라운드로빈이 아니라 **sticky** 방식이다. `batch.size`가 찰 때까지 한 파티션에 몰아 보내고 그 다음에 파티션을 바꾼다. 요청 수를 줄여 처리량을 높이려는 설계이고, 관련 설정이 두 개 있다.
+### 키가 없으면: sticky
+
+> 키가 없으면 라운드로빈이 아니라 **sticky** 방식이다. <br>
+> `batch.size`가 찰 때까지 한 파티션에 몰아 보내고 그 다음에 파티션을 바꾼다. <br>
+> 요청 수를 줄여 처리량을 높이려는 설계이고, 관련 설정이 두 개 있다.
 
 | 설정 | 기본값 | 의미 |
 | --- | --- | --- |
 | `partitioner.ignore.keys` | `false` | `true`면 키가 있어도 무시하고 sticky로 분배 |
 | `partitioner.adaptive.partitioning.enable` | `true` | 빠른 브로커의 파티션으로 더 많이 보냄 |
 
-`partitioner.ignore.keys=true`로 두면 **키 기반 순서 보장이 사라진다.** 키를 로그 압축(`cleanup.policy=compact`)의 식별자로만 쓰고 순서는 신경 쓰지 않는 경우에만 쓸 수 있다.
+- `partitioner.ignore.keys=true`로 두면 **키 기반 순서 보장이 사라진다.**
+- 키를 로그 압축(`cleanup.policy=compact`)의 식별자로만 쓰고 순서는 신경 쓰지 않는 경우에만 쓸 수 있다.
 
-## 반드시 알아야 할 것
+## 반드시 알아야 할 파티션 규칙
 
 ---
 
 > 파티션은 늘릴 수만 있고, 늘리는 순간 키→파티션 매핑이 바뀐다. 그리고 컨슈머 병렬성의 상한은 파티션 수다.
 
 ### 파티션은 줄일 수 없다
+
+파티션 3개짜리 `order-events` 토픽의 파티션 수를 `kafka-topics.sh --alter`로 2개로 바꾸려 하면 브로커가 거부한다.
 
 ```bash
 $ kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic order-events --partitions 2
@@ -290,17 +326,42 @@ ERROR org.apache.kafka.common.errors.InvalidPartitionsException:
 
 공식 문서도 명시한다.
 
-> "Kafka does not currently support reducing the number of partitions for a topic."
+> 카프카는 현재 토픽의 파티션 수를 줄이는 기능을 지원하지 않는다.
 
-메타데이터만 보면 `PARTITION_RECORD`를 지우면 될 것 같지만, 그 파티션에는 이미 오프셋이 매겨진 데이터와 그 오프셋을 커밋해 둔 컨슈머 그룹이 붙어 있다. 남은 파티션으로 옮기면 오프셋이 충돌하고 순서도 깨진다. 옮기지 않으면 데이터가 사라진다. 어느 쪽도 카프카가 보장하는 성질을 지키지 못한다.
+앞의 [토픽은 어디에 있는가](#토픽은-어디에-있는가)에서 본 것처럼 파티션 하나는 KRaft 메타데이터 로그의 `PARTITION_RECORD` 하나로 정의된다. 파티션을 늘릴 때도 `PARTITION_RECORD`가 추가될 뿐이므로, 메타데이터만 보면 줄일 때는 그 레코드를 지우기만 하면 될 것처럼 보인다.
 
-파티션을 줄여야 한다면 **새 토픽을 만들어 데이터를 옮기는 것이 유일한 방법**이다.
+문제는 그 파티션에 이미 쌓인 데이터다. 파티션에는 오프셋이 매겨진 레코드가 있고, 컨슈머 그룹은 "이 파티션의 몇 번 오프셋까지 읽었다"를 커밋해 둔다. 이 데이터를 처리하는 방법은 두 가지뿐이고, 둘 다 카프카가 보장하는 성질을 깬다.
+
+![파티션 3개를 2개로 줄일 때, 없앨 파티션의 레코드를 남은 파티션으로 옮기면 오프셋이 다시 매겨지고 커밋 오프셋이 무효가 되며 키 순서가 깨지고, 옮기지 않고 지우면 데이터가 사라진다](../../../../assets/img/kafka-topic-partition-img2.png)
+
+- **옮긴다**: 남은 파티션에는 같은 오프셋이 이미 있으므로 오프셋을 다시 매겨야 한다. 컨슈머 그룹이 커밋한 오프셋은 가리킬 곳을 잃고, 키→파티션 매핑(`% numPartitions`)도 바뀌어 같은 키의 순서가 끊긴다.
+- **지운다**: 프로듀서가 쓰기 완료를 받은 레코드가 retention 기간 전에 사라진다.
+
+#### 그래도 줄여야 한다면
+
+파티션을 줄이고 싶어지는 경우는 대개 이렇다.
+
+- 트래픽을 과하게 예상해 파티션을 많이 잡았고, [파티션이 많을 때의 비용](#파티션이-많을-때의-비용)(파일 핸들, 리더 선출 시간, 프로듀서 메모리)만 남았다.
+- 키 종류보다 파티션이 많아 빈 파티션이 생긴다.
+- 서비스 규모가 줄어 컨슈머 수를 줄였더니 컨슈머 하나가 너무 많은 파티션을 맡는다.
+
+토픽의 파티션 수는 줄일 수 없으므로 **원하는 파티션 수로 새 토픽을 만들고 트래픽을 옮긴다.** 키 단위 순서가 중요하다면 같은 키의 옛 토픽 레코드를 새 토픽 레코드보다 먼저 처리해야 한다. 그래서 옛 토픽을 다 비운 뒤에 새 토픽 소비를 시작한다.
+
+![파티션 6개 토픽을 3개짜리 새 토픽으로 옮기는 절차를 단계마다 프로듀서 → 브로커(옛 토픽, 새 토픽) → 컨슈머 흐름으로 그린 그림. ① 프로듀서는 옛 토픽에 쓰고 컨슈머는 옛 토픽을 소비하며 새 토픽 리스너는 멈춰 둔다. ② 프로듀서가 새 토픽으로 전환해 새 토픽에는 레코드가 쌓이기만 한다. ③ 옛 토픽이 lag 0, 로그 끝 정지로 비었다. ④ 새 토픽 리스너를 earliest로 시작하고 옛 토픽은 구독 해제한다](../../../../assets/img/kafka-topic-partition-img5.png)
+
+- **②는 모든 프로듀서 인스턴스가 전환해야 끝난다.** 롤링 배포 중에는 옛 버전 인스턴스가 아직 옛 토픽에 쓰고 있다. lag 0만 보면 잠깐 비었다가 다시 쌓일 수 있으므로, 옛 토픽의 로그 끝 오프셋(`kafka-get-offsets.sh --time -1`)이 더 이상 늘지 않는 것까지 확인한다.
+- **새 토픽 컨슈머는 `auto.offset.reset=earliest`로 둔다.** 그룹이 새 토픽에 커밋한 오프셋이 없는 상태에서 시작하므로, `latest`면 ②~③ 동안 쌓인 레코드를 [건너뛴다](#새-파티션의-레코드를-컨슈머가-건너뛸-수-있다).
+- **③ 동안에는 새 레코드 처리가 지연된다.** 옛 토픽을 비울 때까지 새 토픽 레코드는 기다린다. 옛 토픽의 lag이 작을 때 전환할수록 지연이 짧다.
+- **키 단위 순서가 필요 없다면** ①부터 새 토픽 소비를 바로 시작해도 된다. 두 토픽을 동시에 소비하는 구간에서 같은 키의 레코드가 섞여 처리될 뿐이다.
+- 멈춰 둔 리스너는 스프링 카프카라면 `@KafkaListener(autoStartup = "false")`로 등록해 두고, ③ 확인 후 `org.springframework.kafka.config.KafkaListenerEndpointRegistry`로 시작할 수 있다. 새 토픽 컨슈머를 ③ 이후에 따로 배포해도 결과는 같다.
+
+이 절차는 옛 토픽에 쌓인 과거 레코드를 새 토픽으로 복사하지 않는다. 과거 레코드를 새 토픽에서 다시 읽어야 한다면(예: 상태 복구용 compact 토픽) 별도 복사 작업(MirrorMaker 2, 재발행 배치 등)이 필요하다.
 
 ### 파티션을 늘리면 키의 순서 보장이 깨진다
 
 파티셔닝 식이 `hash(key) % numPartitions`이므로 `numPartitions`가 바뀌면 결과가 바뀐다.
 
-> "If data is partitioned by `hash(key) % number_of_partitions`, the default partitioner's mapping logic changes when the partition count increases."
+> 데이터가 `hash(key) % number_of_partitions`로 파티셔닝된다면, 파티션 수가 늘어날 때 기본 파티셔너의 매핑 로직이 바뀐다.
 
 파티션을 3 → 5로 늘린 뒤 **같은 키들을 다시 발행**해 봤다.
 
@@ -334,39 +395,130 @@ order-events:0:7   order-events:1:5   order-events:2:2   order-events:3:4   orde
 
 메타데이터도 마찬가지다. 기존 `TOPIC_RECORD`는 그대로 두고 `PARTITION_RECORD`만 3, 4번이 추가된다.
 
-여기에 컨슈머 쪽 함정이 하나 더 붙는다.
+늘리기도 키의 순서를 깨는데 허용되는 이유가 여기 있다. 줄이기는 이미 쓴 레코드를 옮기거나 지워야 하지만, 늘리기는 빈 파티션을 붙이고 **앞으로 쓸 레코드의 경로만** 바꾼다. 기존 파티션의 오프셋, 커밋된 오프셋, 파티션 안 순서는 하나도 바뀌지 않는다. 끊기는 건 서로 다른 파티션에 걸친 같은 키의 순서이고, 이건 카프카가 처음부터 보장하지 않는 범위다. 키 단위 순서는 프로듀서의 `hash(key) % numPartitions` 매핑에서 따라 나오는 성질일 뿐이다.
 
-> "Existing consumers configured with `auto.offset.reset=latest` might miss messages produced to the new partitions."
+![파티션을 3개에서 5개로 늘리면 기존 파티션 0~2의 레코드·오프셋·커밋 오프셋은 그대로이고 빈 파티션 3·4가 추가된다. 바뀌는 건 앞으로 쓸 레코드의 키→파티션 매핑이라, 키 order-1001의 확장 전 레코드는 P0에, 확장 후 레코드는 P3에 놓인다](../../../../assets/img/kafka-topic-partition-img3.png)
+
+#### 새 파티션의 레코드를 컨슈머가 건너뛸 수 있다
+
+`auto.offset.reset`은 컨슈머 그룹에 그 파티션의 **커밋된 오프셋이 없을 때** 어디서부터 읽을지 정한다. `latest`면 그 시점의 로그 끝부터, `earliest`면 맨 처음부터다. 새로 생긴 파티션은 커밋 기록이 없으므로 처음 할당될 때 이 설정을 따른다.
+
+문제는 프로듀서와 컨슈머가 새 파티션을 알아채는 시점이 다르다는 것이다. 둘 다 `metadata.max.age.ms`(기본 5분)마다 메타데이터를 따로 갱신하므로, 프로듀서가 먼저 새 파티션에 쓰기 시작하면 컨슈머가 할당받기 전까지 레코드가 쌓인다. `latest` 컨슈머는 할당 시점의 로그 끝부터 읽으므로 그 사이 레코드를 건너뛴다.
+
+```
+t0  파티션 3 → 5 확장
+t1  프로듀서가 새 파티션 3·4에 쓰기 시작
+    ... 레코드 쌓임 (그룹의 커밋 오프셋 없음) ...
+t2  컨슈머가 메타데이터 갱신 → 리밸런스 → 파티션 3·4 할당
+    → latest: t2 시점의 로그 끝부터 읽음 → t1 ~ t2 레코드는 건너뜀
+```
+
+Kafka 4.3.1에서 `latest` 그룹과 `earliest` 그룹을 붙여 둔 채 파티션을 3 → 5로 늘리고 곧바로 새 파티션에 5건을 발행했더니, 컨슈머가 새 파티션을 할당받기까지 약 4분이 걸렸다. 그동안 쌓인 5건을 `earliest` 그룹은 모두 받았고, `latest` 그룹은 하나도 받지 못했다.
+
+이 누락은 lag으로도 드러나지 않는다. 할당 시점에 읽을 위치가 로그 끝으로 잡히므로, 건너뛴 레코드는 처음부터 lag에 들어가지 않는다. `latest` 그룹의 새 파티션 LAG는 0으로 나온다.
+
+- 건너뛴 레코드는 삭제된 게 아니다. retention 기간 안이면 `kafka-consumer-groups.sh --reset-offsets`로 오프셋을 되돌려 다시 읽을 수 있다.
+- `earliest`면 누락은 없다. 대신 이 설정은 커밋 기록이 없는 모든 경우에 적용되므로, 처음 붙는 그룹도 토픽의 맨 처음부터 읽는다.
 
 ### 파티션 수가 컨슈머 병렬성의 상한이다
 
-한 컨슈머 그룹 안에서 파티션 하나는 컨슈머 하나에만 할당된다. 파티션 2개짜리 토픽에 컨슈머 3개를 붙이면 하나는 논다.
+한 컨슈머 그룹 안에서 파티션 하나는 컨슈머 하나에만 할당된다. 파티션 2개짜리 토픽 `parallel-demo`에 같은 그룹(`g1`)으로 콘솔 컨슈머 3개를 붙이면 하나는 파티션을 할당받지 못한다.
 
 ```bash
-$ kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group g1 --members
-GROUP  CONSUMER-ID                    CLIENT-ID         #PARTITIONS
-g1     console-consumer-f4d135ca-...  console-consumer  0     ← 할당된 파티션 없음
-g1     console-consumer-bcf80338-...  console-consumer  1
-g1     console-consumer-046d5b8f-...  console-consumer  1
+$ kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group g1 --members --verbose
+GROUP  CONSUMER-ID                    #PARTITIONS  CURRENT-ASSIGNMENT
+g1     console-consumer-1d0d43d6-...  1            parallel-demo:0
+g1     console-consumer-b8da11f5-...  0            -                  ← 할당된 파티션 없음
+g1     console-consumer-a76daf10-...  1            parallel-demo:1
 ```
 
-컨슈머를 아무리 늘려도 처리량이 오르지 않는 상황은 대개 여기다. 스케일 아웃 여력을 남기려면 파티션 수를 예상 컨슈머 수보다 넉넉히 잡아야 하는데, 그 "넉넉히"에는 아래의 비용이 따라온다.
+`#PARTITIONS`는 파티션 번호가 아니라 그 컨슈머가 할당받은 파티션 **개수**다. 어느 파티션인지는 `--verbose`를 붙이면 나오는 `CURRENT-ASSIGNMENT`에 `<토픽>:<파티션 번호>` 형태로 찍힌다.
 
-### retention과 복제는 파티션 단위다
+컨슈머를 아무리 늘려도 처리량이 오르지 않는 상황은 대개 여기다. 스케일 아웃 여력을 남기려면 파티션 수를 예상 컨슈머 수보다 넉넉히 잡아야 하는데, 그 "넉넉히"에는 아래 [파티션이 많을 때의 비용](#파티션이-많을-때의-비용)이 따라온다.
 
-`retention.bytes`는 토픽 전체 크기가 아니다.
+### 파티션 하나에 컨슈머 하나인 이유
 
-> "This configuration controls the maximum size a partition (which consists of log segments) can grow to before we will discard old log segments to free up space."
+컨슈머 그룹은 파티션마다 **오프셋 하나**만 커밋한다. 이 값은 "이 앞의 레코드는 모두 처리했다"는 뜻이다. 커밋은 내부 토픽 `__consumer_offsets`에 `(그룹, 토픽, 파티션)`을 키로, 오프셋을 값으로 하는 레코드로 저장된다. 키에 컨슈머 ID는 없다. 어느 컨슈머가 어느 파티션을 맡는지(할당)는 그룹 메타데이터에 따로 기록된다.
 
-파티션이 10개면 토픽이 실제로 차지할 수 있는 최대 크기는 `retention.bytes × 10`이고, 복제 팩터 3이면 클러스터 전체로는 `× 30`이다. 파티션을 늘리면 디스크 상한도 같이 늘어난다.
+![커밋 오프셋은 __consumer_offsets에 (그룹, 토픽, 파티션) 키로 하나씩 저장되고 컨슈머 ID는 키에 없다. 한 파티션을 컨슈머 2개가 나눠 읽으면 A가 5를 처리하는 동안 B가 6을 먼저 끝내 오프셋 하나로 진행 위치를 나타낼 수 없고, 컨슈머 1개가 읽으면 오프셋 순서대로 처리해 오프셋 하나로 진행 위치가 표현된다](../../../../assets/img/kafka-topic-partition-img4.png)
 
-복제도 마찬가지로 파티션 단위다.
+- 한 파티션을 두 컨슈머가 나눠 읽으면 한쪽이 오프셋 5를 처리하는 동안 다른 쪽이 6을 먼저 끝낼 수 있다. 그러면 숫자 하나로는 어디까지 처리했는지 나타낼 수 없다.
+- 처리 순서도 오프셋 순서와 어긋나서, 파티션 안 순서 보장이 컨슈머 쪽에서 깨진다.
 
-> "replication is performed at the level of topic-partitions"
+파티션을 컨슈머 하나에만 맡기면 그 컨슈머가 오프셋 순서대로 처리하고, 오프셋 하나로 진행 위치를 기록할 수 있다. 순서 보장과 오프셋 기반 진행 관리가 둘 다 이 규칙에 기대고 있다.
 
-토픽에 leader가 있는 게 아니라 **파티션마다 leader 1개와 follower N개**가 있다. ISR·HW·리더 선출이 전부 파티션 단위로 도는 이유이고, 자세한 동작은 [카프카 파티션 로그의 오프셋들 — LEO, HW, LSO](/posts/kafka-partition-offsets/)에서 다뤘다.
+> 4.x에는 한 파티션을 여러 컨슈머가 나눠 읽는 share group(KIP-932)이 별도로 있다. 레코드 단위로 전달·확인하는 큐 방식이라 파티션 안 순서를 보장하지 않는다. 이 글에서 말하는 컨슈머 그룹은 기존 방식이다.
 
-주요 토픽 설정의 기본값은 다음과 같다 (4.3 기준).
+### 스프링 카프카의 `concurrency`
+
+`@KafkaListener(concurrency = "3")`나 `spring.kafka.listener.concurrency`는 **애플리케이션 인스턴스 하나 안에서 띄울 컨슈머 수**다. `org.springframework.kafka.listener.ConcurrentMessageListenerContainer`가 `concurrency` 개수만큼 `org.springframework.kafka.listener.KafkaMessageListenerContainer`를 만들고, 각 컨테이너가 자기 `KafkaConsumer`와 스레드를 가진 채 같은 그룹에 합류한다. 한 파티션을 여러 스레드가 나눠 처리하는 설정이 아니다.
+
+그래서 그룹의 컨슈머 수는 `인스턴스 수 × concurrency`이고, 이 값이 파티션 수를 넘으면 넘는 만큼 위 출력처럼 논다. 파티션 6개 토픽에 인스턴스 3대를 `concurrency=3`으로 띄우면 컨슈머 9개 중 3개는 할당받는 파티션이 없다.
+
+## 실무에서 고려할 것
+
+---
+
+> 파티션 수는 한 번 정하면 늘릴 수만 있다. 그래서 "얼마나 잡을 것인가"가 토픽 설계에서 사실상 되돌릴 수 없는 유일한 결정이다.
+
+### 파티션 수 정하기
+
+[Confluent가 제시한 계산식](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/)은 목표 처리량 기반이다. 목표 처리량 `t`, 파티션 하나가 감당하는 프로듀서 처리량 `p`, 컨슈머 처리량 `c`라 할 때 최소 `max(t/p, t/c)` 개가 필요하다. 하지만 오픈 전에는 `t`를 모르는 경우가 많다.
+
+그럴 때 기준은 **나중에 늘려도 괜찮은 토픽인가**다. 파티션을 늘릴 때 깨지는 건 같은 키의 순서이므로, 키 단위 순서가 필요한지에 따라 처음 잡는 방법이 갈린다.
+
+| | 키 단위 순서가 필요 없다 | 키 단위 순서가 필요하다 |
+| --- | --- | --- |
+| 예 | 로그 수집, 알림 발송, 키 없이 발행하는 이벤트 | 주문 상태 변경, 잔액 변동, CDC |
+| 늘릴 때 대가 | 거의 없다. `latest` 컨슈머가 새 파티션 레코드를 건너뛰는 것만 주의 | 확장 전·후의 같은 키 레코드가 다른 파티션에 흩어진다 |
+| 처음 잡는 법 | 지금 필요한 만큼 작게 시작하고, 부족하면 늘린다 | 1~2년 뒤 예상 처리량·컨슈머 수를 기준으로 처음부터 넉넉히 잡는다 |
+
+순서가 필요한 토픽을 넉넉히 잡는 건 [위 Confluent 글](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/)이 권하는 방식이기도 하다.
+
+> 이런 상황을 피하려고 흔히 파티션을 조금 넉넉하게 잡는다. 기본적으로 1~2년 뒤 같은 미래의 목표 처리량을 기준으로 파티션 수를 정한다.
+
+처음에는 지금 트래픽에 맞는 작은 클러스터로 시작하고, 트래픽이 늘면 브로커를 추가해 기존 파티션 일부를 옮긴다. 파티션 수가 그대로이므로 키→파티션 매핑도 그대로다.
+
+넉넉히 잡는 정도는 다음을 기준으로 한다.
+
+- **컨슈머 확장 여력**: 지금 컨슈머가 3개라도 앞으로 6개까지 늘릴 계획이면 파티션은 6개 이상. 컨슈머가 파티션보다 많으면 남는 컨슈머는 논다.
+- **나눠 떨어지는 수**: 6, 12처럼 약수가 많은 수로 잡으면 컨슈머가 2·3·4·6개 어느 쪽이든 파티션이 고르게 나뉜다. 파티션 10개를 컨슈머 4개가 나누면 3·3·2·2개씩 맡아 부하가 고르지 않다.
+- **키 카디널리티**: 파티션 수가 키 종류보다 많으면 빈 파티션이 생긴다.
+
+아래 비용 표의 항목은 모두 파티션 수에 비례하므로, 토픽 하나를 3개 대신 12개로 잡는 정도는 차이가 작다. 비용이 문제가 되는 건 토픽마다 넉넉히 잡은 결과 클러스터 전체 파티션이 수천~수만 개로 불어날 때다.
+
+#### 순서가 중요한 토픽을 늘려야 한다면
+
+순서가 깨지는 건 같은 키의 레코드가 기존 파티션에 **아직 처리되지 않은 채 남아 있는데** 새 파티션의 레코드가 먼저 처리될 때다. 그래서 방법은 셋 중 하나다.
+
+| 방법 | 절차 | 대가 |
+| --- | --- | --- |
+| 발행을 멈추고 늘린다 | ① 프로듀서 발행 중단 ② 컨슈머가 기존 파티션을 lag 0까지 소비 ③ 파티션 늘리기 ④ 프로듀서를 재시작해 새 파티션 수를 받은 상태로 발행 재개 | 기존 lag을 소진하는 동안 발행이 멈춘다 |
+| 새 토픽으로 옮긴다 | 파티션을 줄일 때와 같은 절차(새 토픽 생성 → 프로듀서 전환 → 옛 토픽 소진 → 새 토픽 소비)를 파티션이 더 많은 새 토픽으로 진행 | 옛 토픽을 비우는 동안 새 레코드 처리가 지연된다 |
+| 컨슈머가 순서 뒤바뀜을 견디게 한다 | 레코드에 키별 버전(상태 버전, 시퀀스 번호)을 싣고, 컨슈머는 이미 처리한 버전보다 낮은 레코드를 버린다 | 애플리케이션 설계가 필요하다. 대신 이후 파티션 변경에 자유로워진다 |
+
+- 첫 번째 방법의 ④에서 프로듀서를 재시작하는 이유는 실행 중인 프로듀서가 `metadata.max.age.ms`(기본 5분)가 지나야 새 파티션 수를 알기 때문이다. 재시작 없이 발행을 재개하면 한동안 옛 매핑(`% 옛 파티션 수`)으로 쓰다가 도중에 새 매핑으로 바뀐다.
+- 첫 번째·두 번째 방법 모두 새 파티션(새 토픽)에는 그룹의 커밋 오프셋이 없으므로 컨슈머를 `auto.offset.reset=earliest`로 둔다.
+
+### 파티션이 많을 때의 비용
+
+파티션은 공짜가 아니다. 대표적인 비용은 다음과 같다.
+
+| 비용 | 내용 |
+| --- | --- |
+| 파일 핸들 | 파티션마다 세그먼트별로 `.log` / `.index` / `.timeindex` 세 개. 파티션이 많으면 브로커의 open file 수가 수만 단위로 올라간다 |
+| 프로듀서 메모리 | 프로듀서는 파티션마다 배치 버퍼를 잡는다. [Confluent 기준](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/)으로 파티션당 최소 수십 KB |
+| 복제 지연 | 파티션 수만큼 복제 fetch가 늘어난다. 1,000개 파티션 복제에 약 20ms 지연이 붙는다는 [측정치](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/)가 있다 |
+| 리더 선출 시간 | 브로커가 죽으면 그 브로커가 리더였던 파티션 전부에 대해 선출이 돈다 |
+| 디스크 상한 | `retention.bytes`가 파티션마다 적용돼, 토픽이 차지할 수 있는 최대 크기가 파티션 수에 비례한다 |
+
+> 위 수치는 [2015년 ZooKeeper 시절](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/) 측정 기준이다. KRaft로 넘어오면서 컨트롤러 페일오버 비용 구조가 바뀌었으므로, "브로커당 2~4천 개, 클러스터당 수만 개"라는 당시 권고를 그대로 적용할 수는 없다. [Confluent 랩 환경에서 KRaft 클러스터가 200만 파티션까지 검증됐다는 보고](https://docs.confluent.io/platform/current/kafka-metadata/kraft.html)가 있지만, 파일 핸들·메모리·복제 비용은 KRaft와 무관하게 그대로 남는다. 실제 상한은 사용하는 버전과 하드웨어에서 직접 측정하는 편이 맞다.
+
+`retention.bytes`는 토픽 전체 크기가 아니라 파티션 하나의 상한이다.
+
+> 이 설정은 공간 확보를 위해 오래된 로그 세그먼트를 버리기 전까지 파티션(로그 세그먼트들로 구성된다)이 커질 수 있는 최대 크기를 정한다.
+
+파티션이 10개면 토픽이 실제로 차지할 수 있는 최대 크기는 `retention.bytes × 10`이고, 복제 팩터 3이면 클러스터 전체로는 `× 30`이다. 파티션을 늘리면 디스크 상한도 같이 늘어난다. 이렇게 파티션 단위로 적용되는 토픽 설정이 많고, 주요 설정의 기본값은 다음과 같다 (4.3 기준).
 
 | 설정 | 기본값 | 적용 범위 |
 | --- | --- | --- |
@@ -378,39 +530,9 @@ g1     console-consumer-046d5b8f-...  console-consumer  1
 | `min.insync.replicas` | `1` | 파티션 |
 | `max.message.bytes` | `1048588` | 레코드 배치 |
 
-## 실무에서 고려할 것
-
----
-
-> 파티션 수는 한 번 정하면 늘릴 수만 있다. 그래서 "얼마나 잡을 것인가"가 토픽 설계에서 사실상 되돌릴 수 없는 유일한 결정이다.
-
-### 파티션 수 정하기
-
-Confluent가 제시한 기준은 목표 처리량 기반이다. 목표 처리량 `t`, 파티션 하나가 감당하는 프로듀서 처리량 `p`, 컨슈머 처리량 `c`라 할 때 최소 `max(t/p, t/c)` 개가 필요하다.
-
-여기에 실무적인 조건 두 개를 더 얹게 된다.
-
-- **컨슈머 확장 여력**: 지금 컨슈머가 3개라도 앞으로 6개까지 늘릴 계획이면 파티션은 6개 이상
-- **키 카디널리티**: 파티션 수가 키 종류보다 많으면 빈 파티션이 생긴다
-
-### 파티션이 많을 때의 비용
-
-파티션은 공짜가 아니다. 대표적인 비용은 다음과 같다.
-
-| 비용 | 내용 |
-| --- | --- |
-| 파일 핸들 | 파티션마다 세그먼트별로 `.log` / `.index` / `.timeindex` 세 개. 파티션이 많으면 브로커의 open file 수가 수만 단위로 올라간다 |
-| 프로듀서 메모리 | 프로듀서는 파티션마다 배치 버퍼를 잡는다. Confluent 기준으로 파티션당 최소 수십 KB |
-| 복제 지연 | 파티션 수만큼 복제 fetch가 늘어난다. 1,000개 파티션 복제에 약 20ms 지연이 붙는다는 측정치가 있다 |
-| 리더 선출 시간 | 브로커가 죽으면 그 브로커가 리더였던 파티션 전부에 대해 선출이 돈다 |
-
-> 위 수치는 2015년 ZooKeeper 시절 측정 기준이다. KRaft로 넘어오면서 컨트롤러 페일오버 비용 구조가 바뀌었으므로, "브로커당 2~4천 개, 클러스터당 수만 개"라는 당시 권고를 그대로 적용할 수는 없다. Confluent 랩 환경에서 KRaft 클러스터가 200만 파티션까지 검증됐다는 보고가 있지만, 파일 핸들·메모리·복제 비용은 KRaft와 무관하게 그대로 남는다. 실제 상한은 사용하는 버전과 하드웨어에서 직접 측정하는 편이 맞다.
-
-정리하면, **"나중에 늘릴 수 있으니 일단 작게"도 "혹시 모르니 일단 크게"도 좋은 전략이 아니다.** 전자는 순서 보장이 깨지는 마이그레이션을 부르고, 후자는 상시 비용이 된다. 목표 처리량과 컨슈머 확장 계획으로 계산한 값에 약간의 여유만 두는 게 낫다.
-
 ### 브로커를 추가해도 파티션은 옮겨가지 않는다
 
-> "these new servers will not automatically be assigned any data partitions, so unless partitions are moved to them they won't be doing any work."
+> 새로 추가한 서버에는 데이터 파티션이 자동으로 할당되지 않는다. 따라서 파티션을 그쪽으로 옮기지 않으면 새 서버는 아무 일도 하지 않는다.
 
 브로커를 늘렸는데 부하가 그대로인 이유가 이것이다. `kafka-reassign-partitions.sh`로 직접 옮겨야 한다.
 
@@ -482,7 +604,7 @@ topic_id: O9tTOuh6TLaWS7nww1ejbg
 - 토픽은 KRaft 메타데이터의 `TOPIC_RECORD`(이름 + ID)일 뿐이고, 리더·복제본·디스크 위치는 전부 `PARTITION_RECORD`에 달려 있다.
 - 순서 보장, 복제, 병렬 처리, retention 크기 제한이 모두 파티션 단위다.
 - 파티션은 늘릴 수만 있고, 늘리면 `hash(key) % numPartitions`가 바뀌어 키의 순서 보장이 끊긴다. 기존 데이터는 재배치되지 않는다.
-- 컨슈머 병렬성의 상한이 파티션 수이므로, 처리량 목표와 확장 계획을 기준으로 처음에 잘 잡아야 한다.
+- 컨슈머 병렬성의 상한이 파티션 수다. 키 단위 순서가 필요한 토픽은 미래 처리량 기준으로 처음부터 넉넉히 잡고, 그렇지 않은 토픽은 작게 시작해 늘린다.
 
 ## 참고 자료
 
@@ -493,5 +615,6 @@ topic_id: O9tTOuh6TLaWS7nww1ejbg
 - [Apache Kafka — Operations: Basic Kafka Operations (kafka.apache.org/43/operations)](https://kafka.apache.org/43/operations/basic-kafka-operations/) — 파티션 증가 시 주의사항, 파티션 감소 미지원, 브로커 추가 후 재배치, 내부 토픽 경고
 - [Apache Kafka — Producer Configs (kafka.apache.org/43/configuration)](https://kafka.apache.org/43/configuration/producer-configs/) — `partitioner.class` 기본 동작, `partitioner.ignore.keys`, `partitioner.adaptive.partitioning.enable`
 - [Apache Kafka — Topic Configs (kafka.apache.org/43/configuration)](https://kafka.apache.org/43/configuration/topic-configs/) — `retention.bytes`가 파티션 단위라는 설명, 각 설정 기본값
-- [How to Choose the Number of Topics/Partitions in a Kafka Cluster? (confluent.io)](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/) — Jun Rao, 2015. `max(t/p, t/c)` 기준과 파티션 증가 비용 (ZooKeeper 시절 기준)
+- [How to Choose the Number of Topics/Partitions in a Kafka Cluster? (confluent.io)](https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/) — Jun Rao, 2015. `max(t/p, t/c)` 기준, 키가 있는 토픽은 1~2년 뒤 처리량 기준으로 넉넉히 잡으라는 권고, 파티션 증가 비용 (ZooKeeper 시절 기준)
 - [KRaft Overview (docs.confluent.io)](https://docs.confluent.io/platform/current/kafka-metadata/kraft.html) — KRaft에서의 파티션 규모 관련 설명
+- [KIP-932: Queues for Kafka (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka) — 한 파티션을 여러 컨슈머가 나눠 읽는 share group
