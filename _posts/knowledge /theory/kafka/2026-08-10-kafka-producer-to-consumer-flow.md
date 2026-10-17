@@ -208,6 +208,8 @@ while (true) {
 Spring Kafka는 2.3부터 `enable.auto.commit`을 명시하지 않으면 `false`로 두고, 기본 `AckMode.BATCH`로 `poll()`이 리턴한 레코드를 리스너가 모두 처리한 뒤 컨테이너가 커밋한다.
 - 구조는 위 표의 첫 행과 같고 커밋 주체만 프레임워크다.
 
+![KafkaConsumer를 직접 쓰면 poll 스레드에서 처리 후 내 코드가 commitSync를 호출하고, Spring Kafka에서는 같은 컨테이너 스레드에서 리스너 처리 후 컨테이너가 commitSync를 호출하는 흐름과 각각의 샘플 코드](../../../../assets/img/kafka-producer-to-consumer-flow-img7.png)
+
 ## 4. 커밋된 오프셋은 어디에 남는가
 
 ---
@@ -260,3 +262,4 @@ Spring Kafka는 2.3부터 `enable.auto.commit`을 명시하지 않으면 `false`
 - [KafkaConsumer javadoc (kafka.apache.org/42/javadoc)](https://kafka.apache.org/42/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html) — position과 committed offset의 구분
 - [ProducerConfig.java (github.com/apache/kafka, 4.2.0)](https://github.com/apache/kafka/blob/4.2.0/clients/src/main/java/org/apache/kafka/clients/producer/ProducerConfig.java) — `postProcessAndValidateIdempotenceConfigs`의 멱등성 설정 검증
 - [Message Listener Containers (docs.spring.io/spring-kafka/reference)](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/message-listener-container.html) — `enable.auto.commit` 기본값, `AckMode`
+- [KafkaMessageListenerContainer.java (github.com/spring-projects/spring-kafka, v4.1.1)](https://github.com/spring-projects/spring-kafka/blob/v4.1.1/spring-kafka/src/main/java/org/springframework/kafka/listener/KafkaMessageListenerContainer.java) — `pollAndInvoke` → `doProcessCommits`의 커밋 시점
