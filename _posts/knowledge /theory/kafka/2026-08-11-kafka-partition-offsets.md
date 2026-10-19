@@ -5,106 +5,159 @@ categories: [지식 더하기, 카프카]
 tags: [Kafka]
 ---
 
-카프카를 쓰면서 만나는 "오프셋"은 하나가 아니다. 컨슈머가 커밋하는 오프셋이 있고, 브로커가 파티션 로그를 관리하려고 들고 있는 오프셋이 따로 있다. ISR·복제·리더 선출을 다루면서 나오는 오프셋은 전부 후자 쪽이고, 이걸 모르면 "팔로워가 리더의 LEO까지 따라잡았는지" 같은 문장에서 막힌다.
+카프카를 쓰면서 만나는 "오프셋"은 하나가 아니다. 컨슈머 그룹이 "여기까지 처리했다"고 커밋하는 오프셋이 있고, 브로커가 파티션 로그 자체의 상태를 나타내려고 매기는 오프셋이 따로 있다. <br> 커밋된 오프셋도 브로커(`__consumer_offsets`)에 저장되지만, 값을 정하는 쪽은 컨슈머다. <br> ISR·복제·리더 선출을 다루면서 나오는 오프셋은 전부 후자 쪽이고, 이걸 모르면 "팔로워가 리더의 LEO까지 따라잡았는지" 같은 문장에서 막힌다.
 
-이 글은 파티션 로그 위에 존재하는 네 개의 오프셋 — **log start offset, LSO, HW, LEO** — 이 각각 무엇이고 무엇이 그것을 전진시키는지 정리한다. 설정 기본값과 동작은 **Apache Kafka 4.2** 문서 기준이다.
+이 글은 파티션 로그 위에 존재하는 네 개의 오프셋 — **log start offset, LSO, HW, LEO** — 이 각각 무엇이고 무엇이 그것을 전진시키는지 정리한다. <br>설정 기본값과 동작은 **Apache Kafka 4.2** 문서 기준이다.
 
 ## 파티션 로그와 오프셋
 
 ---
 
-> 파티션은 append-only 로그이고, 오프셋은 그 로그에서 레코드의 위치를 가리키는 0부터 시작하는 정수다.
+> 파티션은 append-only 로그이고, 오프셋은 그 **로그에서 레코드의 위치**를 가리키는 0부터 시작하는 정수다.
 
-프로듀서가 보낸 레코드는 파티션 로그의 끝에 순서대로 붙는다. 붙는 순간 위치가 정해지고, 그 위치가 오프셋이다. 한번 정해지면 바뀌지 않고, 파티션 안에서 레코드를 유일하게 식별한다.
+![프로듀서가 오프셋 없이 ProduceRequest를 보내면 리더 브로커가 append 시점의 LEO(4)를 m4의 오프셋으로 부여해 ProduceResponse의 base_offset으로 돌려주고, 리더·팔로워 replica는 각자 다른 길이의 로그를 들고 있는 구조](../../../../assets/img/kafka-partition-offsets-img1.png)
 
-```
-파티션 로그:  [ m0 ][ m1 ][ m2 ][ m3 ]
-offset:         0     1     2     3     4 ←  다음에 쓸 자리
-```
+- 프로듀서는 `ProduceRequest`로 레코드 배치를 파티션의 **리더 브로커**에 보낸다.
+  - 배치의 오프셋 자리에는 0이 들어 있을 뿐, 실제 오프셋은 정해져 있지 않다.
+- 리더가 레코드를 로그 끝에 append하면서 **자기 LEO부터 번호를 매기고**, 그 번호가 오프셋이 된다.
+  - 프로듀서는 `ProduceResponse`의 `base_offset`을 받고 나서야 오프셋을 안다.
+- 한번 정해지면 바뀌지 않고, 파티션 안에서 레코드를 유일하게 식별한다.
+- 여기서 중요한 건 **파티션의 복제본(replica)마다 이 로그를 각자 하나씩 들고 있다는 점**이다.
+  - 리더 replica는 프로듀서 쓰기를 받아 로그를 늘리고, 팔로워 replica는 리더에게 fetch 요청을 보내 받아온 레코드를 자기 로그에 붙인다.
+  - 그래서 같은 파티션이라도 시점에 따라 replica들의 로그 길이가 다르다.
 
-여기서 중요한 건 **파티션의 복제본(replica)마다 이 로그를 각자 하나씩 들고 있다는 점**이다. 리더 replica는 프로듀서 쓰기를 받아 로그를 늘리고, 팔로워 replica는 리더에게 fetch 요청을 보내 받아온 레코드를 자기 로그에 붙인다. 그래서 같은 파티션이라도 시점에 따라 replica들의 로그 길이가 다르다.
+## 왜 "로그"인가
 
-아래에서 볼 오프셋들은 이 "여러 개의 로그"라는 사실 위에 서 있다. 어떤 것은 replica마다 값이 다르고(LEO), 어떤 것은 리더가 계산해서 모두에게 알려준다(HW).
+---
+
+> 여기서 로그는 애플리케이션 로그(텍스트 로그)가 아니라 **DB·분산 시스템에서 쓰는 자료구조로서의 로그**다.
+
+**로그 = 시간순으로 append만 하는 레코드 시퀀스**
+- 끝에만 추가하고, 이미 쓴 항목은 고치지 않는다.
+- 항목마다 순번이 붙고, 그 순번이 곧 시간 순서다. → 카프카의 오프셋
+- 같은 개념을 WAL(write-ahead log), commit log, transaction log라고도 부른다.
+
+**카프카 = DB 내부의 로그 개념을 메시징 시스템으로 꺼낸 것**
+- 초기 문서는 카프카를 "분산·파티션·복제되는 commit log 서비스"라고 소개했다.
+
+**"파티션" 로그인 이유: 로그의 단위가 토픽이 아니라 파티션이다**
+- 오프셋도, 순서 보장도, 복제도 파티션 로그 하나 단위로 성립한다.
+
+Jay Kreps(카프카 공동 개발자)의 정의는 다음과 같다.
+
+> 로그는 아마 가장 단순한 저장 추상화일 것이다. 시간순으로 정렬된, append만 가능한, 전순서(totally-ordered)가 있는 레코드 시퀀스다. (…) 각 항목에는 고유한 순차 번호가 부여된다.
+>
+> — Jay Kreps, *The Log: What every software engineer should know about real-time data's unifying abstraction* (2013)
+
+애플리케이션 로그와의 차이도 같은 글에 있다.
+
+> 애플리케이션 로그는 내가 말하는 로그 개념의 퇴화한 형태다. 가장 큰 차이는 텍스트 로그는 주로 사람이 읽기 위한 것이고, 내가 말하는 "저널"이나 "데이터 로그"는 프로그램이 접근하도록 만든 것이라는 점이다.
+
+카프카 0.8 문서(2014)는 파티션을 이렇게 설명했다.
+
+> 각 파티션은 계속 append되는, 순서가 있는 불변의 메시지 시퀀스, 즉 commit log다. 파티션의 메시지에는 각각 오프셋이라는 순차 id 번호가 부여된다.
 
 ## LEO (Log End Offset)
 
 ---
 
-> LEO는 **각 replica가 자기 로그에 다음으로 쓸 오프셋**이다. 마지막 레코드의 오프셋 + 1이고, 로그가 비어 있으면 log start offset과 같다.
+> LEO는 **각 replica가 자기 로그에 다음으로 쓸 오프셋**이다. <br> **마지막 레코드의 오프셋 + 1**이고, 로그가 비어 있으면 log start offset과 같다.
 
-앞의 그림에서 `4`가 LEO다. "마지막 레코드의 오프셋"이 아니라 "다음에 쓸 자리"라는 점이 헷갈리기 쉬운데, 이렇게 잡아두면 `LEO - log start offset`이 곧 보유 중인 레코드 개수가 되고 구간을 `[start, end)` 반열림으로 다룰 수 있다.
+**LEO는 replica마다 값이 다르다.**
+- 리더가 오프셋 0~199(200개)를 받았는데 느린 팔로워는 아직 0~99(100개)만 받았다면, 리더 LEO는 200이고 그 팔로워의 LEO는 100이다.
+- 이 차이가 복제 lag다(컨슈머 lag인 `HW - committed offset`과는 다른 값이다).
 
-**LEO는 replica마다 값이 다르다.** 리더가 오프셋 200까지 받았는데 느린 팔로워는 아직 100까지만 받았다면, 리더 LEO는 200이고 그 팔로워의 LEO는 100이다. 이 차이가 곧 복제 지연(lag)이고, ISR 판정의 기준이 되는 것도 이 값이다.
 
-| replica | LEO를 전진시키는 것 |
-|---|---|
-| 리더 | **프로듀서의 쓰기**. produce 요청을 받아 자기 로그에 append하면 그만큼 전진 |
-| 팔로워 | **fetch 응답의 레코드**. 리더에게서 받아온 레코드를 자기 로그에 append하면 전진 |
+### 빈 로그라고 오프셋이 0인 건 아니다
+
+- 새로 만든 파티션만 log start offset = LEO = 0이다.
+- 레코드가 retention으로 전부 지워지면 log start offset이 LEO까지 따라와 둘이 같아진다. 오프셋은 재사용하지 않는다.
+
+```
+0~99를 쓴 뒤 전부 삭제:  [0, 100) → [100, 100)   ← 비었지만 LEO = 100, 다음 레코드는 100
+```
 
 ### 리더는 팔로워의 LEO를 어떻게 아는가
 
-팔로워가 별도로 "나 여기까지 받았어요"를 보고하지 않는다. 팔로워가 보내는 `FetchRequest`의 `fetch_offset` 필드가 곧 그 팔로워의 LEO다.
+> 팔로워가 별도로 보고하지 않는다. <br>
+> 팔로워가 보내는 `FetchRequest`의 `fetch_offset` 필드가 곧 그 팔로워의 LEO다.
 
-```
-팔로워 → 리더 :  FetchRequest(fetch_offset = 100)
-리더          :  "이 팔로워는 99까지 받았고, LEO는 100이구나"
-              →  records[100..200] + 현재 HW를 응답
-팔로워        :  append → 자기 LEO = 200
-              →  즉시 FetchRequest(fetch_offset = 200) 전송
-```
+이 방식을 **LEO piggyback**이라 부른다.
+- piggyback은 별도 메시지를 보내지 않고 *어차피 보내는* 메시지에 정보를 얹어 보내는 것이다.
+- 팔로워는 LEO를 별도 ACK로 보내지 않고, 다음 `FetchRequest`의 `fetch_offset`에 실어 보낸다.
+  - `fetch_offset = N`은 팔로워 입장에선 *"N부터 달라"*는 요청이고, 리더 입장에선 **"N-1까지는 이미 다 받았다"** 는 진행보고다.
+  - 그래서 fetch 요청 하나가 **직전 데이터의 ACK와 다음 데이터 요청**을 겸한다.
 
-어차피 보내야 하는 fetch 요청에 진행 상황을 얹어 보내는 것이라 별도의 ACK 메시지가 필요 없다. 리더 입장에서는 fetch 요청 하나가 "직전 데이터 확인 + 다음 데이터 요청"을 겸한다.
+![팔로워가 LEO 200을 그대로 fetch_offset=200으로 보내면, 그 요청이 "200부터 주세요"(요청)와 "199까지 저장했다"(ACK)를 겸하고, 리더는 이를 진행보고로 해석해 팔로워 LEO 기록·HW 재계산·lastCaughtUpTime 갱신·acks=all 확인을 한다. 별도 ReplicaAck를 두면 같은 정보를 두 번 보내게 된다](../../../../assets/img/kafka-partition-offsets-img2.png)
+
+- 리더는 `HW = min(ISR 전원 LEO)`를 계산해야 하므로 각 팔로워의 LEO를 알아야 하고, 그 값을 이 `fetch_offset`에서 얻는다.
+- 컨슈머도 같은 `FetchRequest`의 `fetch_offset`을 보내지만, `replica_id=-1`(컨슈머) 요청이면 리더는 이 값을 LEO로 쓰지 않는다.
+- LEO 추적과 HW 재계산은 팔로워(`replica_id ≥ 0`) 요청일 때만 한다.
+
+이 설계 때문에 HW가 한 라운드 늦게 움직이고, 쓰기가 없어도 ISR이 유지된다.
+
+| 결과 | 내용 |
+|---|---|
+| HW가 구조적으로 한 라운드 늦음 | 리더는 팔로워의 수신 여부를 직접 확인하지 못하고 **다음 요청의 `fetch_offset`으로 추론**한다. 마지막 배치의 확인은 항상 다음 요청에 실려 온다. 그래서 `acks=all`의 ack도 "팔로워가 받은 순간"이 아니라 "팔로워가 다음 fetch를 보낸 순간"에 나간다 (→ [§팔로워는 HW를 한 라운드 늦게 안다](#팔로워는-hw를-한-라운드-늦게-안다)) |
+| 쓰기가 없어도 LEO 보고가 끊기지 않음 | 쓸 데이터가 없어도 fetch는 long polling이라 `replica.fetch.wait.max.ms`(500ms)마다 빈 응답이 가고 다음 요청이 올라온다. 그때마다 `lastCaughtUpTime`이 갱신돼 ISR이 유지된다 (→ [ISR 1편 §Fetch 요청 주기](/posts/kafka-isr-1/#fetch-요청-주기-long-polling)) |
+
+> 위 그림의 `fetch_offset=200`은 **정상 사이클** 예시이고 최초 요청이 아니다. 최초 요청의 `fetch_offset`은 truncation 후의 LEO(신규 replica면 0)다 → [ISR 1편 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점).
 
 ## HW (High Watermark)
 
 ---
 
-> HW는 **ISR에 속한 모든 replica가 복제를 마친 지점**이다. `HW = min(리더 LEO, ISR 팔로워들의 LEO)`로 계산되고, 컨슈머가 읽을 수 있는 경계가 된다.
+> HW는 **ISR에 속한 모든 replica가 복제를 마친 지점**이다. `HW = min(리더 LEO, ISR 팔로워들의 LEO)`로 계산되고, **컨슈머가 읽을 수 있는 경계**가 된다.
 
-오프셋이 HW보다 작은 레코드는 ISR 전원의 로그에 들어가 있다. 즉 replica 하나가 죽어도 남아 있다. 이 상태를 카프카는 **committed**라고 부르고, 컨슈머에게는 committed된 레코드만 보여준다.
+![리더 LEO는 프로듀서의 Produce로, 팔로워 LEO는 Fetch 응답의 레코드로 전진하고, HW는 리더가 ISR 모두의 LEO 중 최솟값(min(6, 5, 4) = 4)으로 계산한다. Fetch 응답은 팔로워에게는 리더 LEO까지, 컨슈머에게는 HW 이전 구간까지만 나간다](../../../../assets/img/kafka-partition-offsets-img3.png)
 
-```
-리더 로그:  [ m0 ][ m1 ][ m2 ][ m3 ][ m4 ]
-offset:       0     1     2     3     4     5 ← LEO
-                                ↑
-                              HW = 3
-            └─ committed ─┘ └ 미복제 꼬리 ┘
-```
+- 오프셋이 HW보다 작은 레코드는 ISR 모두의 로그에 들어가 있다.
+- 그래서 리더가 죽어도 ISR의 다른 replica가 새 리더가 되어 그 레코드를 계속 내준다.
+- ISR 중 하나만 살아 있으면 유실되지 않는다는 뜻이다.
+- 이 상태를 카프카는 **committed**라고 부르고, 컨슈머에게는 committed된 레코드만 보여준다.
+- 반면 팔로워의 fetch 요청(`replica_id ≥ 0`)에는 리더 LEO까지 다 준다
+  - 팔로워가 그 꼬리를 가져가야 HW가 전진하기 때문이다.
+  - 같은 Fetch API인데 요청자에 따라 응답 상한이 다르다.
 
-`m3`, `m4`는 리더 로그에는 있지만 아직 ISR 전원에게 복제되지 않았다. 컨슈머는 이 구간을 받지 못한다.
+## 팔로워는 HW를 한 라운드 늦게 안다
 
-**컨슈머가 "안 보는" 게 아니라 리더가 "안 준다".** 컨슈머의 fetch 요청(`replica_id = -1`)에 리더는 HW까지만 잘라서 응답한다. 반면 팔로워의 fetch 요청(`replica_id ≥ 0`)에는 리더 LEO까지 다 준다 — 팔로워가 그 꼬리를 가져가야 HW가 전진하기 때문이다. 같은 Fetch API인데 요청자에 따라 응답 상한이 다르다.
+---
 
-### HW를 미는 건 팔로워의 fetch다
+> 리더는 HW가 오른 순간 바로 알지만, 팔로워는 **Fetch 왕복 한 번(한 라운드) 뒤에야** 안다.
 
-리더 LEO는 프로듀서가 밀지만, HW는 팔로워가 민다. 이 둘의 동력이 다르다는 점이 `acks=all`의 동작으로 이어진다. 팔로워들이 fetch로 따라붙어 → 리더가 `min(LEO)`를 다시 계산해 HW를 전진시키고 → HW가 해당 오프셋을 넘어서면 그때 대기 중이던 `acks=all` produce 요청에 ack이 나간다.
+### 라운드 = Fetch 왕복 1회
 
-### 팔로워는 HW를 한 라운드 늦게 안다
+한 라운드는 팔로워가 `FetchRequest`를 보내고 리더가 `FetchResponse`를 돌려주는 **왕복 1회**다. 이 왕복 하나에 두 방향의 정보가 실린다.
 
-HW는 리더가 계산해서 `FetchResponse`의 `high_watermark` 필드로 알려준다. 팔로워는 그걸 받아 `자기 HW = min(응답의 리더 HW, 자기 LEO)`로 갱신한다. 자기가 갖고 있지도 않은 오프셋을 committed로 표시할 수는 없으니 min을 취한다.
+| 방향 | 실리는 값 | 받는 쪽이 하는 일 |
+|---|---|---|
+| 팔로워 → 리더 (`FetchRequest`) | `fetch_offset` = 팔로워 LEO | 리더가 팔로워 LEO를 기록하고 HW를 다시 계산 |
+| 리더 → 팔로워 (`FetchResponse`) | `records` + `high_watermark` | 팔로워가 레코드를 append하고 `자기 HW = min(응답의 리더 HW, 자기 LEO)`로 갱신 |
 
-```
-초기: 리더 LEO=200(프로듀서가 씀), F1.LEO=F2.LEO=100, HW=100
+팔로워가 min을 취하는 이유는 [아래](#팔로워가-min을-취해야-하는-이유)에서 다룬다.
 
-① F1: Fetch(100) → 리더: F1.LEO=100 기록, records[100..200] + HW=100 응답
-② F1: append → LEO=200, 자기 HW = min(100, 200) = 100, Fetch(200) 전송
-③ F2도 동일하게 200까지 따라붙어 Fetch(200) 전송
-④ 리더: F1.LEO=F2.LEO=200 확인 → HW = min(200,200,200) = 200 전진
-⑤ 리더: F1의 Fetch(200)에 HW=200을 실어 응답
-⑥ F1: 자기 HW = min(200, 200) = 200  ← 이제서야 학습
-```
+### 한 라운드 늦는 과정
 
-리더는 ④에서 HW=200을 알지만 팔로워는 ⑥에서야 안다. **HW 전파는 항상 한 라운드 늦다.** 여기서 한 라운드는 `FetchRequest` 하나가 나갔다가 `FetchResponse`가 돌아오는 **왕복 1회**를 말한다.
+![팔로워 F1·F2가 라운드 1의 Fetch(100) 응답으로 레코드 100~199와 HW=100을 받고, 라운드 2의 Fetch(200)이 도착해서야 리더가 HW=200을 계산하며, 팔로워는 라운드 2 응답에서야 HW=200을 받는 시퀀스.](../../../../assets/img/kafka-partition-offsets-img4.png)
 
-한 라운드가 뜨는 이유는 이렇다. ①의 응답이 나가는 시점에는 팔로워가 아직 데이터를 받기 전이니 HW=100이 맞다. 팔로워가 받았다는 사실은 ④, 즉 **다음 요청의 `fetch_offset`으로** 리더에게 도착하고, 그렇게 새로 계산된 HW를 실어 보낼 응답은 그 다음 응답인 ⑤뿐이다. 리더가 중간에 "HW가 올랐다"고 따로 통보하는 경로가 없어서(pull 모델) 왕복 하나가 구조적으로 밀린다.
+- 라운드 1 응답이 나갈 때 팔로워는 아직 레코드를 받기 전이라, 실을 수 있는 HW는 100뿐이다.
+- 팔로워가 받았다는 사실은 라운드 2 요청의 `fetch_offset`으로 도착하고, 새 HW는 라운드 2 응답에 실린다.
+- 리더가 HW 변화를 따로 알리는 경로가 없어서(pull 모델) 왕복 하나가 밀린다.
 
-이 시차가 팔로워 재시작 시 로그를 자르는(truncation) 판단을 HW로 하면 안 되는 이유이고, Leader Epoch이 도입된 배경이기도 하다.
+### 얼마나 늦고, 무엇이 문제인가
+
+- **시간**: 대략 브로커 간 RTT 한 번, 보통 밀리초 단위다. HW가 밀려 있다는 건 리더에 아직 복제되지 않은 데이터가 있다는 뜻이라 `replica.fetch.min.bytes`(기본 1)가 바로 충족되고, 응답은 long polling 대기(`replica.fetch.wait.max.ms`, 기본 500ms) 없이 즉시 나간다.
+- **문제**: 늦는 시간이 아니라, 이 구간에 재시작한 팔로워가 뒤처진 HW로 로그를 자른다(truncation)는 점이다. Leader Epoch이 도입된 배경이다(→ [ISR 2편 §HW 의 한계와 Leader Epoch](/posts/kafka-isr-2/#hw-의-한계와-leader-epoch-kip-101)).
+  - ack 시점이 문제는 아니다. `acks=all`은 "ISR 모두의 로그에 들어갔다"는 약속이고, 그 시점에 레코드는 실제로 복제돼 있다. 잘못은 재시작한 팔로워가 늦게 받은 HW를 믿고 갖고 있던 레코드까지 버린 데 있다.
+  - 그래서 ack 시점은 그대로 두고, 잘라낼 지점을 HW 대신 리더에게 묻도록 바꿨다. ack를 늦추면 모든 쓰기가 왕복 한 번만큼 느려진다.
+
+![Kafka 0.11 이전에는 HW가 뒤처진 구간에 재시작한 팔로워 F1이 자기 HW(100) 뒤를 잘라내고, 이어서 리더가 죽어 F1이 새 리더가 되면 acks=all로 ack된 100~199가 유실되는 과정. 0.11부터는 Leader Epoch으로 잘라낼 지점을 리더에게 묻는다](../../../../assets/img/kafka-partition-offsets-img5.png)
 
 > Kafka 4.x에서 ELR(Eligible Leader Replicas, KIP-966)을 활성화하면 여기에 조건이 하나 붙는다. ISR 크기가 `min.insync.replicas` 이상일 때만 HW가 전진한다. 이렇게 해야 "HW까지의 데이터는 최소 그만큼의 replica에 있다"가 보장된다. Kafka 4.0은 기본 비활성, 4.1부터 신규 클러스터 기본 활성이다.
 
 ### 팔로워가 min을 취해야 하는 이유
 
-리더 HW는 `min(ISR 멤버들의 LEO)`이므로, ISR에 정상적으로 붙어 있는 팔로워라면 응답의 HW가 자기 LEO를 넘을 일이 없다. 위 ①~⑥에서도 min은 늘 응답 HW를 고른다. min이 실제로 값을 바꾸는 건 그 전제가 깨질 때다.
+리더 HW는 `min(ISR 멤버들의 LEO)`이므로, ISR에 정상적으로 붙어 있는 팔로워라면 응답의 HW가 자기 LEO를 넘을 일이 없다. 위 그림에서도 min은 늘 응답 HW를 고른다. min이 실제로 값을 바꾸는 건 그 전제가 깨질 때다.
 
 - **ISR 밖의 팔로워** — HW 계산에 들어가는 건 ISR 멤버뿐이다. `replica.lag.time.max.ms`를 넘겨 ISR에서 빠진 팔로워, 재시작 후 따라잡는 중인 replica, 파티션 재할당으로 log start offset부터 받기 시작한 replica는 전부 계산에서 빠져 있으므로 리더 HW가 이들의 LEO보다 한참 앞서 있다.
 - **한 번의 fetch로 꼬리를 다 못 받는 경우** — 응답 크기는 `replica.fetch.max.bytes`(기본 1MB) 등으로 잘린다. 응답에 HW=200이 실려 와도 records는 `[100..150)`까지만 오고, append 후 자기 LEO는 150에 머문다.
@@ -143,24 +196,6 @@ HW는 리더가 계산해서 `FetchResponse`의 `high_watermark` 필드로 알�
 
 HW와 LEO 사이의 미복제 꼬리는 어떤 컨슈머에게도 가지 않는다. 그 구간은 팔로워만 받아가고, 팔로워는 `isolation.level` 자체를 쓰지 않는다.
 
-## log start offset
-
----
-
-> log start offset은 **파티션에 아직 남아 있는 가장 오래된 오프셋**이다. 로그의 왼쪽 경계다.
-
-파티션 로그는 무한히 자라지 않는다. 보존 정책(`retention.ms`, `retention.bytes`)에 걸린 오래된 세그먼트가 삭제되거나, `DeleteRecords` API로 특정 오프셋 이전을 잘라내면 log start offset이 그만큼 전진한다. 삭제된 오프셋 번호가 재사용되지는 않는다.
-
-```
-삭제 전:  [ m0 ][ m1 ][ m2 ][ m3 ]    log start offset = 0
-           0     1     2     3
-
-삭제 후:              [ m2 ][ m3 ]    log start offset = 2
-                       2     3
-```
-
-컨슈머가 log start offset보다 작은 오프셋을 요청하면 `OFFSET_OUT_OF_RANGE`가 나고, 이때 `auto.offset.reset`(기본 `latest`) 설정에 따라 위치가 재조정된다. 오랫동안 멈춰 있던 컨슈머 그룹을 다시 띄웠을 때 메시지를 건너뛰는 상황이 여기서 나온다.
-
 ## 네 오프셋의 순서 관계
 
 ---
@@ -196,9 +231,12 @@ ISR 관련 설명에서 "팔로워가 리더의 LEO까지 따라잡았는가"를
 |---|---|---|
 | 영역 | 브로커 / 복제 | 컨슈머 / 진행 추적 |
 | 의미 | ISR 전원에게 복제됨 → 내구성·가시성 확보 | 내가 여기까지 처리했다 |
-| 저장 | 리더가 메모리에서 관리 | `__consumer_offsets` 토픽에 기록 |
-| 전진 주체 | 리더가 ISR의 LEO를 보고 계산 | 컨슈머가 `commitSync()` / auto-commit |
+| 값을 정하는 쪽 | 브로커 (리더가 ISR의 LEO로 계산) | 컨슈머 (브로커는 받은 값을 저장만 함) |
+| 저장 | 메모리 + 로그 디렉터리의 `replication-offset-checkpoint` 파일에 주기적 체크포인트 | 그룹 코디네이터 브로커가 `__consumer_offsets` 토픽에 기록 |
+| 전진 시점 | 팔로워 Fetch로 ISR의 LEO가 오를 때 | 컨슈머가 `commitSync()` / auto-commit 할 때 |
 | 답하는 질문 | *데이터가 안전한가?* | *어디까지 읽었나?* |
+
+HW 체크포인트는 `kafka.server.ReplicaManager#checkpointHighWatermarks`가 `replica.high.watermark.checkpoint.interval.ms`(기본 5000ms)마다 로그 디렉터리별로 쓴다(Kafka 4.2 기준). 브로커가 재시작하면 이 파일에서 HW를 읽어 복구한다.
 
 여기에 컨슈머 쪽 오프셋이 하나 더 있다. **position**은 컨슈머가 다음에 fetch할 오프셋으로 메모리에만 있고, `poll()` 할 때마다 전진한다. committed offset은 그 position을 브로커에 기록해 둔 스냅샷이다. 둘이 벌어져 있는 동안 컨슈머가 죽으면 committed offset부터 다시 읽게 되고, 그 구간이 중복 처리된다.
 
@@ -228,11 +266,18 @@ replica별 LEO를 보려면 각 브로커의 JMX 지표를 봐야 한다. 복제
 
 ---
 
+- [Jay Kreps — The Log: What every software engineer should know about real-time data's unifying abstraction (engineering.linkedin.com, 2013, Wayback 아카이브)](https://web.archive.org/web/20240105095933/https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying) — 로그의 정의, 애플리케이션 로그와의 차이 (원본 URL은 현재 404)
+- [Apache Kafka 0.8 Documentation: Introduction (kafka.apache.org/documentation, 2014, Wayback 아카이브)](https://web.archive.org/web/2014/http://kafka.apache.org/documentation.html) — "distributed, partitioned, replicated commit log service", 파티션 = commit log
 - [Apache Kafka — Design: Replication (kafka.apache.org/42/design)](https://kafka.apache.org/42/design/design/#replication) — committed 메시지의 정의와 ISR
 - [Apache Kafka — Design: Consumer Position (kafka.apache.org/42/design)](https://kafka.apache.org/42/design/design/#consumer-position) — 컨슈머가 오프셋을 관리하는 이유
 - [KafkaConsumer javadoc — endOffsets (kafka.apache.org/42/javadoc)](https://kafka.apache.org/42/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html) — isolation level에 따라 HW / LSO가 반환된다는 설명
 - [Apache Kafka — A Guide To The Kafka Protocol: Fetch API (kafka.apache.org/protocol)](https://kafka.apache.org/protocol.html) — `fetch_offset`, `high_watermark`, `log_start_offset` 필드
+- [Apache Kafka — A Guide To The Kafka Protocol: Produce API (kafka.apache.org/protocol)](https://kafka.apache.org/protocol.html#The_Messages_Produce) — `ProduceRequest`의 레코드 배치와 `ProduceResponse`의 `base_offset`
+- [`UnifiedLog#append` · `appendAsLeader` · `appendAsFollower` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/storage/src/main/java/org/apache/kafka/storage/internals/log/UnifiedLog.java) — 리더 append 시 LEO부터 오프셋 부여, 팔로워는 부여하지 않음
+- [`LogValidator#assignOffsetsNonCompressed` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/storage/src/main/java/org/apache/kafka/storage/internals/log/LogValidator.java) — 레코드마다 오프셋을 매기는 코드
+- [`RecordAccumulator` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/clients/src/main/java/org/apache/kafka/clients/producer/internals/RecordAccumulator.java) — 프로듀서가 `baseOffset = 0`으로 배치를 만드는 코드
 - [KIP-101: Reduce log complexity with Leader Epoch (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation) — HW 전파 지연이 만드는 문제
 - [KIP-392: Allow consumers to fetch from closest replica (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-392%3A+Allow+consumers+to+fetch+from+closest+replica) — 팔로워가 컨슈머에게 응답할 때의 상한
+- [`ReplicaManager#checkpointHighWatermarks` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/core/src/main/scala/kafka/server/ReplicaManager.scala) — HW를 `replication-offset-checkpoint` 파일에 주기적으로 기록
 - [`UnifiedLog#maybeUpdateHighWatermark` (github.com/apache/kafka, 4.1)](https://github.com/apache/kafka/blob/4.1/storage/src/main/java/org/apache/kafka/storage/internals/log/UnifiedLog.java) — 팔로워 HW를 log start offset과 LEO 사이로 clamp하는 코드
 - [KIP-966: Eligible Leader Replicas (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-966:+Eligible+Leader+Replicas) — ISR 크기에 따른 HW 전진 조건
