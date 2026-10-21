@@ -211,6 +211,10 @@ checkpoint는 파일의 줄바꿈을 `|`로 바꿔 한 줄로 찍은 것이다.
 
 리더는 질의한 epoch이 자기 현재 epoch이면 LEO를, 지난 epoch이면 다음 epoch의 시작 offset을 돌려준다. 팔로워는 HW가 아니라 그 offset부터 자른다.
 
+지난 epoch 질의는 팔로워가 마지막으로 append한 뒤 리더가 바뀐 경우다. 이 질의에 답하려고 checkpoint는 과거 epoch 항목을 지우지 않는다.
+
+![epoch 1 리더 B3가 복제되지 않은 6~7을 남긴 채 죽고, 리더가 B2(epoch 2) → B1(epoch 3)로 두 번 바뀐 뒤 B3가 돌아와 OffsetsForLeaderEpoch(epoch=1)를 보낸다. B1은 checkpoint의 과거 항목 2→6을 보고 endOffset=6을 돌려주고 B3는 6~7을 잘라낸다. 최신 항목 3→9만 있었다면 9를 돌려줘 B3의 6~7이 남아 로그가 갈라진다. 항목은 log start offset이 오르면 앞쪽부터 정리되어 0→0 1→3 2→6이 1→4 2→6, 다시 2→7로 줄어든다](../../../../assets/img/kafka-partition-offsets-img10.png)
+
 ![리더 L과 팔로워 F1 모두 epoch 5로 기록된 0~99, 100~199와 checkpoint {5→0}을 갖고 있고 F1의 HW만 100이다. F1이 재시작해 OffsetsForLeaderEpoch(epoch=5)를 보내면 L은 현재 epoch과 같으므로 자기 LEO 200을 돌려주고, F1은 200부터 자르므로 아무것도 버리지 않는다. 이후 L이 죽고 F1이 epoch 6 리더가 되면 checkpoint는 {5→0, 6→200}이 되고 100~199가 남는다](../../../../assets/img/kafka-partition-offsets-img7.png)
 
 ![epoch 0 리더 A는 m1@0, m2@1을, 팔로워 B는 flush 전이던 m2를 잃고 m1@0만 가진 채 정전으로 함께 다운된다. B가 epoch 1 리더가 되어 m3을 offset 1에 epoch 1로 쓰고 checkpoint는 {0→0, 1→1}이 된다. 복귀한 A가 OffsetsForLeaderEpoch(epoch=0)을 보내면 B는 checkpoint에서 epoch 1의 시작 offset 1을 돌려주고, A는 offset 1의 m2를 잘라낸 뒤 Fetch(offset=1)로 m3을 받아 B와 로그와 checkpoint가 일치한다](../../../../assets/img/kafka-partition-offsets-img8.png)
@@ -339,6 +343,7 @@ replica별 LEO를 보려면 각 브로커의 JMX 지표를 봐야 한다. 복제
 - [`LogValidator#assignOffsetsNonCompressed` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/storage/src/main/java/org/apache/kafka/storage/internals/log/LogValidator.java) — 레코드마다 오프셋을 매기는 코드
 - [`RecordAccumulator` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/clients/src/main/java/org/apache/kafka/clients/producer/internals/RecordAccumulator.java) — 프로듀서가 `baseOffset = 0`으로 배치를 만드는 코드
 - [KIP-101: Reduce log complexity with Leader Epoch (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation) — HW 전파 지연이 만드는 유실·분기 시나리오, `OffsetsForLeaderEpoch`, leader-epoch-checkpoint
+- [KIP-320: Allow fetchers to detect and handle log truncation (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-320%3A+Allow+fetchers+to+detect+and+handle+log+truncation) — 컨슈머가 커밋 offset의 leader epoch으로 truncation을 감지
 - [KIP-392: Allow consumers to fetch from closest replica (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-392%3A+Allow+consumers+to+fetch+from+closest+replica) — 팔로워가 컨슈머에게 응답할 때의 상한
 - [`ReplicaManager#checkpointHighWatermarks` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/core/src/main/scala/kafka/server/ReplicaManager.scala) — HW를 `replication-offset-checkpoint` 파일에 주기적으로 기록
 - [`UnifiedLog#maybeUpdateHighWatermark` (github.com/apache/kafka, 4.1)](https://github.com/apache/kafka/blob/4.1/storage/src/main/java/org/apache/kafka/storage/internals/log/UnifiedLog.java) — 팔로워 HW를 log start offset과 LEO 사이로 clamp하는 코드
