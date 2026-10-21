@@ -99,9 +99,9 @@ Jay Kreps(카프카 공동 개발자)의 정의는 다음과 같다.
 | 결과 | 내용 |
 |---|---|
 | HW가 구조적으로 한 라운드 늦음 | 리더는 팔로워의 수신 여부를 직접 확인하지 못하고 **다음 요청의 `fetch_offset`으로 추론**한다. 마지막 배치의 확인은 항상 다음 요청에 실려 온다. 그래서 `acks=all`의 ack도 "팔로워가 받은 순간"이 아니라 "팔로워가 다음 fetch를 보낸 순간"에 나간다 (→ [§팔로워는 HW를 한 라운드 늦게 안다](#팔로워는-hw를-한-라운드-늦게-안다)) |
-| 쓰기가 없어도 LEO 보고가 끊기지 않음 | 쓸 데이터가 없어도 fetch는 long polling이라 `replica.fetch.wait.max.ms`(500ms)마다 빈 응답이 가고 다음 요청이 올라온다. 그때마다 `lastCaughtUpTime`이 갱신돼 ISR이 유지된다 (→ [ISR 1편 §Fetch 요청 주기](/posts/kafka-isr-1/#fetch-요청-주기-long-polling)) |
+| 쓰기가 없어도 LEO 보고가 끊기지 않음 | 쓸 데이터가 없어도 fetch는 long polling이라 `replica.fetch.wait.max.ms`(500ms)마다 빈 응답이 가고 다음 요청이 올라온다. 그때마다 `lastCaughtUpTime`이 갱신돼 ISR이 유지된다 (→ [ISR 글 §Fetch 요청 주기](/posts/kafka-isr-1/#fetch-요청-주기-long-polling)) |
 
-> 위 그림의 `fetch_offset=200`은 **정상 사이클** 예시이고 최초 요청이 아니다. 최초 요청의 `fetch_offset`은 truncation 후의 LEO(신규 replica면 0)다 → [ISR 1편 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점).
+> 위 그림의 `fetch_offset=200`은 **정상 사이클** 예시이고 최초 요청이 아니다. 최초 요청의 `fetch_offset`은 truncation 후의 LEO(신규 replica면 0)다 → [ISR 글 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점).
 
 ## HW (High Watermark)
 
@@ -215,7 +215,7 @@ checkpoint는 파일의 줄바꿈을 `|`로 바꿔 한 줄로 찍은 것이다.
 
 ![epoch 0 리더 A는 m1@0, m2@1을, 팔로워 B는 flush 전이던 m2를 잃고 m1@0만 가진 채 정전으로 함께 다운된다. B가 epoch 1 리더가 되어 m3을 offset 1에 epoch 1로 쓰고 checkpoint는 {0→0, 1→1}이 된다. 복귀한 A가 OffsetsForLeaderEpoch(epoch=0)을 보내면 B는 checkpoint에서 epoch 1의 시작 offset 1을 돌려주고, A는 offset 1의 m2를 잘라낸 뒤 Fetch(offset=1)로 m3을 받아 B와 로그와 checkpoint가 일치한다](../../../../assets/img/kafka-partition-offsets-img8.png)
 
-이 truncation은 팔로워가 첫 fetch를 보내기 전에 일어나고(→ [ISR 1편 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점)), 0.11부터 기본 동작이라 따로 켤 설정은 없다. rolling restart처럼 리더 교체가 연달아 일어나도 위 유실은 생기지 않는다. 다만 ISR 축소와 unclean election을 피하려면 브로커를 재시작한 뒤 `UnderReplicatedPartitions`가 0으로 돌아온 걸 확인하고 다음 브로커를 내린다.
+이 truncation은 팔로워가 첫 fetch를 보내기 전에 일어나고(→ [ISR 글 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점)), 0.11부터 기본 동작이라 따로 켤 설정은 없다. rolling restart처럼 리더 교체가 연달아 일어나도 위 유실은 생기지 않는다. 다만 ISR 축소와 unclean election을 피하려면 브로커를 재시작한 뒤 `UnderReplicatedPartitions`가 0으로 돌아온 걸 확인하고 다음 브로커를 내린다.
 
 ### 팔로워가 min을 취해야 하는 이유
 
