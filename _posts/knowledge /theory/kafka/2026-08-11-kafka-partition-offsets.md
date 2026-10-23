@@ -207,19 +207,67 @@ checkpoint는 파일의 줄바꿈을 `|`로 바꿔 한 줄로 찍은 것이다.
 |---|---|
 | Leader Epoch | 리더가 바뀔 때마다 +1되는 번호. 모든 record batch에 기록된다 |
 | `leader-epoch-checkpoint` | replica마다 `epoch → 그 epoch의 시작 offset`을 디스크에 저장한 파일. 현재 리더도 과거 epoch 기록을 갖고 있어 옛 리더가 죽어도 답할 수 있다 |
-| `OffsetsForLeaderEpoch` | 재시작한 팔로워가 자기 마지막 epoch을 보내 그 epoch의 끝 offset을 현재 리더에게 묻는 요청 |
+| 분기점 질의 | 팔로워가 자기 마지막 epoch을 보내 그 epoch의 끝 offset을 현재 리더에게 묻는 것. 0.11~2.6은 별도 `OffsetsForLeaderEpoch` 요청으로, 2.7부터는 `FetchRequest`의 `last_fetched_epoch`와 `FetchResponse`의 `diverging_epoch`으로 묻고 답한다 |
 
-리더는 질의한 epoch이 자기 현재 epoch이면 LEO를, 지난 epoch이면 다음 epoch의 시작 offset을 돌려준다. 팔로워는 HW가 아니라 그 offset부터 자른다.
+Kafka 4.2 팔로워는 재시작 후 따로 묻지 않고 곧바로 자기 LEO부터 Fetch를 보낸다. 요청에는 마지막으로 받은 batch의 epoch(`last_fetched_epoch`)이 같이 실린다. 리더는 records를 읽기 전에 그 epoch이 자기 로그에서 어디서 끝나는지 checkpoint로 계산한다. 질의한 epoch이 자기 현재 epoch이면 LEO, 지난 epoch이면 다음 epoch의 시작 offset이다.
+
+- 계산한 끝 offset이 팔로워의 `fetch_offset`보다 작으면(또는 그 epoch을 리더가 모르면) 로그가 갈라진 것이다. 리더는 records 없이 `diverging_epoch {epoch, end_offset}`만 담아 응답한다.
+- 팔로워는 자기 checkpoint에서 같은 epoch의 끝을 구해, 리더 값과 둘 중 작은 offset까지 자른다. 그 다음 Fetch부터는 정상적으로 records를 받는다.
+- 갈라지지 않았으면 그 Fetch가 그대로 records를 받는다. 재시작한 팔로워라고 왕복이 하나 더 드는 일은 없다.
+
+리더 쪽 판정은 `kafka.cluster.Partition#readRecords`에 있다.
+
+```scala
+// kafka.cluster.Partition (Kafka 4.2.0, 요약)
+lastFetchedEpoch.ifPresent { fetchEpoch =>
+  val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
+  ...
+  if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
+    val divergingEpoch = new FetchResponseData.EpochEndOffset()
+      .setEpoch(epochEndOffset.leaderEpoch)
+      .setEndOffset(epochEndOffset.endOffset)
+    return new LogReadInfo(FetchDataInfo.empty(fetchOffset), Optional.of(divergingEpoch), ...)
+  }
+}
+```
+
+`lastOffsetForLeaderEpoch`는 `OffsetsForLeaderEpoch` 요청을 처리할 때 쓰는 것과 같은 계산이다. 묻는 경로만 별도 요청에서 Fetch로 옮겨졌다. 이 변경은 KIP-595가 Fetch에 `last_fetched_epoch`·`diverging_epoch` 필드를 넣으면서 들어왔고, 브로커 간 복제에는 inter-broker protocol 2.7부터 쓰인다(`kafka.server.AbstractFetcherThread#partitionFetchState` 주석: "IBP 2.7부터는 Fetch 응답에 실려 오는 분기 정보로 truncation할 수 있다"). `OffsetsForLeaderEpoch` API가 없어진 것은 아니고, 컨슈머가 자기 위치를 검증할 때(KIP-320) 계속 쓴다.
+
+<details markdown="1">
+<summary>실측: 분기된 팔로워의 첫 Fetch (Kafka 4.2.0)</summary>
+
+브로커 2·3·4, RF=3 토픽에서 그림의 분기 경우를 만들었다. 리더 b2에 `m1~m3`를 복제한 뒤 팔로워 b3·b4를 `docker pause`로 멈추고, b2에만 `x1`, `x2`(offset 3~4, epoch 0)를 `acks=1`로 썼다. 이어서 b2를 SIGKILL로 죽이고 b3·b4를 풀었다. 새 리더 b3(epoch 1)에는 `y1`, `y2`(offset 3~4, epoch 1)를 썼다. 그 다음 b2를 다시 띄웠다.
+
+리더 b3의 요청 로그(`kafka.request.logger=DEBUG`)에 찍힌 b2의 첫 두 Fetch다.
+
+```
+FETCH  fetchOffset=5, lastFetchedEpoch=0, currentLeaderEpoch=1
+  → response: highWatermark=5, divergingEpoch={"epoch":0,"endOffset":3}   (records 없음)
+FETCH  fetchOffset=3, lastFetchedEpoch=0
+  → response: highWatermark=5, recordsSizeInBytes=79                       (y1, y2)
+```
+
+b2 쪽 로그다.
+
+```
+Truncating partition d-0 with TruncationState(offset=3, completed=true) due to leader epoch
+  and offset EpochEndOffset(errorCode=0, partition=0, leaderEpoch=0, endOffset=3)
+[UnifiedLog partition=d-0] Truncating to offset 3
+```
+
+b3가 b2(`clientId=broker-2-fetcher-0`)에게서 받은 요청은 `FETCH` 72건이 전부였고, `OFFSET_FOR_LEADER_EPOCH`는 0건이었다. 재기동 후 b2의 로그는 `m1 m2 m3 y1 y2`로 b3와 같다.
+
+</details>
 
 지난 epoch 질의는 팔로워가 마지막으로 append한 뒤 리더가 바뀐 경우다. 이 질의에 답하려고 checkpoint는 과거 epoch 항목을 지우지 않는다.
 
-![epoch 1 리더 B3가 복제되지 않은 6~7을 남긴 채 죽고, 리더가 B2(epoch 2) → B1(epoch 3)로 두 번 바뀐 뒤 B3가 돌아와 OffsetsForLeaderEpoch(epoch=1)를 보낸다. B1은 checkpoint의 과거 항목 2→6을 보고 endOffset=6을 돌려주고 B3는 6~7을 잘라낸다. 최신 항목 3→9만 있었다면 9를 돌려줘 B3의 6~7이 남아 로그가 갈라진다. 항목은 log start offset이 오르면 앞쪽부터 정리되어 0→0 1→3 2→6이 1→4 2→6, 다시 2→7로 줄어든다](../../../../assets/img/kafka-partition-offsets-img10.png)
+![epoch 1 리더 B3가 복제되지 않은 6~7을 남긴 채 죽고, 리더가 B2(epoch 2) → B1(epoch 3)로 두 번 바뀐 뒤 B3가 돌아와 Fetch(fetchOffset=8, lastFetchedEpoch=1)를 보낸다. B1은 checkpoint의 과거 항목 2→6을 보고 divergingEpoch(epoch=1, endOffset=6)을 돌려주고 B3는 6~7을 잘라낸다. 최신 항목 3→9만 있었다면 epoch 1의 끝을 9로 계산해 분기로 보지 않으므로 B3의 6~7이 남아 로그가 갈라진다. 항목은 log start offset이 오르면 앞쪽부터 정리되어 0→0 1→3 2→6이 1→4 2→6, 다시 2→7로 줄어든다](../../../../assets/img/kafka-partition-offsets-img10.png)
 
-![리더 L과 팔로워 F1 모두 epoch 5로 기록된 0~99, 100~199와 checkpoint {5→0}을 갖고 있고 F1의 HW만 100이다. F1이 재시작해 OffsetsForLeaderEpoch(epoch=5)를 보내면 L은 현재 epoch과 같으므로 자기 LEO 200을 돌려주고, F1은 200부터 자르므로 아무것도 버리지 않는다. 이후 L이 죽고 F1이 epoch 6 리더가 되면 checkpoint는 {5→0, 6→200}이 되고 100~199가 남는다](../../../../assets/img/kafka-partition-offsets-img7.png)
+![리더 L과 팔로워 F1 모두 epoch 5로 기록된 0~99, 100~199와 checkpoint {5→0}을 갖고 있고 F1의 HW만 100이다. F1이 재시작해 Fetch(fetchOffset=200, lastFetchedEpoch=5)를 보내면 L은 epoch 5가 현재 epoch이므로 끝을 자기 LEO 200으로 계산하고, 200이 fetchOffset 이상이라 분기가 없으므로 F1은 아무것도 버리지 않고 이어서 받는다. 이후 L이 죽고 F1이 epoch 6 리더가 되면 checkpoint는 {5→0, 6→200}이 되고 100~199가 남는다](../../../../assets/img/kafka-partition-offsets-img7.png)
 
-![epoch 0 리더 A는 m1@0, m2@1을, 팔로워 B는 flush 전이던 m2를 잃고 m1@0만 가진 채 정전으로 함께 다운된다. B가 epoch 1 리더가 되어 m3을 offset 1에 epoch 1로 쓰고 checkpoint는 {0→0, 1→1}이 된다. 복귀한 A가 OffsetsForLeaderEpoch(epoch=0)을 보내면 B는 checkpoint에서 epoch 1의 시작 offset 1을 돌려주고, A는 offset 1의 m2를 잘라낸 뒤 Fetch(offset=1)로 m3을 받아 B와 로그와 checkpoint가 일치한다](../../../../assets/img/kafka-partition-offsets-img8.png)
+![epoch 0 리더 A는 m1@0, m2@1을, 팔로워 B는 flush 전이던 m2를 잃고 m1@0만 가진 채 정전으로 함께 다운된다. B가 epoch 1 리더가 되어 m3을 offset 1에 epoch 1로 쓰고 checkpoint는 {0→0, 1→1}이 된다. 복귀한 A가 Fetch(fetchOffset=2, lastFetchedEpoch=0)를 보내면 B는 checkpoint에서 epoch 1의 시작 offset 1을 divergingEpoch(epoch=0, endOffset=1)로 돌려주고, A는 offset 1의 m2를 잘라낸 뒤 Fetch(fetchOffset=1)로 m3을 받아 B와 로그와 checkpoint가 일치한다](../../../../assets/img/kafka-partition-offsets-img8.png)
 
-이 truncation은 팔로워가 첫 fetch를 보내기 전에 일어나고(→ [ISR 글 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점)), 0.11부터 기본 동작이라 따로 켤 설정은 없다. rolling restart처럼 리더 교체가 연달아 일어나도 위 유실은 생기지 않는다. 다만 ISR 축소와 unclean election을 피하려면 브로커를 재시작한 뒤 `UnderReplicatedPartitions`가 0으로 돌아온 걸 확인하고 다음 브로커를 내린다.
+이 truncation은 팔로워의 첫 Fetch 응답으로 일어나고(→ [ISR 글 부록 B §최초 fetch 시점](/posts/kafka-isr-1/#부록-b--최초-fetch-시점)), 0.11부터 기본 동작이라 따로 켤 설정은 없다. rolling restart처럼 리더 교체가 연달아 일어나도 위 유실은 생기지 않는다. 다만 ISR 축소와 unclean election을 피하려면 브로커를 재시작한 뒤 `UnderReplicatedPartitions`가 0으로 돌아온 걸 확인하고 다음 브로커를 내린다.
 
 ### 팔로워가 min을 취해야 하는 이유
 
@@ -343,6 +391,9 @@ replica별 LEO를 보려면 각 브로커의 JMX 지표를 봐야 한다. 복제
 - [`LogValidator#assignOffsetsNonCompressed` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/storage/src/main/java/org/apache/kafka/storage/internals/log/LogValidator.java) — 레코드마다 오프셋을 매기는 코드
 - [`RecordAccumulator` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/clients/src/main/java/org/apache/kafka/clients/producer/internals/RecordAccumulator.java) — 프로듀서가 `baseOffset = 0`으로 배치를 만드는 코드
 - [KIP-101: Reduce log complexity with Leader Epoch (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation) — HW 전파 지연이 만드는 유실·분기 시나리오, `OffsetsForLeaderEpoch`, leader-epoch-checkpoint
+- [KIP-595: A Raft Protocol for the Metadata Quorum (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum) — Fetch에 `last_fetched_epoch`·`diverging_epoch` 필드 추가
+- [`Partition#readRecords` (github.com/apache/kafka, 4.2.0)](https://github.com/apache/kafka/blob/4.2.0/core/src/main/scala/kafka/cluster/Partition.scala) — Fetch 처리 중 `last_fetched_epoch`로 분기를 판정해 `diverging_epoch`을 돌려주는 부분
+- [`AbstractFetcherThread#partitionFetchState` · `getOffsetTruncationState` (github.com/apache/kafka, 4.2.0)](https://github.com/apache/kafka/blob/4.2.0/core/src/main/scala/kafka/server/AbstractFetcherThread.scala) — 팔로워가 Fetch 응답의 분기 정보로 truncation하는 부분
 - [KIP-320: Allow fetchers to detect and handle log truncation (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-320%3A+Allow+fetchers+to+detect+and+handle+log+truncation) — 컨슈머가 커밋 offset의 leader epoch으로 truncation을 감지
 - [KIP-392: Allow consumers to fetch from closest replica (cwiki.apache.org)](https://cwiki.apache.org/confluence/display/KAFKA/KIP-392%3A+Allow+consumers+to+fetch+from+closest+replica) — 팔로워가 컨슈머에게 응답할 때의 상한
 - [`ReplicaManager#checkpointHighWatermarks` (github.com/apache/kafka, 4.2)](https://github.com/apache/kafka/blob/4.2/core/src/main/scala/kafka/server/ReplicaManager.scala) — HW를 `replication-offset-checkpoint` 파일에 주기적으로 기록
