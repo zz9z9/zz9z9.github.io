@@ -82,14 +82,16 @@ services:
 
 [공식 문서(KRaft 운영)](https://kafka.apache.org/42/operations/kraft/)는 combined 모드를 이렇게 설명한다.
 
-> combined 서버는 개발 환경 같은 작은 용도에서 운영하기 더 간단하다. 핵심 단점은 컨트롤러가 시스템의 나머지 부분과 덜 격리된다는 것이다. 예를 들어 combined 모드에서는 컨트롤러를 브로커와 따로 롤링 재시작하거나 확장할 수 없다. combined 모드는 중요한 운영 환경에서는 권장하지 않는다.
+> combined 서버는 개발 환경 같은 작은 용도에서 운영하기 더 간단하다. 핵심 단점은 컨트롤러가 시스템의 나머지 부분과 덜 격리된다는 것이다. <br>
+> 예를 들어 combined 모드에서는 컨트롤러를 브로커와 따로 롤링 재시작하거나 확장할 수 없다. <br>
+> combined 모드는 중요한 운영 환경에서는 권장하지 않는다.
 
 이 블로그의 [토픽과 파티션](/posts/kafka-topic-partition/)·[세그먼트](/posts/kafka-segment/) 글은 단일 노드 combined 모드로 실습했다(로그 디렉터리 이름 `kraft-combined-logs`가 그 흔적이다).
 
 **노드(브로커·컨트롤러) 설정**에 컨트롤러 주소를 넣는 방법은 두 가지다. 애플리케이션 설정에는 브로커 주소만 넣는다.
 
 - `controller.quorum.voters`: voter(쿼럼에서 투표하는 컨트롤러) 목록을 `id@host:port`로 고정한다. 이 글의 실습이 이 방식이다.
-- `controller.quorum.bootstrap.servers`: 접속할 주소만 주고, voter 구성은 쿼럼이 메타데이터로 관리한다(KIP-853, Kafka 3.9+). 이 방식에서는 `kafka-metadata-quorum.sh add-controller`·`remove-controller`로 voter를 바꿀 수 있다. 이 글에서는 실측하지 않았다.
+- `controller.quorum.bootstrap.servers`: 접속할 주소만 주고, voter 구성은 쿼럼이 메타데이터로 관리한다(KIP-853, Kafka 3.9+). 이 방식에서는 `kafka-metadata-quorum.sh add-controller`·`remove-controller`로 voter를 바꿀 수 있다.
 
 둘 다 없으면 노드가 뜨지 않는다. 4.2.0 브로커를 두 설정 없이 띄우면 저장소 포맷 단계(`StorageTool`)에서 설정 검증에 걸려 종료된다.
 
@@ -122,7 +124,7 @@ org.apache.kafka.common.config.ConfigException: If using process.roles, either c
 - 브로커 등록, 토픽 생성, 리더 변경이 모두 레코드 한 줄이다.
   - 토픽이 이 로그의 `TOPIC_RECORD`·`PARTITION_RECORD`라는 점은 [Kafka - 토픽과 파티션](/posts/kafka-topic-partition/) 글에서도 확인했다.
 
->   실습 클러스터를 새로 띄운 뒤 토픽 `orders`(파티션 2개, RF 3)를 만들고 `retention.ms`를 바꾼 다음, b5를 정상 종료했다. c1의 로그를 `kafka-dump-log.sh --cluster-metadata-decoder`로 덤프한 결과다(`NO_OP_RECORD`는 빼고, 필드 일부 생략).
+>   실습 클러스터를 새로 띄운 뒤 토픽 `orders`(파티션 2개, RF 3)를 만들고 `retention.ms`를 바꾼 다음, b5를 정상 종료했다. <br> c1의 로그를 `kafka-dump-log.sh --cluster-metadata-decoder`로 덤프한 결과다(`NO_OP_RECORD`는 빼고, 필드 일부 생략).
 
 ```
 offset 0    LeaderChange               leaderId=3, voters=[1,2,3], grantingVoters=[3,2]   ← 컨트롤러 3이 리더로 선출
@@ -168,11 +170,13 @@ BrokerRegistration(id=4, epoch=18, ..., listeners=[Endpoint(listenerName='PLAINT
   host='b4', port=9092)], ..., fenced=false, inControlledShutdown=false, ...)
 ```
 
-파티션 1은 `PARTITION_RECORD`(offset 66)와 `PARTITION_CHANGE_RECORD`(offset 121)가 합쳐져 leader=6, isr=[6, 4], leaderEpoch=1이 됐다. 레코드에 없던 leaderEpoch 1은 리더가 바뀐 변경을 반영하면서 올라간 값이다.
+- 파티션 1은 `PARTITION_RECORD`(offset 66)와 `PARTITION_CHANGE_RECORD`(offset 121)가 합쳐져 leader=6, isr=[6, 4], leaderEpoch=1이 됐다.
+- 레코드에 없던 leaderEpoch 1은 리더가 바뀐 변경을 반영하면서 올라간 값이다.
 
 ### 컨트롤러가 쓰고, 모두가 복제한다
 
-메타데이터 로그에 레코드를 쓰는 건 active controller 한 대뿐이다. 변경이 시작되는 경로는 세 가지다.
+> **메타데이터 로그에 레코드를 쓰는 건 active controller 한 대뿐**이다. <br>
+> 변경이 시작되는 경로는 세 가지다.
 
 | 경로 | 예 | 요청 |
 |---|---|---|
@@ -203,11 +207,40 @@ NodeId  LogEndOffset  Lag  Status
 - **Observer**: 투표권 없이 로그만 받아 가는 브로커 3대
 - 여섯 노드 모두 LEO 45로 같은 메타데이터를 갖고 있다.
 
+컨트롤러가 브로커에 밀어 넣는 게 아니다. 모든 노드가 active controller의 컨트롤러 리스너(`:9093`)로 **Fetch**를 보내 가져간다.
+
+![__cluster_metadata-0은 Raft로 복제된다. standby 컨트롤러 c1·c2(voter)와 브로커 b4~b6(observer)가 active controller c3에 Fetch를 보내고, voter가 가져간 위치로만 커밋 지점(HW)을 정한다. 받은 노드는 로컬 __cluster_metadata-0에 쓰고 HW까지만 꺼내 메타데이터 이미지에 반영하며, 브로커는 ReplicaManager#applyDelta로 리더·팔로워를 바꾼다. 뒤처지면 FetchSnapshot, 로그가 갈라지면 divergingEpoch, 리더가 바뀌면 currentLeader가 Fetch 응답에 실려 온다](../../../../assets/img/kafka-cluster-controller-kraft-img4.png)
+
+| | 일반 토픽 파티션 | `__cluster_metadata-0` |
+|---|---|---|
+| 리더 | 컨트롤러가 정한 파티션 리더 | Raft 선거로 뽑힌 active controller |
+| 가져가는 쪽 | 팔로워 replica, 컨슈머 | standby 컨트롤러(voter), 브로커(observer) |
+| 커밋 기준(HW) | ISR 전원이 가진 위치 | voter 과반수가 가진 위치 |
+| 리더 변경을 아는 방법 | 메타데이터 로그 | Fetch 응답의 `currentLeader` |
+| 뒤처졌을 때 | 리더 로그에서 이어 받음 | `FetchSnapshot`으로 스냅샷부터 받음 |
+
+>   c3에서 `kafka.request.logger`를 잠깐 DEBUG로 올려 약 7초 동안 받은 요청을 셌다(위와 다른 기동, 컨트롤러 3 + 브로커 3).
+
+```
+FETCH  28건씩   clientId=raft-client-1, -2, -4, -5, -6   # c1·c2(voter), b4~b6(observer) 모두 같은 Fetch(v18)
+BROKER_HEARTBEAT 4건씩   clientId=4, 5, 6
+
+# raft-client-4(b4)의 연속 두 응답. topicId=AAAAAAAAAAAAAAAAAAAAAQ, currentLeader={leaderId=3, leaderEpoch=1}
+14:26:39,075  439ms  records 72B  highWatermark=337   ← 새 레코드(NO_OP)가 생길 때까지 붙잡혀 있다가 응답
+14:26:39,083    5ms  records  0B  highWatermark=338   ← 커밋 지점이 오른 것만 알려 준다
+```
+
+- 새 레코드가 없으면 리더는 Fetch를 최대 500ms 붙잡아 둔다(`org.apache.kafka.raft.KafkaRaftClient`의 `MAX_FETCH_WAIT_MS`, Kafka 4.2.0).
+- 받은 레코드는 각 노드의 로컬 `__cluster_metadata-0/`에 쌓이고, 커밋 지점(HW)까지만 `RaftClient.Listener#handleCommit`으로 넘어가 메타데이터 이미지가 된다. c1과 b4의 디렉터리 구성(`*.log`, `leader-epoch-checkpoint`, `quorum-state`)은 같았다.
+- HW는 voter의 Fetch 위치로만 계산한다(`org.apache.kafka.raft.LeaderState#maybeUpdateHighWatermark`). 브로커가 늦게 가져가도 커밋은 늦어지지 않는다.
+- 스냅샷은 각 노드가 직접 만든다. 마지막 스냅샷 이후 커밋된 레코드가 `metadata.log.max.record.bytes.between.snapshots`(기본 20MB)만큼 쌓이거나, `metadata.log.max.snapshot.interval.ms`(기본 1시간)가 지나면 만든다.
+
 ## 클러스터는 어떻게 묶이나
 
 ---
 
-> 브로커와 컨트롤러 모두 `controller.quorum.voters`에 적힌 주소로 컨트롤러를 찾아가고, `cluster.id`로 같은 클러스터인지 확인받는다. <br> 브로커끼리는 서로를 직접 등록하지 않는다.
+> 브로커와 컨트롤러 모두 `controller.quorum.voters`에 적힌 주소로 컨트롤러를 찾아가고, `cluster.id`로 같은 클러스터인지 확인받는다. <br>
+> 브로커끼리는 서로를 직접 등록하지 않는다.
 
 - 브로커: 컨트롤러에 등록하고 메타데이터 로그를 받아 가려고 접속한다.
 - 컨트롤러: 다른 컨트롤러와 리더를 뽑고(`Vote`) 메타데이터 로그를 복제하려고 접속한다.
@@ -219,20 +252,25 @@ NodeId  LogEndOffset  Lag  Status
 
 ### 컨트롤러 주소만 안다
 
-> 브로커 설정에는 다른 브로커 목록이 없다. 브로커가 아는 건 컨트롤러 주소뿐이다. 기동하면 이런 순서로 클러스터에 들어간다(`kafka.server.BrokerServer#startup`, 4.2.0).
+> 브로커 설정에는 다른 브로커 목록이 없다. **브로커가 아는 건 컨트롤러 주소뿐**이다. <br>
+> 기동하면 이런 순서로 클러스터에 들어간다(`kafka.server.BrokerServer#startup`, 4.2.0).
 
 1. 컨트롤러 쿼럼에서 메타데이터 로그를 받아 오기 시작한다(`sharedServer.startForBroker()`).
 2. 컨트롤러에 `BrokerRegistration` 요청을 보내 자기 `node.id`와 리스너 주소를 등록한다(`lifecycleManager.start`).
 3. 컨트롤러가 그 등록을 `REGISTER_BROKER_RECORD`로 메타데이터 로그에 쓴다.
 4. 브로커는 받아 오는 로그에서 다른 브로커들의 등록 레코드를 읽는다. 그렇게 해서 다른 브로커의 주소를 안다.
 5. 이후 `broker.heartbeat.interval.ms`(기본 2초)마다 컨트롤러에 하트비트를 보낸다.
-    - 하트비트가 끊기면 fencing된다. 이 과정은 [카프카 브로커 장애와 리더 선출](/posts/kafka-broker-failure-leader-election/)에서 다룬다.
+    - 하트비트가 끊기면 fencing된다.
+    - 이 과정은 [카프카 브로커 장애와 리더 선출](/posts/kafka-broker-failure-leader-election/)에서 다룬다.
 
 ### cluster.id로 같은 클러스터인지 확인한다
 
-`cluster.id`는 노드끼리 연결해 주는 값이 아니라, 연결된 상대가 같은 클러스터인지 검사하는 값이다.
+> `cluster.id`는 노드끼리 연결해 주는 값이 아니라, 연결된 상대가 같은 클러스터인지 검사하는 값이다.
 
-- 저장소를 포맷할 때(`kafka-storage.sh format`) 각 노드 디스크의 `meta.properties`에 기록된다. 실습 클러스터의 컨트롤러 c1과 브로커 b4의 파일이다.
+- 저장소를 포맷할 때(`kafka-storage.sh format`) 각 노드 디스크의 `meta.properties`에 기록된다.
+  - 포맷은 빈 디스크를 노드로 쓸 수 있게 초기화하는 단계다. `meta.properties`(`cluster.id`·`node.id`)와 클러스터 초기값(`bootstrap.checkpoint`)을 쓰고, 이미 포맷된 디렉터리는 거부한다(`org.apache.kafka.metadata.storage.Formatter#doFormat`, Kafka 4.2.0).
+  - 포맷하지 않은 디스크로는 노드가 뜨지 않는다.
+- 실습 클러스터의 컨트롤러 c1과 브로커 b4의 파일이다.
 
 ```
 # c1: /tmp/kafka-logs/meta.properties
@@ -250,8 +288,10 @@ version=1
 
 - `apache/kafka` 이미지는 `CLUSTER_ID` 환경 변수로 포맷을 대신 해 준다.
 - 직접 설치한 경우에는 `kafka-storage.sh random-uuid`로 ID를 하나 만들고, 모든 노드를 그 ID로 `format`한다.
-
-노드는 이 값을 요청에 실어 보낸다. 4.2.0 메시지 정의에서 `ClusterId` 필드가 있는 요청은 메타데이터 로그 `Fetch`·`FetchSnapshot`, `BrokerRegistration`, 그리고 컨트롤러끼리 주고받는 `Vote`·`BeginQuorumEpoch`·`EndQuorumEpoch`와 voter 추가·삭제 요청이다. `FetchRequest.json`의 필드 설명은 "알고 있다면 clusterId. 브로커 등록 전의 메타데이터 fetch를 검증하는 데 쓴다"이다.
+- 노드는 이 값을 요청에 실어 보낸다.
+  - 4.2.0 메시지 정의에서 `ClusterId` 필드가 있는 요청은 메타데이터 로그 `Fetch`·`FetchSnapshot`, `BrokerRegistration`, 그리고 컨트롤러끼리 주고받는 `Vote`·`BeginQuorumEpoch`·`EndQuorumEpoch`와 voter 추가·삭제 요청이다.
+  - `Fetch`의 `ClusterId`는 비워 둘 수 있는 선택 필드다. 메타데이터 로그를 복제하는 노드는 항상 채우고, 데이터 파티션 팔로워·컨슈머는 비워 둔다.
+  - 받는 쪽은 값이 있을 때만 비교한다(`org.apache.kafka.raft.KafkaRaftClient#hasValidClusterId`, Kafka 4.2.0).
 
 받는 쪽은 자기 값과 비교한다. 브로커 등록은 `org.apache.kafka.controller.ClusterControlManager#registerBroker`에서 검사한다.
 
@@ -264,7 +304,8 @@ if (!clusterId.equals(request.clusterId())) {
 
 ### 다른 `cluster.id`로는 붙지 않는다
 
-같은 컨트롤러 주소를 바라보되 `CLUSTER_ID`만 다른 브로커(node 7)를 하나 더 띄웠다. 컨트롤러 세 대 모두 등록 전 단계인 메타데이터 로그 `Fetch`부터 거부했다.
+> 같은 컨트롤러 주소를 바라보되 `CLUSTER_ID`만 다른 브로커(node 7)를 하나 더 띄웠다. <br>
+> 컨트롤러 세 대 모두 등록 전 단계인 메타데이터 로그 `Fetch`부터 거부했다.
 
 ```
 ERROR [RaftManager id=7] Unexpected error INCONSISTENT_CLUSTER_ID in FETCH response:
@@ -284,7 +325,9 @@ ERROR [RaftManager id=7] Unexpected error INCONSISTENT_CLUSTER_ID in FETCH respo
 
 ### 아무 브로커 하나만 알면 된다
 
-클라이언트의 `bootstrap.servers`에 브로커 하나만 넣어도, 그 브로커가 메타데이터 이미지에서 전체 브로커 목록을 돌려준다. b4 한 대에만 연결했을 때다.
+- 클라이언트의 `bootstrap.servers`에 브로커 하나만 넣어도, 그 브로커가 **메타데이터 이미지에서 전체 브로커 목록을** 돌려준다.
+
+b4 한 대에만 연결했을 때다.
 
 ```
 $ kafka-broker-api-versions.sh --bootstrap-server b4:9092 | grep '^b'
@@ -297,7 +340,10 @@ b6:9092 (id: 6 rack: null isFenced: false) -> (
 
 ### 프로듀서·컨슈머는 컨트롤러에 붙지 않는다
 
-프로듀서와 컨슈머는 연결하자마자 `Metadata` 요청으로 파티션 리더가 어느 브로커인지 알아낸다. 컨트롤러는 이 API를 지원하지 않는다. 같은 클러스터(컨트롤러 c1~c3, 브로커 b4)에서 접속 대상을 바꿔 가며 붙여 봤다.
+> 프로듀서와 컨슈머는 연결하자마자 `Metadata` 요청으로 파티션 리더가 어느 브로커인지 알아낸다.
+
+- 컨트롤러는 이 API를 지원하지 않는다.
+- 같은 클러스터(컨트롤러 c1~c3, 브로커 b4)에서 접속 대상을 바꿔 가며 붙여 봤다.
 
 | 시도 | 결과 |
 |---|---|
@@ -307,18 +353,23 @@ b6:9092 (id: 6 rack: null isFenced: false) -> (
 | `kafka-cluster.sh cluster-id --bootstrap-controller c1:9093` (Admin) | `Cluster ID: MkU3OEVBNTcwNTJENDM2Qk` |
 | `kafka-topics.sh --bootstrap-controller c1:9093` | 옵션 없음 (`bootstrap-controller is not a recognized option`) |
 
-Admin 클라이언트는 예외다. Kafka 3.7부터 `bootstrap.controllers`(CLI에서는 `--bootstrap-controller`)로 컨트롤러에 직접 붙을 수 있다(KIP-919). 다만 이 경로로는 클러스터 ID 조회나 쿼럼 조회 같은 일부 관리 작업만 된다. 위의 `kafka-metadata-quorum.sh --bootstrap-controller`도 이 경로다. 토픽 생성 같은 요청은 브로커가 받아서 active controller로 넘긴다.
+- Admin 클라이언트는 예외다.
+  - Kafka 3.7부터 `bootstrap.controllers`(CLI에서는 `--bootstrap-controller`)로 컨트롤러에 직접 붙을 수 있다(KIP-919).
+  - 다만 이 경로로는 클러스터 ID 조회나 쿼럼 조회 같은 일부 관리 작업만 된다.
+  - 위의 `kafka-metadata-quorum.sh --bootstrap-controller`도 이 경로다.
+  - 토픽 생성 같은 요청은 브로커가 받아서 active controller로 넘긴다.
 
 ### 애플리케이션 설정
 
-애플리케이션 설정에도 브로커 주소만 넣는다. 순수 `kafka-clients`라면 `bootstrap.servers` 키에 넣는다.
+>애플리케이션 설정에도 브로커 주소만 넣는다. 순수 `kafka-clients`라면 `bootstrap.servers` 키에 넣는다.
 
 ```properties
 # producer.properties / consumer.properties
 bootstrap.servers=b4:9092,b5:9092,b6:9092
 ```
 
-Spring Boot에서는 `spring.kafka.bootstrap-servers`에 넣는다. 이 값이 프로듀서·컨슈머·Admin의 `bootstrap.servers`로 전달된다.
+- Spring Boot에서는 `spring.kafka.bootstrap-servers`에 넣는다.
+- 이 값이 프로듀서·컨슈머·Admin의 `bootstrap.servers`로 전달된다.
 
 ```yaml
 # application.yml
@@ -332,27 +383,15 @@ spring:
       auto-offset-reset: earliest
 ```
 
-`application.properties`라면 같은 키를 `spring.kafka.bootstrap-servers=b4:9092,b5:9092,b6:9092`처럼 쓴다. 클라이언트별로 다른 주소를 주려면 `spring.kafka.producer.bootstrap-servers`, `spring.kafka.consumer.bootstrap-servers`를 쓴다. 이 값이 공통 값보다 우선한다.
-
-Spring Boot 3.5.4(spring-kafka 3.3.8, kafka-clients 3.9.1) 앱을 같은 Docker 네트워크에서 띄워 확인했다. 앱은 기동하면서 `app-test` 토픽에 `hello`를 보내고, `@KafkaListener`로 받는다. 표의 `bootstrap.servers`는 kafka-clients가 기동 시 출력하는 `ProducerConfig`·`ConsumerConfig` 로그 값이다. `app-test`의 리더는 브로커 5다.
-
-| 설정 | 로그의 `bootstrap.servers` | 결과 |
-|---|---|---|
-| `bootstrap-servers: b4:9092,b5:9092,b6:9092` | 프로듀서·컨슈머 모두 `[b4:9092, b5:9092, b6:9092]` | 전송(`app-test-0@0`), 수신 성공 |
-| `bootstrap-servers: c1:9093` (컨트롤러) | `[c1:9093]` | `KafkaException: Send failed`. 원인 `UnsupportedVersionException: The node does not support METADATA` |
-| `bootstrap-servers: b4:9092` + `producer.bootstrap-servers: b6:9092` | 컨슈머 `[b4:9092]`, 프로듀서 `[b6:9092]` | 전송(`app-test-0@2`), 수신 성공 |
-
-마지막 줄의 프로듀서는 b6만 알지만 리더인 b5로 보냈다. 컨슈머도 b4만 알지만 b5에서 읽었다. bootstrap 주소는 첫 연결에만 쓰이고, 실제 요청은 메타데이터로 알아낸 리더에게 간다.
-
-`spring.kafka.*` 한 벌은 클러스터 하나를 가리킨다. `org.springframework.boot.autoconfigure.kafka.KafkaProperties`에는 공통 `bootstrapServers` 하나와 클라이언트별 `bootstrapServers`만 있고, 클러스터 목록을 받는 항목은 없다. 클러스터 둘에 붙으려면 두 번째 클러스터용 `ProducerFactory`·`ConsumerFactory`를 직접 빈으로 만들어야 한다. 이 구성은 이 글에서 실측하지 않았다.
 
 ## 쿼럼
 
 ---
 
-> 컨트롤러 여러 대는 Raft 합의(KRaft)로 메타데이터 로그를 복제한다. 레코드는 투표권 있는 컨트롤러(voter)의 **과반수**가 받아야 커밋된다.
+> 컨트롤러 여러 대는 Raft 합의(KRaft)로 메타데이터 로그를 복제한다. <br>
+> **쿼럼**은 투표권 있는 컨트롤러(voter)의 묶음이고, 커밋과 리더 선출에는 그 **과반수**가 필요하다(voter 3대면 2대).
 
-### voter, 리더, observer
+![쿼럼은 voter 과반수로 커밋하고 리더를 뽑는다. 평소에는 리더 c3와 c1 두 대가 레코드를 가지면 커밋된다. 리더 c3가 죽으면 2초 fetch 타임아웃 뒤 pre-vote를 거쳐 c2가 c1의 표와 자기 표로 epoch 2 리더가 된다. c1·c2가 죽어 c3 한 대만 남으면 토픽 생성·리더 선출·ISR 변경이 멈추고 기존 메타데이터로 하는 produce·consume만 계속된다. voter 1·3·4·5대의 과반수는 1·2·3·3, 견딜 수 있는 장애는 0·1·1·2](../../../../assets/img/kafka-cluster-controller-kraft-img5.png)
 
 | 역할 | 누가 | 하는 일 |
 |---|---|---|
@@ -360,11 +399,19 @@ Spring Boot 3.5.4(spring-kafka 3.3.8, kafka-clients 3.9.1) 앱을 같은 Docker 
 | follower | 나머지 voter | 리더에게서 로그를 fetch해 복제. 리더가 죽으면 선거에 참여 |
 | observer | 브로커 | 투표권 없이 로그만 fetch |
 
-Raft 리더(= active controller)를 바꿀 때마다 **epoch**이 1 오른다. 위 `describe --status` 출력의 `LeaderEpoch`가 그 값이다. 파티션 리더의 leader epoch과는 별개인 쿼럼 단위 번호다.
+- Raft 리더(= active controller)를 바꿀 때마다 **epoch**이 1 오른다.
+- 위 `describe --status` 출력의 `LeaderEpoch`가 그 값이다.
+- **파티션 리더의 leader epoch과는 별개**인 쿼럼 단위 번호다.
 
 ### 과반수 규칙
 
-voter가 N대면 레코드를 커밋하고 리더를 뽑는 데 `N/2 + 1`대(정수 나눗셈)가 필요하다.
+> voter가 N대면 레코드를 커밋하고 리더를 뽑는 데 `N/2 + 1`대(정수 나눗셈)가 필요하다.
+
+과반수인 이유는 두 과반수가 반드시 한 대 이상 겹치기 때문이다.
+
+- **리더가 둘 생기지 않는다**: voter는 epoch마다 한 표만 준다. 네트워크가 갈라져도 과반수를 모을 수 있는 쪽은 하나뿐이다.
+- **커밋된 레코드가 사라지지 않는다**: 새 리더에게 표를 준 과반수 중 최소 한 대는 그 레코드를 갖고 있다. voter는 자기보다 로그가 뒤처진 후보에게 표를 주지 않으므로, 커밋된 레코드가 없는 후보는 리더가 될 수 없다.
+- **과반수는 전체 voter 기준이다**: 3대 중 1대가 죽어도 2표가 필요하다. 남은 2대가 동시에 후보로 나서 1:1이 되면 그 판은 무효다. 선거 제한 시간이 노드마다 무작위(`controller.quorum.election.timeout.ms` 기본 1000ms의 1~2배)라 다음 판에서는 먼저 나선 쪽이 표를 받는다(`org.apache.kafka.raft.QuorumState#randomElectionTimeoutMs`, Kafka 4.2.0, 재현은 안 함).
 
 | voter 수 | 필요한 과반수 | 견딜 수 있는 장애 |
 |---|---|---|
@@ -373,30 +420,32 @@ voter가 N대면 레코드를 커밋하고 리더를 뽑는 데 `N/2 + 1`대(정
 | 4 | 3 | 1 |
 | 5 | 3 | 2 |
 
-4대는 3대보다 장애 내성이 늘지 않고 과반수만 커진다. 그래서 컨트롤러는 3대나 5대처럼 홀수로 둔다.
+- 4대는 3대보다 장애 내성이 늘지 않고 과반수만 커진다.
+- 그래서 컨트롤러는 3대나 5대처럼 홀수로 둔다.
 
 ### active controller가 죽으면
 
-active controller인 c3를 SIGKILL로 죽였다. c3 종료 시각을 0으로 두고 나머지 노드의 로그를 놓으면 다음과 같다.
+> active controller인 c3를 SIGKILL로 죽였다. c3 종료 시각을 0으로 두고 나머지 노드의 로그를 놓으면 다음과 같다.
 
 ```
 +0.000s  c3 프로세스 종료 (SIGKILL)
 +0.000s  c1, c2: Node 3 disconnected.
-+1.774s  c2: Transitioning to Prospective state due to fetch timeout
+
+# 장애 감지: follower는 리더 응답이 controller.quorum.fetch.timeout.ms(기본 2000ms) 동안 없으면 리더가 죽었다고 본다
++1.774s  c2: Transitioning to Prospective state due to fetch timeout   ← 마지막 fetch가 kill 0.22초 전이라 1.77초에 타임아웃
 +1.775s  c1: Transitioning to Prospective state due to fetch timeout
-+1.824s  c2: Attempting durable transition to CandidateState(localId=2, epoch=2, ...)
-+1.924s  c2: Completed transition to Leader(... id=2 ...)
+
+# Prospective(pre-vote): epoch을 올리기 전에 "후보로 나가면 뽑아 줄 것인가"를 먼저 묻는다 (KIP-996)
+#   잠깐 끊긴 노드 하나가 epoch만 올려 멀쩡한 리더를 끌어내리는 일을 막는다
++1.824s  c2: Attempting durable transition to CandidateState(localId=2, epoch=2, ...)   ← epoch 2로 투표 요청
++1.924s  c2: Completed transition to Leader(... id=2 ...)   ← c1의 표 + 자기 표 = 2표, 3대 중 과반수
+
 +1.996s  c2: [QuorumController id=2] Becoming the active controller at epoch 2, next write offset 171.
-+2.067s  b4: Recorded new KRaft controller, from now on will use node c2:9093
+                                                            ← 리더 된 뒤 72ms. standby 때 로그를 끝까지 받아 둬서 다시 읽을 게 없다
++2.067s  b4: Recorded new KRaft controller, from now on will use node c2:9093   ← 브로커가 하트비트 대상을 c2로 옮김
 ```
 
-1. **장애 감지**: follower는 리더에게서 `controller.quorum.fetch.timeout.ms`(기본 2000ms) 동안 응답을 못 받으면 리더가 죽었다고 본다. 마지막 fetch가 kill 0.22초 전에 나갔으므로 kill 후 1.77초에 타임아웃이 났다.
-2. **Prospective (pre-vote)**: 바로 epoch을 올리지 않고, 먼저 다른 voter에게 "내가 후보로 나가면 뽑아 줄 것인가"를 묻는다. 네트워크가 잠깐 끊긴 노드 하나가 epoch만 올려 멀쩡한 리더를 끌어내리는 일을 막는 단계다(KIP-996).
-3. **Candidate → Leader**: c2가 epoch 2로 투표를 요청했고, c1이 c2에게 표를 줬다. c2 자신의 표까지 2표로 과반수(3대 중 2대)를 넘어 c2가 리더가 됐다.
-4. **active controller 전환**: c2가 Raft 리더가 된 뒤 72ms 만에 컨트롤러로서 쓰기를 시작했다. standby 시절에 이미 메타데이터 로그를 끝까지 갖고 있었으므로 따로 읽어 들일 것이 없다.
-5. **브로커 전환**: 브로커 b4는 kill 2.07초 뒤 새 컨트롤러로 하트비트 대상을 옮겼다.
-
-같은 실험을 `acks=all` 프로듀서(초당 100건)를 돌리면서 다시 했다.
+> 같은 실험을 `acks=all` 프로듀서(초당 100건)를 돌리면서 다시 했다.
 
 ```
 501 records sent, 100.0 records/sec, 98.0 ms avg latency, 1120.0 ms max latency.   ← 기동 직후 구간
@@ -404,11 +453,13 @@ active controller인 c3를 SIGKILL로 죽였다. c3 종료 시각을 0으로 두
 501 records sent, 100.1 records/sec, 12.8 ms avg latency,   38.0 ms max latency.
 ```
 
-active controller가 바뀌는 2초 동안에도 produce는 멈추지 않았다(최대 95ms). produce·fetch는 브로커끼리 처리하는 일이고, 그 사이 리더·ISR 변경이 필요 없었기 때문이다.
+- active controller가 바뀌는 2초 동안에도 produce는 멈추지 않았다(최대 95ms).
+- produce·fetch는 브로커끼리 처리하는 일이고, 그 사이 리더·ISR 변경이 필요 없었기 때문이다.
 
 ### 과반수를 잃으면
 
-컨트롤러 3대 중 2대(c1, c2)를 죽여 c3 한 대만 남겼다. 과반수(2대)가 없으므로 리더를 뽑을 수도, 레코드를 커밋할 수도 없다. 브로커 3대는 모두 살아 있다.
+> 컨트롤러 3대 중 2대(c1, c2)를 죽여 c3 한 대만 남겼다. <br>
+> 과반수(2대)가 없으므로 리더를 뽑을 수도, 레코드를 커밋할 수도 없다. 브로커 3대는 모두 살아 있다.
 
 | 동작 | 결과 |
 |---|---|
@@ -419,9 +470,11 @@ active controller가 바뀌는 2초 동안에도 produce는 멈추지 않았다(
 | 컨슈머 그룹 consume, `__consumer_offsets`가 아직 없을 때 | 실패 (`TimeoutException`), 0건 |
 | 컨슈머 그룹 consume, `__consumer_offsets`가 이미 있을 때 | 기존 그룹·새 그룹 모두 성공 |
 
-메타데이터를 **바꾸는** 일은 막히고, 이미 있는 메타데이터로 하는 produce·consume은 계속된다. 컨슈머 그룹은 처음 쓰일 때 `__consumer_offsets` 토픽이 자동 생성되는데, 그것도 토픽 생성이라 쿼럼 없이는 안 된다.
+- 메타데이터를 **바꾸는** 일은 막히고, 이미 있는 메타데이터로 하는 produce·consume은 계속된다.
+- 컨슈머 그룹은 처음 쓰일 때 `__consumer_offsets` 토픽이 자동 생성되는데, 그것도 토픽 생성이라 쿼럼 없이는 안 된다.
+- **이 상태에서 브로커까지 죽으면 복구가 안 된다.**
 
-**이 상태에서 브로커까지 죽으면 복구가 안 된다.** 쿼럼이 없는 채로 p0의 리더인 b4를 죽였다.
+> 쿼럼이 없는 채로 p0의 리더인 b4를 죽였다.
 
 ```
 p0 (리더 b4)        리더가 바뀌지 않는다. 오프셋 조회도 실패:
@@ -434,11 +487,14 @@ p1 (리더 b5, ISR에 b4 포함)
 ```
 
 - p0은 새 리더를 뽑을 컨트롤러가 없다.
-- p1은 리더가 살아 있다. 그런데 ISR에서 죽은 b4를 빼려는 `AlterPartition`을 커밋해 줄 컨트롤러가 없다. ISR이 `[5,6,4]`로 남아 있으니 HW가 b4의 LEO(817)에 묶이고, `acks=all` 쓰기가 전부 타임아웃난다.
+- p1은 리더가 살아 있다. 그런데 ISR에서 죽은 b4를 빼려는 `AlterPartition`을 커밋해 줄 컨트롤러가 없다.
+- ISR이 `[5,6,4]`로 남아 있으니 HW가 b4의 LEO(817)에 묶이고, `acks=all` 쓰기가 전부 타임아웃난다.
 
 > 쿼럼이 없는 클러스터는 장애가 없는 동안에만 정상처럼 보인다. 브로커 하나만 죽어도 리더 선출과 ISR 변경이 모두 멈춘다.
 
-컨트롤러 c1, c3를 다시 띄우자 c2가 epoch 3의 active controller가 됐다(14:34:25.873). 그 9.01초 뒤(`broker.session.timeout.ms` 9초) 하트비트가 없는 b4를 fencing했고, p0의 리더는 5, 모든 파티션의 ISR은 `[5,6]`이 됐다. 새 active controller는 브로커 세션을 자기가 활성화된 시점부터 다시 센다.
+- 컨트롤러 c1, c3를 다시 띄우자 c2가 epoch 3의 active controller가 됐다(14:34:25.873).
+- 그 9.01초 뒤(`broker.session.timeout.ms` 9초) 하트비트가 없는 b4를 fencing했고, p0의 리더는 5, 모든 파티션의 ISR은 `[5,6]`이 됐다.
+- 새 active controller는 브로커 세션을 자기가 활성화된 시점부터 다시 센다.
 
 ## ZooKeeper vs KRaft
 
