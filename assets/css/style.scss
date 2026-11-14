@@ -105,3 +105,68 @@ $tab-count: {{ site.tabs | size | plus: 1 }}; // plus 1 for home tab
     }
   }
 }
+
+/* --- 글 본문: <details> 접기 블록을 카드형으로 --- */
+
+.post-content details {
+  margin: 1rem 0 1.25rem;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 0.5rem;
+  overflow: hidden;
+
+  > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    background: rgba(127, 127, 127, 0.06);
+    transition: background-color 0.15s ease;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: "";
+      flex-shrink: 0;
+      width: 0.5rem;
+      height: 0.5rem;
+      margin-right: 0.15rem;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      opacity: 0.55;
+      transform: rotate(-45deg);
+      transition: transform 0.2s ease;
+    }
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.12);
+    }
+  }
+
+  &[open] > summary {
+    border-bottom: 1px solid rgba(127, 127, 127, 0.22);
+
+    &::after {
+      transform: rotate(45deg);
+    }
+  }
+
+  > :not(summary) {
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+
+  > summary + * {
+    margin-top: 1rem;
+  }
+
+  > :last-child:not(summary) {
+    margin-bottom: 1rem;
+  }
+}
