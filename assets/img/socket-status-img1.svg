@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2260" viewBox="0 0 1500 2260" font-family="'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#6b6b6b"/>
+    </marker>
+    <marker id="arrB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#2f6fae"/>
+    </marker>
+    <marker id="arrR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#b0446a"/>
+    </marker>
+  </defs>
+  <style>
+    .title{font-size:26px;font-weight:700;fill:#2b2b2b}
+    .colTitle{font-size:20px;font-weight:700}
+    .st{font-size:14px;font-weight:700}
+    .desc{font-size:12px;fill:#666}
+    .pkt{font-size:14px;font-weight:700}
+    .api{font-size:12.5px;font-weight:600;fill:#7a5c1e}
+    .phase{font-size:16px;font-weight:700;fill:#4a463f}
+    .note{font-size:14.5px;fill:#3f3a33}
+    .life{stroke:#b9b2a6;stroke-width:2.5}
+    .msgB{stroke:#2f6fae;stroke-width:2.5;fill:none;marker-end:url(#arrB)}
+    .msgR{stroke:#b0446a;stroke-width:2.5;fill:none;marker-end:url(#arrR)}
+  </style>
+
+  <rect width="1500" height="2260" fill="#faf5ec"/>
+
+  <!-- Title -->
+  <text x="750" y="45" text-anchor="middle" class="title">HTTPS 소켓 상태 변화 — TCP 3-way → TLS 1.3 핸드셰이크 → 암호화 데이터 → 4-way</text>
+  <text x="750" y="76" text-anchor="middle" font-size="14" fill="#8a8378">시나리오: 클라이언트가 connect() · TLS 1.3 · 클라이언트가 먼저 close() (능동 종료)</text>
+
+  <!-- Lifelines -->
+  <line x1="375" y1="180" x2="375" y2="1955" class="life"/>
+  <line x1="1180" y1="180" x2="1180" y2="1955" class="life"/>
+
+  <!-- Column headers -->
+  <rect x="180" y="118" width="390" height="58" rx="14" fill="#fde8df" stroke="#c25b3f" stroke-width="2.5"/>
+  <text x="375" y="154" text-anchor="middle" class="colTitle" fill="#a8442b">Client (능동 개시/종료)</text>
+  <rect x="985" y="118" width="390" height="58" rx="14" fill="#e2f0e7" stroke="#3f7d5c" stroke-width="2.5"/>
+  <text x="1180" y="154" text-anchor="middle" class="colTitle" fill="#2f5f46">Server (수동)</text>
+
+  <!-- ===================== PHASE 1 ===================== -->
+  <rect x="110" y="215" width="1350" height="495" rx="16" fill="#e8f3ec" stroke="#7fae91" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="140" y="250" class="phase">PHASE 1 · TCP 연결 수립 (3-way handshake) — 1 RTT</text>
+
+  <rect x="245" y="272" width="260" height="52" rx="12" fill="#e8e4dc" stroke="#9a938a" stroke-width="2"/>
+  <text x="375" y="294" text-anchor="middle" class="st">CLOSED</text>
+  <text x="375" y="313" text-anchor="middle" class="desc">socket() → fd 생성</text>
+
+  <rect x="1050" y="272" width="260" height="52" rx="12" fill="#d9d0f7" stroke="#6a58c9" stroke-width="2"/>
+  <text x="1180" y="294" text-anchor="middle" class="st">LISTEN</text>
+  <text x="1180" y="313" text-anchor="middle" class="desc">bind()+listen() · 상시 점유 fd</text>
+
+  <text x="215" y="372" class="api">connect() 호출</text>
+  <rect x="245" y="384" width="260" height="52" rx="12" fill="#d9eafc" stroke="#4a86c6" stroke-width="2"/>
+  <text x="375" y="406" text-anchor="middle" class="st">SYN_SENT</text>
+  <text x="375" y="425" text-anchor="middle" class="desc">SYN/ACK 대기 · connect() 블로킹</text>
+
+  <line x1="510" y1="410" x2="1042" y2="458" class="msgB"/>
+  <text x="775" y="418" text-anchor="middle" class="pkt" fill="#2f6fae">SYN (seq=x)</text>
+
+  <rect x="1040" y="440" width="290" height="52" rx="12" fill="#d9eafc" stroke="#4a86c6" stroke-width="2"/>
+  <text x="1185" y="462" text-anchor="middle" class="st">SYN_RECEIVED</text>
+  <text x="1185" y="481" text-anchor="middle" class="desc">SYN 큐(incomplete queue)에 적재</text>
+
+  <line x1="1040" y1="497" x2="518" y2="586" class="msgR"/>
+  <text x="780" y="528" text-anchor="middle" class="pkt" fill="#b0446a">SYN + ACK (seq=y, ack=x+1)</text>
+
+  <rect x="240" y="572" width="275" height="52" rx="12" fill="#fbdde7" stroke="#c25b7c" stroke-width="2.5"/>
+  <text x="377" y="594" text-anchor="middle" class="st">ESTABLISHED ✓</text>
+  <text x="377" y="613" text-anchor="middle" class="desc">connect() 리턴 · 클라이언트가 먼저 도달</text>
+
+  <line x1="518" y1="608" x2="1037" y2="646" class="msgB"/>
+  <text x="780" y="612" text-anchor="middle" class="pkt" fill="#2f6fae">ACK (ack=y+1)</text>
+
+  <rect x="1035" y="628" width="300" height="52" rx="12" fill="#fbdde7" stroke="#c25b7c" stroke-width="2.5"/>
+  <text x="1185" y="650" text-anchor="middle" class="st">ESTABLISHED ✓</text>
+  <text x="1185" y="669" text-anchor="middle" class="desc">accept 큐 이동 → accept()가 새 fd 반환</text>
+
+  <!-- ===================== PHASE 1.5 · TLS ===================== -->
+  <rect x="110" y="730" width="1350" height="445" rx="16" fill="#ede9f8" stroke="#8a7bd4" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="140" y="765" class="phase" fill="#4a3f8a">PHASE 1.5 · TLS 핸드셰이크 (HTTPS일 때만 · TLS 1.3 = +1 RTT)</text>
+  <text x="140" y="789" font-size="13" fill="#6a5fae">커널 TCP 상태는 양쪽 모두 그대로 ESTABLISHED — TLS는 유저 공간(OpenSSL 등)에서 TCP 페이로드로 처리</text>
+
+  <line x1="380" y1="820" x2="1172" y2="862" class="msgB"/>
+  <text x="775" y="822" text-anchor="middle" class="pkt" fill="#2f6fae">① ClientHello</text>
+  <text x="775" y="856" text-anchor="middle" class="desc">지원 버전 · 암호 스위트 목록 · key_share(ECDHE 공개키) · SNI</text>
+
+  <line x1="1172" y1="900" x2="385" y2="952" class="msgR"/>
+  <text x="775" y="902" text-anchor="middle" class="pkt" fill="#b0446a">② ServerHello + {EncryptedExtensions · Certificate · CertificateVerify · Finished}</text>
+  <text x="775" y="945" text-anchor="middle" class="desc">key_share 교환 완료 → { } 부분은 이미 핸드셰이크 키로 암호화되어 전송</text>
+
+  <text x="215" y="985" class="api">인증서 체인 검증 · 세션 키 도출</text>
+
+  <line x1="380" y1="1000" x2="1172" y2="1040" class="msgB"/>
+  <text x="775" y="1002" text-anchor="middle" class="pkt" fill="#2f6fae">③ Finished</text>
+  <text x="775" y="1036" text-anchor="middle" class="desc">클라이언트는 이 직후(같은 flight)부터 암호화된 HTTP 요청 송신 가능</text>
+
+  <rect x="330" y="1065" width="840" height="92" rx="12" fill="#fff8ec" stroke="#c07a2e" stroke-width="2"/>
+  <text x="352" y="1092" class="st" fill="#8a5a1a">TLS 버전별 차이</text>
+  <text x="352" y="1116" font-size="13" fill="#5a544a">· TLS 1.2는 2 RTT (키 교환/Finished가 왕복 한 번 더) → 첫 요청까지 TCP 1 + TLS 2 = 3 RTT</text>
+  <text x="352" y="1140" font-size="13" fill="#5a544a">· TLS 1.3 세션 재개(0-RTT)면 ClientHello에 애플리케이션 데이터 동봉 가능 (재전송 공격 위험 → 멱등 요청만)</text>
+
+  <!-- ===================== PHASE 2 ===================== -->
+  <rect x="110" y="1195" width="1350" height="170" rx="16" fill="#eceae6" stroke="#a9a396" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="140" y="1230" class="phase">PHASE 2 · 데이터 송수신 (양쪽 ESTABLISHED 유지) — 전 구간 TLS Application Data로 암호화</text>
+
+  <line x1="385" y1="1270" x2="1172" y2="1270" class="msgB"/>
+  <text x="775" y="1262" text-anchor="middle" class="pkt" fill="#2f6fae">write() — 요청 데이터 (TLS 레코드로 봉인)</text>
+  <line x1="1172" y1="1325" x2="385" y2="1325" class="msgR"/>
+  <text x="775" y="1317" text-anchor="middle" class="pkt" fill="#b0446a">read() ← 응답 데이터 (TLS 레코드로 봉인)</text>
+
+  <!-- ===================== PHASE 3 ===================== -->
+  <rect x="110" y="1385" width="1350" height="575" rx="16" fill="#fdeee3" stroke="#cf9469" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="140" y="1420" class="phase">PHASE 3 · 연결 종료 (4-way handshake) — 먼저 close()한 쪽이 TIME_WAIT 부담</text>
+  <text x="140" y="1443" font-size="13" fill="#8a5a1a">정석은 TLS close_notify 알림을 먼저 교환한 뒤 TCP FIN 진행 (실제로는 생략하고 바로 FIN 보내는 구현도 많음)</text>
+
+  <text x="215" y="1482" class="api">close() 호출 (능동 종료)</text>
+  <rect x="245" y="1494" width="260" height="52" rx="12" fill="#d9eafc" stroke="#4a86c6" stroke-width="2"/>
+  <text x="375" y="1516" text-anchor="middle" class="st">FIN_WAIT_1</text>
+  <text x="375" y="1535" text-anchor="middle" class="desc">내 FIN에 대한 ACK 대기</text>
+
+  <line x1="510" y1="1520" x2="1037" y2="1562" class="msgB"/>
+  <text x="775" y="1524" text-anchor="middle" class="pkt" fill="#2f6fae">① FIN (seq=m)</text>
+
+  <rect x="1035" y="1544" width="300" height="52" rx="12" fill="#fde3c8" stroke="#c07a2e" stroke-width="2.5"/>
+  <text x="1185" y="1566" text-anchor="middle" class="st">CLOSE_WAIT ⚠</text>
+  <text x="1185" y="1585" text-anchor="middle" class="desc">앱이 close() 할 때까지 유지 → 누수 지점</text>
+
+  <line x1="1035" y1="1600" x2="512" y2="1672" class="msgR"/>
+  <text x="775" y="1622" text-anchor="middle" class="pkt" fill="#b0446a">② ACK (ack=m+1)</text>
+
+  <rect x="245" y="1658" width="260" height="52" rx="12" fill="#d9eafc" stroke="#4a86c6" stroke-width="2"/>
+  <text x="375" y="1680" text-anchor="middle" class="st">FIN_WAIT_2</text>
+  <text x="375" y="1699" text-anchor="middle" class="desc">상대 FIN 대기 (반쯤 닫힘, half-close)</text>
+
+  <text x="1340" y="1740" text-anchor="end" class="api">서버 앱도 close() 호출</text>
+  <rect x="1050" y="1750" width="260" height="52" rx="12" fill="#e8e4dc" stroke="#9a938a" stroke-width="2"/>
+  <text x="1180" y="1772" text-anchor="middle" class="st">LAST_ACK</text>
+  <text x="1180" y="1791" text-anchor="middle" class="desc">마지막 ACK 대기</text>
+
+  <line x1="1045" y1="1780" x2="552" y2="1822" class="msgR"/>
+  <text x="790" y="1786" text-anchor="middle" class="pkt" fill="#b0446a">③ FIN (seq=n)</text>
+
+  <rect x="215" y="1806" width="330" height="56" rx="12" fill="#fbdde7" stroke="#c25b7c" stroke-width="2.5"/>
+  <text x="380" y="1829" text-anchor="middle" class="st">TIME_WAIT ⏱</text>
+  <text x="380" y="1849" text-anchor="middle" class="desc">2MSL(리눅스 60초) 동안 4튜플+포트 점유</text>
+
+  <line x1="550" y1="1838" x2="1047" y2="1872" class="msgB"/>
+  <text x="790" y="1842" text-anchor="middle" class="pkt" fill="#2f6fae">④ ACK (ack=n+1)</text>
+
+  <rect x="1035" y="1856" width="300" height="52" rx="12" fill="#e8e4dc" stroke="#9a938a" stroke-width="2"/>
+  <text x="1185" y="1878" text-anchor="middle" class="st">CLOSED</text>
+  <text x="1185" y="1897" text-anchor="middle" class="desc">fd 즉시 해제 — 서버는 대기 없음</text>
+
+  <line x1="380" y1="1862" x2="380" y2="1892" stroke="#9a938a" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+  <rect x="250" y="1896" width="260" height="50" rx="12" fill="#e8e4dc" stroke="#9a938a" stroke-width="2"/>
+  <text x="380" y="1917" text-anchor="middle" class="st">CLOSED</text>
+  <text x="380" y="1936" text-anchor="middle" class="desc">2MSL 경과 후 fd·포트 완전 해제</text>
+
+  <rect x="560" y="1852" width="440" height="96" rx="12" fill="#fff8ec" stroke="#c07a2e" stroke-width="2"/>
+  <text x="582" y="1878" class="st" fill="#8a5a1a">TIME_WAIT이 존재하는 이유</text>
+  <text x="582" y="1901" font-size="12.5" fill="#5a544a">1. 마지막 ACK 유실 시 상대의 FIN 재전송에 응답하기 위해</text>
+  <text x="582" y="1921" font-size="12.5" fill="#5a544a">2. 같은 4튜플 새 연결에 옛 세그먼트가 섞여 드는 것 방지 (2MSL)</text>
+  <!-- Legend -->
+  <g font-size="14">
+    <rect x="110" y="1990" width="16" height="16" rx="4" fill="#d9d0f7" stroke="#6a58c9" stroke-width="2"/>
+    <text x="134" y="2003" fill="#3f3a33">상시 점유 (LISTEN)</text>
+    <rect x="330" y="1990" width="16" height="16" rx="4" fill="#d9eafc" stroke="#4a86c6" stroke-width="2"/>
+    <text x="354" y="2003" fill="#3f3a33">과도기 상태</text>
+    <rect x="510" y="1990" width="16" height="16" rx="4" fill="#fbdde7" stroke="#c25b7c" stroke-width="2"/>
+    <text x="534" y="2003" fill="#3f3a33">주요 상태 (ESTABLISHED / TIME_WAIT)</text>
+    <rect x="860" y="1990" width="16" height="16" rx="4" fill="#fde3c8" stroke="#c07a2e" stroke-width="2"/>
+    <text x="884" y="2003" fill="#3f3a33">위험 신호 (CLOSE_WAIT 누적 = 앱 버그)</text>
+    <text x="110" y="2040" fill="#3f3a33">→ 파란 화살표 = Client 발신 · 분홍 화살표 = Server 발신</text>
+  </g>
+
+  <!-- Notes -->
+  <g class="note">
+    <text x="110" y="2090">· LISTEN 소켓과 accept()로 생성된 연결 소켓은 별개의 fd — 연결이 닫혀도 LISTEN fd는 계속 유지</text>
+    <text x="110" y="2118">· 서버 SYN_RECEIVED 단계의 큐가 넘치면(backlog 초과) SYN 드롭 → 클라이언트는 재시도로 지연 체감</text>
+    <text x="110" y="2146">· CLOSE_WAIT가 계속 쌓이면 상대는 이미 끊었는데 우리 앱이 close()를 안 한 것 — 커넥션/스트림 누수 코드 점검</text>
+    <text x="110" y="2174">· 양쪽이 동시에 FIN을 보내면 CLOSING 상태를 거치는 동시 종료(simultaneous close) 경로도 존재 (드묾)</text>
+    <text x="110" y="2202">· ②와 ③이 합쳐져 FIN+ACK 한 패킷으로 오는 경우도 많음 → 이때 FIN_WAIT_1에서 바로 TIME_WAIT로 전이</text>
+    <text x="110" y="2230">· TLS 세션 재개(session ticket)를 해도 TCP 3-way는 매번 새로 수행 — 이를 아끼려고 keep-alive/커넥션 풀로 연결을 재사용</text>
+  </g>
+</svg>
