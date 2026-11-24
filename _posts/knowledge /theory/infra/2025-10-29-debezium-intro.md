@@ -26,7 +26,7 @@ tags: [Infra]
   - Kafka 토픽의 레코드를 다른 시스템으로 전달하는 싱크 커넥터(Sink Connector)
 
 ![img](/assets/img/debezium-intro-img1.png)
-(출처 : [https://debezium.io/documentation//reference/stable/architecture.html](https://debezium.io/documentation//reference/stable/architecture.html))
+_출처 : [https://debezium.io/documentation//reference/stable/architecture.html](https://debezium.io/documentation//reference/stable/architecture.html)_
 
 **※ Debezium을 배포한다 ?**
 > 어떤 방식으로 CDC를 수행할지 정한 뒤, 그에 맞게 Debezium을 구성하고 실행 환경에 올리는 것을 의미한다. ([참고](https://debezium.io/documentation/reference/stable/tutorial.html#deploying-mysql-connector))

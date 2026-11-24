@@ -98,7 +98,7 @@ tags: [Infra]
 - 태스크는 언제든지 시작(start), 중지(stop), 재시작(restart) 할 수 있습니다. 이런 구조 덕분에 Kafka Connect는 장애 복구(resilience) 와 확장성(scalability) 을 동시에 갖춘 안정적인 데이터 파이프라인을 제공
 
 ![img.png](/assets/img/kafka-connect-img1.png)
-(출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html))
+_출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html)_
 
 **Task Rebalancing**
 - Kafka Connect에서 커넥터가 클러스터에 처음 등록되면, 클러스터 내의 모든 워커(worker)들이 협력하여 모든 커넥터와 태스크를 재분배(rebalance) 합니다.
@@ -117,7 +117,7 @@ tags: [Infra]
   - 대신 REST API 를 통해 수동으로 재시작해야 합니다.
 
 ![img.png](/assets/img/kafka-connect-img2.png)
-(출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html))
+_출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html)_
 
 
 ### 3. Workers
@@ -153,7 +153,7 @@ tags: [Infra]
   - 두 워커는 자동으로 하나의 클러스터 connect-cluster-a 를 형성함.
 
 ![img.png](/assets/img/kafka-connect-img3.png)
-(출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html))
+_출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html)_
 
 ### 4. Converters
 > Kafka Connect가 외부 시스템과 데이터를 주고받을 때, 데이터를 Kafka 내부 형식**(바이트 배열)**과 Connect의 내부 데이터 구조 사이에서 변환해주는 역할
@@ -175,7 +175,7 @@ tags: [Infra]
   - 데이터의 표현 방식(Avro, JSON, String 등)은 컨버터가 전담
 
 ![img.png](/assets/img/kafka-connect-img4.png)
-(출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html))
+_출처 : [https://docs.confluent.io/platform/current/connect/index.html](https://docs.confluent.io/platform/current/connect/index.html)_
 
 ### 5. Transforms
 > 하나의 레코드를 입력받아 수정된 레코드를 출력하는 간단한 함수

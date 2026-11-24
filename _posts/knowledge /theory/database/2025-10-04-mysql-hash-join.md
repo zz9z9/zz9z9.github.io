@@ -28,7 +28,7 @@ JOIN countries ON persons.country_id = countries.country_id;
   - 이 과정을 마치면 build phase 종료
 
 ![image](/assets/img/mysql-hash-join-build-phase.png)
-(출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/))
+_출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/)_
 
 ### 2. Probe Phase
 
@@ -43,7 +43,7 @@ JOIN countries ON persons.country_id = countries.country_id;
   - 이 값은 실행 중(runtime)에도 조정할 수 있다.
 
 ![image](/assets/img/mysql-hash-join-probe-phase.png)
-(출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/))
+_출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/)_
 
 ## Spill to disk
 ---
@@ -74,7 +74,7 @@ JOIN countries ON persons.country_id = countries.country_id;
   - 같은 해시 함수를 쓰면, chunk 파일에 있는 row들이 전부 같은 해시 값에 몰려서, 해시 테이블이 한쪽으로 쏠리는 문제(hash collision)가 생긴다.
 
 ![image](/assets/img/mysql-hash-join-spill-to-disk.png)
-(출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/))
+_출처 : [https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/](https://dev.mysql.com/blog-archive/hash-join-in-mysql-8/)_
 
 ### Chunk File 삭제는 ?
 
