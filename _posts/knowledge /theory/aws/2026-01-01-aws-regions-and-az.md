@@ -12,8 +12,7 @@ tags: [AWS]
 > 물리적으로 분리된 **독립적인 지리적 영역**이다.
 
 ![img](/assets/img/aws-region-az-img1.png)
-
-(출처 : [https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html](https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html))
+_출처 : [https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html](https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html)_
 
 - 각 Region은 다른 Region과 완전히 격리되도록 설계되었다.
   - 이를 통해 최대 수준의 장애 허용성과 안정성을 달성한다.
@@ -48,8 +47,7 @@ tags: [AWS]
 > 하나의 Region 내부에 존재하는, 서로 격리된 위치이다.
 
 ![img](/assets/img/aws-region-az-img2.png)
-
-(출처 : [https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html](https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html))
+_출처 : [https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html](https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions-availability-zones.html)_
 
 - 각 Region에는 **최소 세 개**의 Availability Zone이 존재한다.
 - 이는 AWS 상에서 고가용성 애플리케이션을 설계할 수 있도록 하기 위함이다.
